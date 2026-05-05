@@ -237,11 +237,9 @@ const getParticipants = async (req, res) => {
 
     res.json({ 
       success: true,
-      data: {
-        participants: formattedParticipants,
-        total,
-        hasMore: parseInt(offset) + parseInt(limit) < total
-      }
+      participants: formattedParticipants,
+      total,
+      hasMore: parseInt(offset) + parseInt(limit) < total
     });
 
   } catch (error) {

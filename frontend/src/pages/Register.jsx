@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { API } from '../api/api'
 
-const API = 'http://localhost:3001/api'
+const pageVariants = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -12 }
+}
 
 function Register({ onLogin }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' })
@@ -17,7 +23,7 @@ function Register({ onLogin }) {
     setSuccess('')
     setLoading(true)
     try {
-      const res = await fetch(`${API}/auth/register`, {
+      const res = await fetch(API.REGISTER, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
@@ -39,8 +45,15 @@ function Register({ onLogin }) {
   }
 
   return (
-    <div className="login-page">
-      <div className="login-card">
+    <motion.div
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <div className="login-page">
+        <div className="login-card">
         <div className="login-logo">
           <div className="login-logo-mark">W</div>
           <h1>WAVE INIT LMS</h1>
@@ -82,11 +95,12 @@ function Register({ onLogin }) {
           </div>
         )}
 
-        <p className="register-link" style={{ marginTop: 16 }}>
+        <p className="register-link">
           Already registered? <span onClick={() => navigate('/login')}>Sign In</span>
         </p>
       </div>
     </div>
+    </motion.div>
   )
 }
 

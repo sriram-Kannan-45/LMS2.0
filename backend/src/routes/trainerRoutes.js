@@ -410,71 +410,134 @@ router.put(
   }
 );
 
-// FIX TRAINER UPDATE API
-router.put("/update", authenticateToken, upload.single("photo"), async (req, res) => {
-  try {
-    console.log("Incoming request:", req.body);
-    console.log("Incoming file:", req.file);
+// ─── PUT /api/trainer/update ─────────────────────────────────────────────────
+// Primary profile-update endpoint used by TrainerForm (multipart/form-data)
+router.put(
+  '/update',
+  authenticateToken,
+  roleMiddleware('TRAINER'),
+  upload.single('profileImage'),
+  async (req, res) => {
+    try {
+      // ── Debug logging ──────────────────────────────────────────────────────
+      console.log('📥 [PUT /trainer/update] req.body :', req.body);
+      console.log('📥 [PUT /trainer/update] req.file :', req.file ? req.file.filename : 'none');
 
-    const trainerId = req.user?.id;
+      const trainerId = req.user?.id;
+      if (!trainerId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
 
-    if (!trainerId) {
-      return res.status(401).json({ message: "Unauthorized" });
+      // ── Safe field extraction ──────────────────────────────────────────────
+      const phone         = req.body.phone         ? String(req.body.phone).trim()         : '';
+      const rawDob        = req.body.dob           ? String(req.body.dob).trim()           : '';
+      const qualification = req.body.qualification ? String(req.body.qualification).trim() : '';
+      const experience    = req.body.experience    ? String(req.body.experience).trim()    : '';
+      const name          = req.body.name          ? String(req.body.name).trim()          : '';
+
+      // ── Validation ─────────────────────────────────────────────────────────
+      const validationErrors = [];
+
+      if (phone && !/^[\d\s\+\-\(\)]{7,15}$/.test(phone)) {
+        validationErrors.push('Phone must contain only digits, spaces, +, -, (, )');
+      }
+
+      let dob = null;
+      if (rawDob) {
+        // Normalize to YYYY-MM-DD regardless of what the browser sends
+        const parsed = new Date(rawDob);
+        if (isNaN(parsed.getTime())) {
+          validationErrors.push('Date of birth is not a valid date');
+        } else {
+          // Format: YYYY-MM-DD
+          dob = parsed.toISOString().split('T')[0];
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        return res.status(422).json({
+          success: false,
+          message: 'Validation failed',
+          errors: validationErrors
+        });
+      }
+
+      // Require at least one field
+      if (!phone && !dob && !qualification && !experience && !name && !req.file) {
+        return res.status(400).json({ success: false, message: 'No data provided to update' });
+      }
+
+      // ── Update User table (name, phone) ────────────────────────────────────
+      const trainer = await User.findByPk(trainerId);
+      if (!trainer) {
+        return res.status(404).json({ success: false, message: 'Trainer not found' });
+      }
+
+      const userUpdate = {};
+      if (name)  userUpdate.name  = name;
+      if (phone) userUpdate.phone = phone;
+      if (Object.keys(userUpdate).length > 0) {
+        await trainer.update(userUpdate);
+        console.log('✅ User table updated:', userUpdate);
+      }
+
+      // ── Build TrainerProfile update payload ────────────────────────────────
+      const profileData = {};
+      if (phone)         profileData.phone         = phone;
+      if (dob)           profileData.dob           = dob;
+      if (qualification) profileData.qualification = qualification;
+      if (experience)    profileData.experience    = experience;
+
+      // File stored on disk → save URL-accessible path
+      if (req.file) {
+        profileData.imagePath = `/uploads/trainer/${req.file.filename}`;
+        console.log('✅ Image saved:', profileData.imagePath);
+      }
+
+      // ── Upsert TrainerProfile ──────────────────────────────────────────────
+      let profile = await TrainerProfile.findOne({ where: { userId: trainerId } });
+      if (profile) {
+        await profile.update(profileData);
+        console.log('✅ Existing profile updated');
+      } else {
+        profile = await TrainerProfile.create({ userId: trainerId, ...profileData });
+        console.log('✅ New profile created');
+      }
+
+      // ── Reload to return the freshest data ─────────────────────────────────
+      await trainer.reload();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Profile updated successfully',
+        data: {
+          user: {
+            id:       trainer.id,
+            name:     trainer.name,
+            email:    trainer.email,
+            username: trainer.username,
+            phone:    trainer.phone
+          },
+          profile: {
+            phone:         profile.phone,
+            dob:           profile.dob,
+            qualification: profile.qualification,
+            experience:    profile.experience,
+            imagePath:     profile.imagePath
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ [PUT /trainer/update] ERROR:', error.message);
+      console.error(error.stack);
+      return res.status(500).json({
+        success: false,
+        message: error.message,
+        stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
+      });
     }
-
-    // SAFE FIELD EXTRACTION
-    const phone = req.body.phone || "";
-    const dob = req.body.dob || null;
-    const qualification = req.body.qualification || "";
-    const experience = req.body.experience || "";
-
-    const updateData = {
-      phone,
-      dob,
-      qualification,
-      experience
-    };
-
-    // HANDLE FILE SAFELY
-    if (req.file) {
-      const base64Data = req.file.buffer.toString("base64");
-      updateData.imagePath = `data:${req.file.mimetype};base64,${base64Data}`;
-    }
-
-    // VALIDATE BEFORE UPDATE
-    if (!phone && !dob && !qualification && !experience && !req.file) {
-      return res.status(400).json({ message: "No data provided" });
-    }
-
-    // Sequelize equivalent to User requested findByIdAndUpdate
-    let updatedTrainer = await TrainerProfile.findOne({ where: { userId: trainerId } });
-    if (!updatedTrainer) {
-      updatedTrainer = await TrainerProfile.create({ userId: trainerId, ...updateData });
-    } else {
-      updatedTrainer = await updatedTrainer.update(updateData);
-    }
-    
-    // Also update User phone if provided
-    if (phone) {
-      await User.update({ phone }, { where: { id: trainerId } });
-    }
-
-    if (!updatedTrainer) {
-      return res.status(404).json({ message: "Trainer not found" });
-    }
-
-    res.status(200).json({
-      message: "Profile updated successfully",
-      data: updatedTrainer
-    });
-
-  } catch (error) {
-    console.error("UPDATE ERROR:", error);
-    res.status(500).json({
-      message: "Internal server error",
-      error: error.message
-    });
   }
-});
+);
 
 module.exports = router;

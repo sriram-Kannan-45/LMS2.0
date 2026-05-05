@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const API = 'http://localhost:3001/api'
+import { API_BASE as API } from '../api/api'
 
 /**
  * TrainerDetails — expanded profile panel shown when admin clicks a trainer card.

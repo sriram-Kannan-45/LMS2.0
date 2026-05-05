@@ -3,10 +3,10 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
+import TrainerManagement from '../components/TrainerManagement'
+import { API_BASE } from '../api/api'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
-
-const API = 'http://localhost:3001/api'
 
 // Utility functions
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '-'
@@ -60,14 +60,14 @@ function AdminDashboard({ user, onLogout }) {
 
   const fetchStats = async () => {
     try {
-      const r = await fetch(`${API}/admin/stats`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/admin/stats`, { headers: auth() })
       if (r.ok) setStats(await r.json())
     } catch (e) { console.error(e) }
   }
 
   const fetchPendingParticipants = async () => {
     try {
-      const r = await fetch(`${API}/admin/pending-participants`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/admin/pending-participants`, { headers: auth() })
       const d = await r.json()
       setPendingParticipants(d.participants || [])
     } catch (e) { console.error(e) }
@@ -75,7 +75,7 @@ function AdminDashboard({ user, onLogout }) {
 
   const fetchTrainers = async () => {
     try {
-      const r = await fetch(`${API}/admin/trainers`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/admin/trainers`, { headers: auth() })
       const d = await r.json()
       setTrainers(d.trainers || [])
     } catch (e) { console.error(e) }
@@ -83,7 +83,7 @@ function AdminDashboard({ user, onLogout }) {
 
   const fetchTrainings = async () => {
     try {
-      const r = await fetch(`${API}/trainings`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/trainings`, { headers: auth() })
       const d = await r.json()
       setTrainings(Array.isArray(d) ? d : (d.trainings || []))
     } catch (e) { console.error(e) }
@@ -91,7 +91,7 @@ function AdminDashboard({ user, onLogout }) {
 
   const fetchFeedbacks = async () => {
     try {
-      const r = await fetch(`${API}/feedback/admin-feedbacks`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/feedback/admin-feedbacks`, { headers: auth() })
       const d = await r.json()
       setFeedbacks(d.feedbacks || [])
     } catch (e) { console.error(e) }
@@ -99,7 +99,7 @@ function AdminDashboard({ user, onLogout }) {
 
   const fetchParticipants = async () => {
     try {
-      const r = await fetch(`${API}/admin/participants`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/admin/participants`, { headers: auth() })
       const d = await r.json()
       setParticipants(d.participants || [])
     } catch (e) { console.error(e) }
@@ -114,7 +114,7 @@ function AdminDashboard({ user, onLogout }) {
     
     setLoading(true)
     try {
-      const r = await fetch(`${API}/admin/create-trainer`, {
+      const r = await fetch(`${API_BASE}/admin/create-trainer`, {
         method: 'POST',
         headers: auth(),
         body: JSON.stringify(trainerForm)
@@ -141,7 +141,7 @@ function AdminDashboard({ user, onLogout }) {
     
     setLoading(true)
     try {
-      const r = await fetch(`${API}/admin/trainings`, {
+      const r = await fetch(`${API_BASE}/admin/trainings`, {
         method: 'POST',
         headers: auth(),
         body: JSON.stringify({
@@ -168,7 +168,7 @@ function AdminDashboard({ user, onLogout }) {
     
     setLoading(true)
     try {
-      const r = await fetch(`${API}/admin/approve-participant/${id}`, {
+      const r = await fetch(`${API_BASE}/admin/approve-participant/${id}`, {
         method: 'POST',
         headers: auth()
       })
@@ -190,7 +190,7 @@ function AdminDashboard({ user, onLogout }) {
     
     setLoading(true)
     try {
-      const r = await fetch(`${API}/admin/reject-participant/${id}`, {
+      const r = await fetch(`${API_BASE}/admin/reject-participant/${id}`, {
         method: 'POST',
         headers: auth()
       })
@@ -211,7 +211,7 @@ function AdminDashboard({ user, onLogout }) {
     
     setLoading(true)
     try {
-      const r = await fetch(`${API}/admin/participants/${id}`, {
+      const r = await fetch(`${API_BASE}/admin/participants/${id}`, {
         method: 'DELETE',
         headers: auth()
       })
@@ -232,7 +232,7 @@ function AdminDashboard({ user, onLogout }) {
     
     setLoading(true)
     try {
-      const r = await fetch(`${API}/admin/trainings/${id}`, {
+      const r = await fetch(`${API_BASE}/admin/trainings/${id}`, {
         method: 'DELETE',
         headers: auth()
       })
@@ -308,7 +308,8 @@ function AdminDashboard({ user, onLogout }) {
         {/* Tabs */}
         <div className="flex flex-wrap gap-3 mb-8 pb-6 border-b border-gray-700">
           <TabButton key="overview" label="📈 Overview" active={tab === 'overview'} />
-          <TabButton key="pending" label="⏳ Pending ({pendingParticipants.length})" active={tab === 'pending'} />
+          <TabButton key="trainers" label="👨‍🏫 Trainers" active={tab === 'trainers'} />
+          <TabButton key="pending" label={`⏳ Pending (${pendingParticipants.length})`} active={tab === 'pending'} />
           <TabButton key="trainings" label="📚 Trainings" active={tab === 'trainings'} />
           <TabButton key="participants" label="👥 Participants" active={tab === 'participants'} />
           <TabButton key="feedback" label="⭐ Feedback" active={tab === 'feedback'} />
@@ -327,43 +328,8 @@ function AdminDashboard({ user, onLogout }) {
 
             {/* Quick Actions */}
             <div className="grid md:grid-cols-2 gap-6">
-              {/* Create Trainer */}
-              <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-xl">
-                <h3 className="text-xl font-bold mb-4 text-indigo-400">➕ Create Trainer</h3>
-                <form onSubmit={handleCreateTrainer} className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Name"
-                    value={trainerForm.name}
-                    onChange={(e) => setTrainerForm({ ...trainerForm, name: e.target.value })}
-                    className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-600 focus:border-indigo-400 outline-none transition"
-                  />
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={trainerForm.email}
-                    onChange={(e) => setTrainerForm({ ...trainerForm, email: e.target.value })}
-                    className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-600 focus:border-indigo-400 outline-none transition"
-                  />
-                  <input
-                    type="password"
-                    placeholder="Password (min 6 chars)"
-                    value={trainerForm.password}
-                    onChange={(e) => setTrainerForm({ ...trainerForm, password: e.target.value })}
-                    className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-600 focus:border-indigo-400 outline-none transition"
-                  />
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold py-2 rounded-lg transition disabled:opacity-50"
-                  >
-                    {loading ? '⏳ Creating...' : '✅ Create Trainer'}
-                  </button>
-                </form>
-              </div>
-
               {/* Create Training */}
-              <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-xl">
+              <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-xl col-span-1 md:col-span-2 lg:col-span-1">
                 <h3 className="text-xl font-bold mb-4 text-purple-400">📚 Create Training</h3>
                 <form onSubmit={handleCreateTraining} className="space-y-3">
                   <input
@@ -397,6 +363,41 @@ function AdminDashboard({ user, onLogout }) {
                 </form>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* TRAINERS TAB */}
+        {tab === 'trainers' && (
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden text-gray-900">
+            <TrainerManagement 
+              trainers={trainers}
+              onCreateTrainer={async (form) => {
+                const r = await fetch(`${API_BASE}/admin/create-trainer`, {
+                  method: 'POST',
+                  headers: auth(),
+                  body: JSON.stringify(form)
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.error);
+                await fetchTrainers();
+                fetchStats();
+              }}
+              onDeleteTrainer={async (id, name) => {
+                if (!window.confirm(`Delete trainer "${name}"?`)) return;
+                const r = await fetch(`${API_BASE}/admin/trainers/${id}`, {
+                  method: 'DELETE',
+                  headers: auth()
+                });
+                if (r.ok) {
+                  await fetchTrainers();
+                  fetchStats();
+                } else {
+                  const d = await r.json();
+                  throw new Error(d.error);
+                }
+              }}
+              loading={loading}
+            />
           </div>
         )}
 

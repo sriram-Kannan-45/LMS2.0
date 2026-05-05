@@ -115,8 +115,39 @@ const getAllTrainers = async (req, res) => {
   }
 };
 
+const updateProfile = async (req, res) => {
+  try {
+    console.log("BODY:", req.body);
+    console.log("FILE:", req.file);
+
+    const imageUrl = req.file ? req.file.path : null;
+
+    await User.update(
+      {
+        phone: req.body.phone,
+        dob: req.body.dob,
+        profilePic: imageUrl
+      },
+      { where: { id: req.user.id } }
+    );
+
+    res.json({
+      success: true,
+      message: "Profile updated",
+      imageUrl
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      message: err.message
+    });
+  }
+};
+
 module.exports = {
   createOrUpdateProfile,
   getProfile,
-  getAllTrainers
+  getAllTrainers,
+  updateProfile
 };

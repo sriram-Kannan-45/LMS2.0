@@ -3,7 +3,7 @@ require('dotenv').config();
 
 const dbName = process.env.DB_NAME || 'training_db';
 const dbUser = process.env.DB_USER || 'root';
-const dbPass = process.env.DB_PASS || '';
+const dbPass = process.env.DB_PASS || '1234';
 const dbHost = process.env.DB_HOST || 'localhost';
 
 const resetDatabase = async () => {

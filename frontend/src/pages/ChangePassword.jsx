@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const API = 'http://localhost:3001/api'
+import { API_BASE as API } from '../api/api'
 
 function ChangePassword({ user, onLogin }) {
   const [newPassword, setNewPassword] = useState('')

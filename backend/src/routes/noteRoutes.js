@@ -170,7 +170,40 @@ router.get(
   }
 );
 
-// ADMIN: Get pending notes
+// ADMIN: Get notes (with optional status filter: pending, approved, or all)
+router.get(
+  '/admin/notes',
+  authenticateToken,
+  roleMiddleware('ADMIN'),
+  async (req, res) => {
+    try {
+      const { status } = req.query;
+      
+      const where = {};
+      if (status === 'pending') {
+        where.status = 'PENDING';
+      } else if (status === 'approved') {
+        where.status = 'APPROVED';
+      }
+      // If no status filter, return all notes
+      
+      const notes = await Note.findAll({
+        where,
+        include: [
+          { model: User, as: 'trainer', attributes: ['id', 'name', 'email'] },
+          { model: Training, as: 'training', attributes: ['id', 'title'], required: false }
+        ],
+        order: [['created_at', 'DESC']]
+      });
+      res.json({ notes });
+    } catch (error) {
+      console.error('Get admin notes error:', error.message);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// ADMIN: Get pending notes (legacy route - redirects to admin/notes with status filter)
 router.get(
   '/pending',
   authenticateToken,

@@ -6,6 +6,7 @@ const upload = require('../middleware/upload');
 
 const router = express.Router();
 
+// Trainer profile routes - mounted at /api/profile in app.js
 router.post(
   '/trainer/profile',
   authenticateToken,
@@ -27,13 +28,6 @@ router.get(
   authenticateToken,
   roleMiddleware('TRAINER'),
   (req, res) => profileController.getProfile(req, res)
-);
-
-router.get(
-  '/admin/trainers',
-  authenticateToken,
-  roleMiddleware('ADMIN'),
-  (req, res) => profileController.getAllTrainers(req, res)
 );
 
 module.exports = router;

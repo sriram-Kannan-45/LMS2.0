@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
 import TrainerList from '../components/TrainerList'
+import ParticipantList from '../components/ParticipantList'
+import AnimatedDropdown from '../components/AnimatedDropdown'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
+import { motion, AnimatePresence } from 'framer-motion'
+import Skeleton, { SkeletonStats, SkeletonTable } from '../components/Skeleton'
+import { API, API_BASE } from '../api/api'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
-
-const API = 'http://localhost:3001/api'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
@@ -30,6 +33,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [participants, setParticipants] = useState([])
   const [pendingParticipants, setPendingParticipants] = useState([])
   const [questions, setQuestions] = useState([])
+  const [notes, setNotes] = useState([])
+  const [noteFilter, setNoteFilter] = useState('')
   const [stats, setStats] = useState({})
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
@@ -41,7 +46,10 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [trainerForm, setTrainerForm] = useState({ name: '', email: '', password: '' })
   const [trainingForm, setTrainingForm] = useState({ title: '', description: '', trainerId: '', startDate: '', endDate: '', capacity: '' })
   const [questionForm, setQuestionForm] = useState({ trainingId: '', questionText: '', questionType: 'TEXT', options: '' })
-  
+
+  // Loading state for initial data fetch
+  const [initialLoading, setInitialLoading] = useState(true)
+
   // Confirmation modals
   const [confirmModal, setConfirmModal] = useState(null)
 
@@ -52,22 +60,41 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
     setTimeout(() => { setErr(''); setMsg('') }, 4500)
   }
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    const loadAll = async () => {
+      setInitialLoading(true)
+      try {
+        await fetchAll()
+      } finally {
+        setInitialLoading(false)
+      }
+    }
+    loadAll()
+  }, [])
 
-  const fetchAll = () => {
-    fetchStats(); fetchTrainers(); fetchTrainings(); fetchFeedbacks(); fetchParticipants(); fetchQuestions(); fetchPendingParticipants()
+  const fetchAll = async () => {
+    await Promise.all([
+      fetchStats(),
+      fetchTrainers(),
+      fetchTrainings(),
+      fetchFeedbacks(),
+      fetchParticipants(),
+      fetchQuestions(),
+      fetchPendingParticipants(),
+      fetchNotes()
+    ])
   }
 
   const fetchStats = async () => {
     try {
-      const r = await fetch(`${API}/admin/stats`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/admin/stats`, { headers: auth() })
       if (r.ok) setStats(await r.json())
     } catch {}
   }
 
   const fetchPendingParticipants = async () => {
     try {
-      const r = await fetch(`${API}/admin/pending-participants`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/admin/pending-participants`, { headers: auth() })
       const d = await r.json()
       setPendingParticipants(d.participants || [])
     } catch {}
@@ -82,30 +109,30 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
     setLoading(true)
     try {
       if (confirmModal.action === 'approve-participant') {
-        const r = await fetch(`${API}/admin/approve-participant/${confirmModal.id}`, { method: 'POST', headers: auth() })
+        const r = await fetch(`${API_BASE}/admin/approve-participant/${confirmModal.id}`, { method: 'POST', headers: auth() })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error)
         notify('Participant approved successfully')
         fetchPendingParticipants(); fetchParticipants()
       } else if (confirmModal.action === 'delete-question') {
-        const r = await fetch(`${API}/survey/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
+        const r = await fetch(`${API_BASE}/survey/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
         if (!r.ok) throw new Error('Failed to delete question')
         notify('Question deleted')
         fetchQuestions()
       } else if (confirmModal.action === 'delete-training') {
-        const r = await fetch(`${API}/admin/trainings/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
+        const r = await fetch(`${API_BASE}/admin/trainings/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error)
         notify('Training deleted successfully')
         fetchTrainings(); fetchStats()
       } else if (confirmModal.action === 'delete-participant') {
-        const r = await fetch(`${API}/admin/participants/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
+        const r = await fetch(`${API_BASE}/admin/participants/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error)
         notify('Participant removed successfully')
         fetchParticipants(); fetchStats()
       } else if (confirmModal.action === 'delete-trainer') {
-        const r = await fetch(`${API}/admin/trainers/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
+        const r = await fetch(`${API_BASE}/admin/trainers/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error)
         notify('Trainer removed successfully')
@@ -121,15 +148,17 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   const fetchTrainers = async () => {
     try {
-      const r = await fetch(`${API}/admin/trainers`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/admin/trainers`, { headers: auth() })
       const d = await r.json()
-      setTrainers(d.trainers || [])
-    } catch {}
+      // Handle both { trainers } and { success: true, data: { trainers } }
+      const trainers = d.trainers || (d.data && d.data.trainers) || []
+      setTrainers(trainers)
+    } catch (e) { console.error('fetchTrainers error:', e.message) }
   }
 
   const fetchTrainings = async () => {
     try {
-      const r = await fetch(`${API}/trainings`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/trainings`, { headers: auth() })
       const d = await r.json()
       setTrainings(Array.isArray(d) ? d : (d.trainings || []))
     } catch {}
@@ -137,7 +166,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   const fetchFeedbacks = async () => {
     try {
-      const r = await fetch(`${API}/feedback/admin-feedbacks`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/feedback/admin-feedbacks`, { headers: auth() })
       const d = await r.json()
       setFeedbacks(d.feedbacks || [])
     } catch {}
@@ -145,24 +174,37 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   const fetchParticipants = async () => {
     try {
-      const r = await fetch(`${API}/admin/participants`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/admin/participants`, { headers: auth() })
       const d = await r.json()
-      setParticipants(d.participants || [])
-    } catch {}
+      // Handle both { participants } and { success: true, data: { participants } }
+      const participants = d.participants || (d.data && d.data.participants) || []
+      setParticipants(participants)
+    } catch (e) { console.error('fetchParticipants error:', e.message) }
   }
 
   const fetchQuestions = async () => {
     try {
-      const r = await fetch(`${API}/survey`, { headers: auth() })
+      const r = await fetch(`${API_BASE}/survey`, { headers: auth() })
       const d = await r.json()
       setQuestions(d.questions || [])
+    } catch {}
+  }
+
+  const fetchNotes = async (status = '') => {
+    try {
+      const url = status 
+        ? `${API_BASE}/notes/admin/notes?status=${status}`
+        : `${API_BASE}/notes/admin/notes`
+      const r = await fetch(url, { headers: auth() })
+      const d = await r.json()
+      setNotes(d.notes || [])
     } catch {}
   }
 
   const handleCreateTrainer = async (e) => {
     e.preventDefault(); setLoading(true); setCredentials(null)
     try {
-      const r = await fetch(`${API}/admin/create-trainer`, { method: 'POST', headers: auth(), body: JSON.stringify(trainerForm) })
+      const r = await fetch(`${API_BASE}/admin/create-trainer`, { method: 'POST', headers: auth(), body: JSON.stringify(trainerForm) })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
       setTrainerForm({ name: '', email: '', password: '' })
@@ -175,7 +217,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const handleCreateTraining = async (e) => {
     e.preventDefault(); setLoading(true)
     try {
-      const r = await fetch(`${API}/admin/trainings`, {
+      const r = await fetch(`${API_BASE}/admin/trainings`, {
         method: 'POST', headers: auth(),
         body: JSON.stringify({ ...trainingForm, trainerId: parseInt(trainingForm.trainerId), capacity: trainingForm.capacity ? parseInt(trainingForm.capacity) : null })
       })
@@ -234,7 +276,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const handleUpdateTraining = async (e) => {
     e.preventDefault(); setLoading(true)
     try {
-      const r = await fetch(`${API}/admin/trainings/${editModal.id}`, {
+      const r = await fetch(`${API_BASE}/admin/trainings/${editModal.id}`, {
         method: 'PUT', headers: auth(),
         body: JSON.stringify({ ...editForm, trainerId: editForm.trainerId ? parseInt(editForm.trainerId) : undefined })
       })
@@ -249,7 +291,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const handleSendReminders = async (trainingId) => {
     setLoading(true)
     try {
-      const r = await fetch(`${API}/admin/send-reminders/${trainingId}`, { method: 'POST', headers: auth() })
+      const r = await fetch(`${API_BASE}/admin/send-reminders/${trainingId}`, { method: 'POST', headers: auth() })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
       notify(d.message)
@@ -261,7 +303,9 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
     { key: 'overview', label: 'Overview' },
     { key: 'pending', label: 'Pending Approval' },
     { key: 'trainings', label: 'Trainings' },
+    { key: 'trainers', label: 'Trainers' },
     { key: 'participants', label: 'Participants' },
+    { key: 'notes', label: 'Notes Management' },
     { key: 'feedback', label: 'Feedback Reports' },
     { key: 'surveys', label: 'Survey Config' },
   ]
@@ -319,8 +363,9 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const topTrainer = getTopTrainer()
 
   return (
-    <div className="dashboard">
-      <div className="tabs-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <AnimatePresence>
+      <div className="dashboard">
+        <div className="tabs-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div className="tabs">
           {TABS.map(t => (
             <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => handleTabChange(t.key)}>
@@ -339,160 +384,232 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
           {/* OVERVIEW */}
           {tab === 'overview' && (
-            <div>
-              <div className="stats-grid">
-                <div className="stat-card">
-                  <div className="stat-label">Total Trainings</div>
-                  <div className="stat-value">{stats.totalTrainings ?? 0}</div>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            >
+              {initialLoading ? (
+                <SkeletonStats />
+              ) : (
+                <div className="stats-grid">
+                  <div className="stat-card">
+                    <div className="stat-label">Total Trainings</div>
+                    <div className="stat-value">{stats.totalTrainings ?? 0}</div>
+                  </div>
+                  <div className="stat-card purple">
+                    <div className="stat-label">Trainers</div>
+                    <div className="stat-value">{stats.totalTrainers ?? 0}</div>
+                  </div>
+                  <div className="stat-card green">
+                    <div className="stat-label">Participants</div>
+                    <div className="stat-value">{stats.totalParticipants ?? 0}</div>
+                  </div>
+                  <div className="stat-card orange">
+                    <div className="stat-label">Active Enrollments</div>
+                    <div className="stat-value">{stats.totalEnrollments ?? 0}</div>
+                  </div>
+                  <div className="stat-card red">
+                    <div className="stat-label">Feedback Responses</div>
+                    <div className="stat-value">{stats.totalFeedbacks ?? 0}</div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-label">Avg Trainer Rating</div>
+                    <div className="stat-value">{stats.avgTrainerRating ?? '0.0'}</div>
+                  </div>
+                  <div className="stat-card purple">
+                    <div className="stat-label">Top Trainer</div>
+                    <div className="stat-value" style={{ fontSize: 18 }}>{topTrainer.name} <span style={{ fontSize: 14 }}>({topTrainer.avg > 0 ? topTrainer.avg.toFixed(1) : '-'})</span></div>
+                  </div>
+                  <div className="stat-card green">
+                    <div className="stat-label">Overall Satisfaction</div>
+                    <div className="stat-value">{stats.satisfactionScore ?? '0.0'} <span style={{ fontSize: 14 }}>/ 5.0</span></div>
+                  </div>
                 </div>
-                <div className="stat-card purple">
-                  <div className="stat-label">Trainers</div>
-                  <div className="stat-value">{stats.totalTrainers ?? 0}</div>
-                </div>
-                <div className="stat-card green">
-                  <div className="stat-label">Participants</div>
-                  <div className="stat-value">{stats.totalParticipants ?? 0}</div>
-                </div>
-                <div className="stat-card orange">
-                  <div className="stat-label">Active Enrollments</div>
-                  <div className="stat-value">{stats.totalEnrollments ?? 0}</div>
-                </div>
-                <div className="stat-card red">
-                  <div className="stat-label">Feedback Responses</div>
-                  <div className="stat-value">{stats.totalFeedbacks ?? 0}</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-label">Avg Trainer Rating</div>
-                  <div className="stat-value">{stats.avgTrainerRating ?? '0.0'}</div>
-                </div>
-                <div className="stat-card purple">
-                  <div className="stat-label">Top Trainer</div>
-                  <div className="stat-value" style={{ fontSize: 18 }}>{topTrainer.name} <span style={{ fontSize: 14 }}>({topTrainer.avg > 0 ? topTrainer.avg.toFixed(1) : '-'})</span></div>
-                </div>
-                <div className="stat-card green">
-                  <div className="stat-label">Overall Satisfaction</div>
-                  <div className="stat-value">{stats.satisfactionScore ?? '0.0'} <span style={{ fontSize: 14 }}>/ 5.0</span></div>
-                </div>
-              </div>
+              )}
               <div className="card" style={{ marginTop: 20 }}>
                 <h3 style={{ marginBottom: 16 }}>Feedback Trends Overview</h3>
-                {feedbacks.length > 0 ? (
+                {initialLoading ? (
+                  <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Skeleton style={{ width: '100%', height: 250, borderRadius: 12 }} />
+                  </div>
+                ) : feedbacks.length > 0 ? (
                   <div style={{ height: 300 }}>
                     <Bar data={getChartData()} options={{ maintainAspectRatio: false }} />
                   </div>
                 ) : (
-                  <div className="empty-state"><p>Not enough feedback data to display chart.</p></div>
+                  <div className="empty-state">
+                    <div className="empty-icon">📊</div>
+                    <h3>Not Enough Data</h3>
+                    <p>Feedback trends will appear here once participants start submitting feedback.</p>
+                  </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* PENDING APPROVAL */}
           {tab === 'pending' && (
-            <div className="card">
-              <div className="card-header">
-                <h3>Pending Participants ({pendingParticipants.length})</h3>
-              </div>
-              {pendingParticipants.length === 0 ? (
-                <div className="empty-state"><p>No pending approvals.</p></div>
-              ) : (
-                <div className="table-wrapper">
-                  <table className="table">
-                    <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Registered</th><th>Actions</th></tr></thead>
-                    <tbody>
-                      {pendingParticipants.map((p, i) => (
-                        <tr key={p.id}>
-                          <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
-                          <td><strong>{p.name}</strong></td>
-                          <td>{p.email}</td>
-                          <td>{p.phone || '-'}</td>
-                          <td>{fmtDate(p.created_at)}</td>
-                          <td>
-                            <button className="btn btn-sm btn-success" onClick={() => handleApproveParticipant(p.id)} disabled={loading}>Approve</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="card">
+                <div className="card-header">
+                  <h3>Pending Participants ({pendingParticipants.length})</h3>
                 </div>
-              )}
-            </div>
+                {initialLoading ? (
+                  <SkeletonTable rows={3} />
+                ) : pendingParticipants.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">✓</div>
+                    <h3>All Caught Up!</h3>
+                    <p>No participants are currently waiting for approval.</p>
+                  </div>
+                ) : (
+                  <div className="table-wrapper">
+                    <table className="table">
+                      <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Registered</th><th>Actions</th></tr></thead>
+                      <tbody>
+                        {pendingParticipants.map((p, i) => (
+                          <tr key={p.id}>
+                            <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
+                            <td><strong>{p.name}</strong></td>
+                            <td>{p.email}</td>
+                            <td>{p.phone || '-'}</td>
+                            <td>{fmtDate(p.created_at)}</td>
+                            <td>
+                              <button className="btn btn-sm btn-success" onClick={() => handleApproveParticipant(p.id)} disabled={loading}>Approve</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </motion.div>
           )}
 
           {/* TRAININGS */}
           {tab === 'trainings' && (
-            <div className="card">
-              <div className="card-header">
-                <h3>All Training Sessions ({trainings.length})</h3>
-                <button className="btn btn-primary btn-sm" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
-              </div>
-              {trainings.length === 0 ? (
-                <div className="empty-state"><div className="empty-icon">&#9632;</div><p>No training sessions created yet.</p></div>
-              ) : (
-                <div className="table-wrapper">
-                  <table className="table">
-                    <thead>
-                      <tr><th>#</th><th>Title</th><th>Description</th><th>Trainer</th><th>Start Date</th><th>End Date</th><th>Capacity</th><th>Enrolled</th><th>Actions</th></tr>
-                    </thead>
-                    <tbody>
-                      {trainings.map((t, i) => (
-                        <tr key={t.id}>
-                          <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
-                          <td><strong>{t.title}</strong></td>
-                          <td style={{ color: 'var(--text-secondary)', maxWidth: 180 }}>{t.description ? t.description.slice(0, 60) + (t.description.length > 60 ? '...' : '') : '-'}</td>
-                          <td>{t.trainerName ? <span className="badge badge-purple">{t.trainerName}</span> : <span className="badge badge-gray">Unassigned</span>}</td>
-                          <td>{fmtDate(t.startDate)}</td>
-                          <td>{fmtDate(t.endDate)}</td>
-                          <td>{t.capacity ? t.capacity : <span className="badge badge-blue">Unlimited</span>}</td>
-                          <td>{t.enrolledCount ?? 0}</td>
-                          <td>
-                            <div className="actions">
-                              <button className="btn btn-sm btn-success" onClick={() => handleSendReminders(t.id)} disabled={loading}>Remind</button>
-                              <button className="btn btn-sm" onClick={() => openEdit(t)}>Edit</button>
-                              <button className="btn btn-sm btn-danger" onClick={() => handleDeleteTraining(t.id, t.title)}>Delete</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="card">
+                <div className="card-header">
+                  <h3>All Training Sessions ({trainings.length})</h3>
+                  <button className="btn btn-primary btn-sm" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
                 </div>
-              )}
-            </div>
+                {initialLoading ? (
+                  <SkeletonTable rows={5} />
+                ) : trainings.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">📚</div>
+                    <h3>No Training Sessions</h3>
+                    <p>Create your first training session to get started.</p>
+                    <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => handleTabChange('createTraining')}>+ Create Training</button>
+                  </div>
+                ) : (
+                  <div className="table-wrapper">
+                    <table className="table">
+                      <thead>
+                        <tr><th>#</th><th>Title</th><th>Description</th><th>Trainer</th><th>Start Date</th><th>End Date</th><th>Capacity</th><th>Enrolled</th><th>Actions</th></tr>
+                      </thead>
+                      <tbody>
+                        {trainings.map((t, i) => (
+                          <tr key={t.id}>
+                            <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
+                            <td><strong>{t.title}</strong></td>
+                            <td style={{ color: 'var(--text-secondary)', maxWidth: 180 }}>{t.description ? t.description.slice(0, 60) + (t.description.length > 60 ? '...' : '') : '-'}</td>
+                            <td>{t.trainerName ? <span className="badge badge-purple">{t.trainerName}</span> : <span className="badge badge-gray">Unassigned</span>}</td>
+                            <td>{fmtDate(t.startDate)}</td>
+                            <td>{fmtDate(t.endDate)}</td>
+                            <td>{t.capacity ? t.capacity : <span className="badge badge-blue">Unlimited</span>}</td>
+                            <td>{t.enrolledCount ?? 0}</td>
+                            <td>
+                              <div className="actions">
+                                <button className="btn btn-sm btn-success" onClick={() => handleSendReminders(t.id)} disabled={loading}>Remind</button>
+                                <button className="btn btn-sm" onClick={() => openEdit(t)}>Edit</button>
+                                <button className="btn btn-sm btn-danger" onClick={() => handleDeleteTraining(t.id, t.title)}>Delete</button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* TRAINERS */}
+          {tab === 'trainers' && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="card">
+                <div className="card-header">
+                  <h3>Trainers / Instructors ({trainers.length})</h3>
+                  <button 
+                    className="btn btn-sm btn-primary"
+                    onClick={() => handleTabChange('createTrainer')}
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    + Add Trainer
+                  </button>
+                </div>
+                <TrainerList 
+                  trainers={trainers}
+                  token={user.token}
+                  onDelete={handleDeleteTrainer}
+                  onAddTrainer={() => handleTabChange('createTrainer')}
+                />
+              </div>
+            </motion.div>
           )}
 
           {/* PARTICIPANTS */}
           {tab === 'participants' && (
-            <div className="card">
-              <div className="card-header">
-                <h3>Registered Participants ({participants.length})</h3>
-              </div>
-              {participants.length === 0 ? (
-                <div className="empty-state"><div className="empty-icon">&#9632;</div><p>No participants registered yet.</p></div>
-              ) : (
-                <div className="table-wrapper">
-                  <table className="table">
-                    <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Registered On</th></tr></thead>
-                    <tbody>
-                      {participants.map((p, i) => (
-                        <tr key={p.id}>
-                          <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div className="user-avatar" style={{ width: 28, height: 28, fontSize: 11 }}>{initials(p.name)}</div>
-                              {p.name || '-'}
-                            </div>
-                          </td>
-                          <td>{p.email}</td>
-                          <td>{p.phone || '-'}</td>
-                          <td>{fmtDateTime(p.joinedAt)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="card">
+                <div className="card-header">
+                  <h3>Registered Participants ({participants.length})</h3>
+                  <button 
+                    className="btn btn-sm" 
+                    onClick={() => fetchParticipants()}
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    Refresh
+                  </button>
                 </div>
-              )}
-            </div>
+                {initialLoading ? (
+                  <div style={{ padding: 20 }}>
+                    <div className="empty-state">
+                      <div className="empty-icon">⏳</div>
+                      <p>Loading participants...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <ParticipantList 
+                    participants={participants}
+                    loading={false}
+                    onDelete={handleDeleteParticipant}
+                    onRefresh={() => fetchParticipants()}
+                  />
+                )}
+              </div>
+            </motion.div>
           )}
 
           {/* SURVEYS */}
@@ -504,19 +621,27 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               <form onSubmit={handleCreateQuestion} style={{ marginBottom: 20 }}>
                 <div className="form-grid-2">
                   <div className="form-group">
-                    <label className="form-label">Training (Optional)</label>
-                    <select className="form-control" value={questionForm.trainingId} onChange={e => setQuestionForm(p => ({ ...p, trainingId: e.target.value }))}>
-                      <option value="">Apply to ALL Trainings</option>
-                      {trainings.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                    </select>
+                    <AnimatedDropdown
+                      label="Training (Optional)"
+                      options={[
+                        { value: '', label: 'Apply to ALL Trainings' },
+                        ...trainings.map(t => ({ value: t.id, label: t.title }))
+                      ]}
+                      value={questionForm.trainingId}
+                      onChange={(val) => setQuestionForm(p => ({ ...p, trainingId: val }))}
+                    />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Question Type</label>
-                    <select className="form-control" value={questionForm.questionType} onChange={e => setQuestionForm(p => ({ ...p, questionType: e.target.value }))}>
-                      <option value="TEXT">Text Answer</option>
-                      <option value="RATING">Rating (1-5)</option>
-                      <option value="MULTIPLE_CHOICE">Multiple Choice</option>
-                    </select>
+                    <AnimatedDropdown
+                      label="Question Type"
+                      options={[
+                        { value: 'TEXT', label: 'Text Answer' },
+                        { value: 'RATING', label: 'Rating (1-5)' },
+                        { value: 'MULTIPLE_CHOICE', label: 'Multiple Choice' }
+                      ]}
+                      value={questionForm.questionType}
+                      onChange={(val) => setQuestionForm(p => ({ ...p, questionType: val }))}
+                    />
                   </div>
                 </div>
                 <div className="form-group">
@@ -558,9 +683,92 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
             </div>
           )}
 
+          {/* NOTES MANAGEMENT */}
+          {tab === 'notes' && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="card" style={{ marginBottom: 20 }}>
+                <div className="card-header">
+                  <h3>Notes Management ({notes.length})</h3>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button 
+                      className={`btn btn-sm ${!noteFilter ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => { setNoteFilter(''); fetchNotes() }}
+                    >
+                      All
+                    </button>
+                    <button 
+                      className={`btn btn-sm ${noteFilter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => { setNoteFilter('pending'); fetchNotes('pending') }}
+                    >
+                      Pending
+                    </button>
+                    <button 
+                      className={`btn btn-sm ${noteFilter === 'approved' ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => { setNoteFilter('approved'); fetchNotes('approved') }}
+                    >
+                      Approved
+                    </button>
+                  </div>
+                </div>
+                {notes.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">📄</div>
+                    <h3>No Notes Found</h3>
+                    <p>
+                      {noteFilter === 'pending' ? 'No pending notes to review.' : 
+                       noteFilter === 'approved' ? 'No approved notes yet.' : 
+                       'Notes will appear here when trainers upload them.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="table-wrapper">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Title</th>
+                          <th>Trainer</th>
+                          <th>Training</th>
+                          <th>Type</th>
+                          <th>Status</th>
+                          <th>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {notes.map((note, i) => (
+                          <tr key={note.id}>
+                            <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
+                            <td><strong>{note.title}</strong></td>
+                            <td>{note.trainer?.name || '-'}</td>
+                            <td>{note.training?.title || 'General'}</td>
+                            <td><span className="badge badge-blue">{note.fileType}</span></td>
+                            <td>
+                              <span className={`badge ${note.status === 'APPROVED' ? 'badge-green' : 'badge-yellow'}`}>
+                                {note.status}
+                              </span>
+                            </td>
+                            <td>{fmtDate(note.created_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
           {/* FEEDBACK REPORTS */}
           {tab === 'feedback' && (
-            <div>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
               <div className="stats-grid" style={{ marginBottom: 20 }}>
                 <div className="stat-card">
                   <div className="stat-label">Total Responses</div>
@@ -579,8 +787,14 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                 <div className="card-header">
                   <h3>Feedback Analysis &amp; Reports</h3>
                 </div>
-                {feedbacks.length === 0 ? (
-                  <div className="empty-state"><div className="empty-icon">&#9632;</div><p>No feedback submitted yet.</p></div>
+                {initialLoading ? (
+                  <SkeletonTable rows={5} />
+                ) : feedbacks.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">💬</div>
+                    <h3>No Feedback Yet</h3>
+                    <p>Feedback from participants will appear here once they start submitting.</p>
+                  </div>
                 ) : (
                   <div className="table-wrapper">
                     <table className="table">
@@ -606,7 +820,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* ADD TRAINER */}
@@ -666,12 +880,15 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                       onChange={e => setTrainingForm(p => ({ ...p, description: e.target.value }))} placeholder="Training objectives and content overview..." />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Assign Trainer</label>
-                    <select className="form-control" value={trainingForm.trainerId}
-                      onChange={e => setTrainingForm(p => ({ ...p, trainerId: e.target.value }))} required>
-                      <option value="">Select a trainer</option>
-                      {trainers.map(t => <option key={t.id} value={t.id}>{t.name} ({t.email})</option>)}
-                    </select>
+                    <AnimatedDropdown
+                      label="Assign Trainer"
+                      options={[
+                        { value: '', label: 'Select a trainer' },
+                        ...trainers.map(t => ({ value: t.id, label: `${t.name} (${t.email})` }))
+                      ]}
+                      value={trainingForm.trainerId}
+                      onChange={(val) => setTrainingForm(p => ({ ...p, trainerId: val }))}
+                    />
                   </div>
                   <div className="form-grid-2">
                     <div className="form-group">
@@ -735,8 +952,19 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
       {/* EDIT MODAL */}
       {editModal && (
-        <div className="modal-overlay">
-          <div className="modal">
+        <motion.div
+          className="modal-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="modal"
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ duration: 0.2 }}
+          >
             <div className="modal-header">
               <h3>Edit Training Session</h3>
               <button className="modal-close" onClick={() => setEditModal(null)}>&#10005;</button>
@@ -753,12 +981,15 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} />
               </div>
               <div className="form-group">
-                <label className="form-label">Trainer</label>
-                <select className="form-control" value={editForm.trainerId}
-                  onChange={e => setEditForm(p => ({ ...p, trainerId: e.target.value }))}>
-                  <option value="">No trainer assigned</option>
-                  {trainers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
+                <AnimatedDropdown
+                  label="Trainer"
+                  options={[
+                    { value: '', label: 'No trainer assigned' },
+                    ...trainers.map(t => ({ value: t.id, label: t.name }))
+                  ]}
+                  value={editForm.trainerId}
+                  onChange={(val) => setEditForm(p => ({ ...p, trainerId: val }))}
+                />
               </div>
               <div className="form-grid-2">
                 <div className="form-group">
@@ -782,30 +1013,44 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                 <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Saving...' : 'Save Changes'}</button>
               </div>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
 
       {confirmModal && (
-        <div className="modal-backdrop" onClick={() => setConfirmModal(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
+        <motion.div
+          className="modal-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={() => setConfirmModal(null)}
+        >
+          <motion.div
+            className="modal"
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ duration: 0.2 }}
+            onClick={e => e.stopPropagation()}
+          >
             <div className="modal-header">
               <h3>{confirmModal.title}</h3>
               <button type="button" className="modal-close" onClick={() => setConfirmModal(null)}>×</button>
             </div>
             <div className="modal-body">
               {confirmModal.subtitle && <p>{confirmModal.subtitle}</p>}
+              <div className="modal-footer">
+                <button type="button" className="btn" onClick={() => setConfirmModal(null)}>Cancel</button>
+                <button type="button" className="btn btn-danger" onClick={confirmAction} disabled={loading}>
+                  {loading ? 'Processing...' : 'Confirm'}
+                </button>
+              </div>
             </div>
-            <div className="modal-footer">
-              <button type="button" className="btn" onClick={() => setConfirmModal(null)}>Cancel</button>
-              <button type="button" className="btn btn-danger" onClick={confirmAction} disabled={loading}>
-                {loading ? 'Processing...' : 'Confirm'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+          </motion.div>
+          </motion.div>
+        )}
+      </div>
+    </AnimatePresence>
   )
 }
 

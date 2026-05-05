@@ -7,7 +7,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSocket } from '../context/SocketContext';
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+import { BACKEND_ORIGIN } from '../api/api';
+
+const API_BASE = `${BACKEND_ORIGIN}/api`;
 
 /**
  * useNotifications Hook

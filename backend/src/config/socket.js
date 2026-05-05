@@ -146,6 +146,9 @@ const initializeSocket = (server) => {
     socket.on('error', (error) => {
       logger.error('Socket error', { socketId: socket.id, error: error.message });
     });
+
+    // Register live session and chat events
+    require('../socket/events/liveEvents')(io, socket);
   });
 
   return io;

@@ -5,6 +5,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
+import { BACKEND_ORIGIN } from '../api/api';
 
 const SocketContext = createContext(null);
 
@@ -25,7 +26,7 @@ export const SocketProvider = ({ children }) => {
     setUserRole(user.role);
 
     // Initialize Socket.IO connection
-    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001', {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || BACKEND_ORIGIN, {
       auth: {
         token,
       },

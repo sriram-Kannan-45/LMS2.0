@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const API = 'http://localhost:3001/api'
+import { API_BASE as API } from '../api/api'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '-'
 

@@ -1,0 +1,22 @@
+“From the beginning until now, I started with functional testing, where I revised important concepts across different testing types. white box testing, black box testing
+
+In white box testing, I focused on understanding the internal logic of the code. I covered techniques like statement coverage, 
+
+In black box testing, I concentrated on testing the application without looking at the internal code. I revised equivalence partitioning, where inputs are divided into valid and invalid groups,I also went through performance testing,
+
+After that, I moved on to Agile methodology, where I refreshed my understanding of sprints and sprint ceremonies like sprint planning, daily standup, sprint review, and retrospective.
+
+Then, I worked on Java, Along with that, I practiced GitHub workflows, especially creating and managing pull requests.
+
+then I learned how to use TestNG framework for test execution.
+I understood how to create and run testng.xml file, which helps in organizing and controlling test execution.
+
+I also learned about parallel execution in TestNG, which helps in running multiple test cases simultaneously to reduce execution time.
+
+In addition, I learned how to use parameters and data providers, which allow passing multiple sets of data to test methods, making test cases more flexible and reusable.
+
+Overall, these concepts help in improving test execution efficiency and managing test cases effectively in automation testing.
+
+
+
+Poor Obfuscation Implementation 

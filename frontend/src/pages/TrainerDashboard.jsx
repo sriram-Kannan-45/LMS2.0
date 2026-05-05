@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
 import TrainerForm from '../components/TrainerForm'
+import TrainerAIQuiz from '../components/TrainerAIQuiz'
 
-const API = 'http://localhost:3001/api'
+import { API_BASE } from '../api/api'
+
+const API = API_BASE
 
 function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [tab, setTab] = useState(activeTab || 'trainings')
@@ -84,6 +87,7 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
   const TABS = [
     { key: 'trainings', label: 'My Trainings' },
     { key: 'notes', label: 'Upload Notes' },
+    { key: 'ai-quiz', label: 'AI Quiz Generator' },
     { key: 'feedback', label: 'Feedback Received' },
     { key: 'profile', label: 'My Profile' },
   ]
@@ -300,6 +304,10 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
                 )}
               </div>
             </div>
+          )}
+
+          {tab === 'ai-quiz' && (
+            <TrainerAIQuiz user={user} />
           )}
 
            {tab === 'profile' && (

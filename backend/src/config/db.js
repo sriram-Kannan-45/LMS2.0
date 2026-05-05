@@ -41,7 +41,9 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log('✅ Database connected successfully');
     
-    await sequelize.sync();
+    // Use alter: false to prevent duplicate index creation
+    // Use force: false and match: true for safer sync
+    await sequelize.sync({ alter: false, logging: false });
     console.log('✅ Tables synced');
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);

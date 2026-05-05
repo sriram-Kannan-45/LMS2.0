@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
+import AIQuizList from '../components/AIQuizList'
+import QuizTaking from '../components/QuizTaking'
 
-const API = 'http://localhost:3001/api'
+import { API_BASE as API } from '../api/api'
 
 function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [tab, setTab] = useState(activeTab || 'available')
@@ -37,7 +39,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API}/trainings`, { headers: auth() })
       const d = await r.json()
       setTrainings(Array.isArray(d) ? d : (d.trainings || []))
-    } catch {}
+    } catch { }
   }
 
   const fetchEnrollments = async () => {
@@ -45,7 +47,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API}/participant/enrollments`, { headers: auth() })
       const d = await r.json()
       setEnrollments(d.enrollments || [])
-    } catch {}
+    } catch { }
   }
 
   const fetchFeedbacks = async () => {
@@ -53,7 +55,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API}/participant/feedbacks`, { headers: auth() })
       const d = await r.json()
       setFeedbacks(d.feedbacks || [])
-    } catch {}
+    } catch { }
   }
 
   const handleEnroll = async (trainingId) => {
@@ -93,7 +95,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API}/survey/${enrollment.trainingId}`, { headers: auth() })
       const d = await r.json()
       setQuestions(d.questions || [])
-    } catch {}
+    } catch { }
   }
 
   const handleSubmitFeedback = async (e) => {
@@ -109,9 +111,9 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
           answerRating: q.questionType === 'RATING' ? parseInt(val) : null
         }
       })
-      
+
       const payload = { trainingId: feedbackModal.trainingId, ...fbForm, surveyAnswers }
-      
+
       const r = await fetch(`${API}/feedback`, {
         method: 'POST', headers: auth(),
         body: JSON.stringify(payload)
@@ -131,7 +133,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   const StarPicker = ({ value, onChange }) => (
     <div className="stars">
-      {[1,2,3,4,5].map(s => (
+      {[1, 2, 3, 4, 5].map(s => (
         <span
           key={s}
           className={`star interactive ${s <= value ? 'filled' : ''}`}
@@ -142,14 +144,35 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
     </div>
   )
 
-  const Stars = ({ v }) => <span className="stars">{[1,2,3,4,5].map(s => <span key={s} className={`star ${s<=v?'filled':''}`}>&#9733;</span>)}</span>
+  const Stars = ({ v }) => <span className="stars">{[1, 2, 3, 4, 5].map(s => <span key={s} className={`star ${s <= v ? 'filled' : ''}`}>&#9733;</span>)}</span>
 
   const TABS = [
     { key: 'available', label: 'Available Trainings' },
     { key: 'myEnrollments', label: 'My Enrollments' },
+    { key: 'ai-quizzes', label: 'AI Quizzes' },
     { key: 'feedback', label: 'Give Feedback' },
     { key: 'myFeedbacks', label: 'My Feedbacks' },
   ]
+
+  // Quiz state: store the full quiz object (with questions) + attempt id
+  const [activeQuiz, setActiveQuiz] = useState(null)   // full quiz object
+  const [quizAttemptId, setQuizAttemptId] = useState(null)
+
+  /**
+   * Called by AIQuizList after it hits /participant/start/:quizId.
+   * Receives the attemptId AND the full quiz object (with questions array).
+   */
+  const handleStartQuiz = (attemptId, quiz) => {
+    console.log('[ParticipantDashboard] Starting quiz:', quiz?.title, '| questions:', quiz?.questions?.length, '| attemptId:', attemptId)
+    setActiveQuiz(quiz)
+    setQuizAttemptId(attemptId)
+  }
+
+  const handleQuizComplete = (result) => {
+    setActiveQuiz(null)
+    setQuizAttemptId(null)
+    if (result) notify(`Quiz submitted! Score: ${result.percentage?.toFixed(1) ?? 0}%`)
+  }
 
   return (
     <div className="dashboard">
@@ -173,7 +196,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
               {trainings.map(t => {
                 const enrolled = isEnrolled(t.id)
                 const full = t.isFull
-                const pct = t.capacity ? Math.round(((t.enrolledCount||0) / t.capacity) * 100) : null
+                const pct = t.capacity ? Math.round(((t.enrolledCount || 0) / t.capacity) * 100) : null
                 return (
                   <div key={t.id} className="training-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
@@ -276,6 +299,26 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'ai-quizzes' && (
+        <div>
+          {activeQuiz && quizAttemptId ? (
+            // QuizTaking needs: quizId, attemptId, quizData (with questions), onSubmit
+            <QuizTaking
+              quizId={activeQuiz.id}
+              attemptId={quizAttemptId}
+              quizData={activeQuiz}
+              onSubmit={handleQuizComplete}
+            />
+          ) : (
+            // AIQuizList calls onStartQuiz(attemptId, quizObject) after making the start API call
+            <AIQuizList
+              user={user}
+              onStartQuiz={handleStartQuiz}
+            />
           )}
         </div>
       )}

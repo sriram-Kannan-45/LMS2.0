@@ -1,0 +1,55 @@
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
+
+const AIQuestion = sequelize.define('AIQuestion', {
+  id: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  quizId: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    allowNull: false,
+    field: 'quiz_id'
+  },
+  questionText: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+    field: 'question_text'
+  },
+  questionType: {
+    type: DataTypes.ENUM('MCQ', 'SHORT_ANSWER'),
+    allowNull: false,
+    field: 'question_type'
+  },
+  options: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Array of options for MCQ'
+  },
+  correctAnswer: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'correct_answer'
+  },
+  explanation: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  difficulty: {
+    type: DataTypes.ENUM('EASY', 'MEDIUM', 'HARD'),
+    allowNull: false,
+    defaultValue: 'MEDIUM'
+  },
+  order: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  }
+}, {
+  tableName: 'ai_questions',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
+});
+
+module.exports = AIQuestion;

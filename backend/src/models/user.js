@@ -24,6 +24,14 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  dob: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
+  profilePic: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   username: {
     type: DataTypes.STRING,
     allowNull: true,

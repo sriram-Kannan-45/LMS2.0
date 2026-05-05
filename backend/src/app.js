@@ -23,12 +23,18 @@ const surveyRoutes = require('./routes/surveyRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const noteRoutes = require('./routes/noteRoutes');
 const feedRoutes = require('./routes/feedRoutes');
+const liveRoutes = require('./routes/liveRoutes');
+const aiQuizRoutes = require('./routes/aiQuizRoutes');
+const profileRoutes = require('./routes/profileRoutes');
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: "http://localhost:5173",
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -52,16 +58,62 @@ app.use('/api/survey', surveyRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/feed', feedRoutes);
+app.use('/api/live', liveRoutes);
+app.use('/api/ai-quiz', aiQuizRoutes);
+app.use('/api/profile', profileRoutes);
+
+// Health check for AI service (separate path to avoid conflict with router)
+app.get('/api/ai/health', async (req, res) => {
+  try {
+    const aiService = require('./services/aiService');
+    const result = await aiService.checkHealth();
+    if (result.available) {
+      res.json({ status: 'ok', aiService: result.details });
+    } else {
+      res.status(503).json({ 
+        status: 'error', 
+        message: 'AI service is not responding',
+        hint: 'Start the Python service: cd ai-service && python main.py'
+      });
+    }
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'error', 
+      message: 'AI service unavailable',
+      hint: 'Start the Python service: cd ai-service && python main.py'
+    });
+  }
+});
+
+// Custom route for updating profile exactly as requested
+const profileController = require('./controllers/profileController');
+const upload = require('./middleware/upload');
+const authenticateToken = require('./middleware/auth');
+app.put('/api/update-profile', authenticateToken, upload.single('profilePic'), profileController.updateProfile);
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Error handler
+// ─── Global error handler ────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+  console.error('❌ Unhandled error on', req.method, req.originalUrl);
+  console.error(err.stack);
+
+  // Multer file-type / size errors
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ success: false, message: 'File too large. Maximum size is 5 MB.' });
+  }
+  if (err.message && err.message.includes('Only JPG')) {
+    return res.status(415).json({ success: false, message: err.message });
+  }
+
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Internal server error',
+    stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined
+  });
 });
 
 // Global 404 fallback with detailed logging
@@ -84,19 +136,8 @@ const startServer = async () => {
     app.set('io', io);
     logger.info('Socket.IO initialized');
 
-    // Setup Redis adapter for multi-instance scaling
-    if (process.env.REDIS_URL || process.env.NODE_ENV === 'production') {
-      try {
-        await setupRedisAdapter(io);
-        logger.info('Redis adapter configured for Socket.IO scaling');
-      } catch (error) {
-        logger.warn('Redis adapter setup failed, running without Redis', { 
-          error: error.message 
-        });
-      }
-    } else {
-      logger.info('Running Socket.IO in single-instance mode (no Redis)');
-    }
+    // Setup Redis adapter for multi-instance scaling (disabled for local dev)
+    logger.info('Running Socket.IO in single-instance mode (Redis disabled for local dev)');
 
     // Create default admin if not exists
     const adminExists = await User.findOne({ where: { email: 'admin@test.com' } });
@@ -153,7 +194,11 @@ const startServer = async () => {
     });
 
   } catch (error) {
-    logger.error('Failed to start server', { error: error.message });
+    logger.error('Failed to start server', { 
+      error: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     process.exit(1);
   }
 };
