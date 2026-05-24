@@ -1,254 +1,296 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Trophy, Medal, Flame, Clock, TrendingUp, Crown, Star, Zap } from 'lucide-react'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+} from 'recharts'
+import {
+  Trophy, Medal, Flame, Clock, TrendingUp, Crown,
+  Star, Zap, Users, BarChart2, ChevronUp, ChevronDown
+} from 'lucide-react'
 
+/* ─── Custom Recharts Tooltip ─── */
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-xl px-4 py-3 text-sm">
+      <p className="font-bold text-slate-800 mb-1">{label}</p>
+      <p className="text-indigo-600 font-black text-base">{payload[0]?.value?.toFixed(1)}%</p>
+    </div>
+  )
+}
+
+/* ─── Podium bar heights ─── */
+const PODIUM_HEIGHTS = { 1: 'h-36', 2: 'h-28', 3: 'h-20' }
+
+/* ─── Rank configs ─── */
+const RANK_CONFIG = {
+  1: {
+    medal: '🥇', label: '1st',
+    card: 'border-amber-300 bg-gradient-to-b from-amber-50 to-yellow-50 shadow-xl shadow-amber-100',
+    stripe: 'from-yellow-400 to-amber-500',
+    avatar: 'from-yellow-400 to-amber-500 shadow-amber-200',
+    score: 'text-amber-600',
+    bar: 'from-yellow-400 to-amber-500',
+    scale: 'sm:scale-105 sm:z-10',
+  },
+  2: {
+    medal: '🥈', label: '2nd',
+    card: 'border-slate-300 bg-gradient-to-b from-slate-50 to-white shadow-lg shadow-slate-100',
+    stripe: 'from-slate-300 to-slate-400',
+    avatar: 'from-slate-400 to-slate-500',
+    score: 'text-slate-600',
+    bar: 'from-slate-300 to-slate-400',
+    scale: '',
+  },
+  3: {
+    medal: '🥉', label: '3rd',
+    card: 'border-orange-200 bg-gradient-to-b from-orange-50 to-white shadow-lg shadow-orange-100',
+    stripe: 'from-orange-300 to-orange-400',
+    avatar: 'from-orange-400 to-orange-500 shadow-orange-200',
+    score: 'text-orange-600',
+    bar: 'from-orange-300 to-orange-400',
+    scale: '',
+  },
+}
+
+/* ─── Main Leaderboard Component ─── */
 const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, currentUserId = null }) => {
   const [filterRange, setFilterRange] = useState('all')
 
-  const topThree = data.slice(0, 3)
-  const rest = data.slice(3)
-  const podiumOrder = [1, 0, 2] // 2nd, 1st, 3rd
+  const displayData = filterRange === 'top10' ? data.slice(0, 10) : data
+  const topThree    = displayData.slice(0, 3)
+  const rest        = displayData.slice(3)
+
+  // Podium order: 2nd, 1st, 3rd
+  const podiumOrder = [1, 0, 2]
 
   const chartData = data.slice(0, 10).map(entry => ({
-    name: entry.name?.length > 10 ? entry.name.substring(0, 10) + '...' : entry.name || 'Unknown',
-    score: entry.score || 0
+    name: entry.name?.length > 9
+      ? entry.name.substring(0, 9) + '…'
+      : entry.name || 'Unknown',
+    score: entry.score || 0,
   }))
 
-  const getBadgeForRank = (rank) => {
-    if (rank === 1) return { icon: '🥇', label: '1st', color: 'from-yellow-400 to-amber-500' }
-    if (rank === 2) return { icon: '🥈', label: '2nd', color: 'from-gray-300 to-gray-400' }
-    if (rank === 3) return { icon: '🥉', label: '3rd', color: 'from-orange-300 to-orange-400' }
-    if (rank <= 10) return { icon: '⭐', label: `Top ${rank}`, color: 'from-blue-400 to-indigo-500' }
-    return null
-  }
-
   const getMedalColor = (score) => {
-    if (score >= 90) return 'text-yellow-500'
+    if (score >= 90) return 'text-amber-500'
     if (score >= 80) return 'text-indigo-500'
     if (score >= 70) return 'text-emerald-500'
     return 'text-slate-400'
   }
 
-  const containerVariants = {
-    initial: { opacity: 0, y: 20 },
-    animate: { opacity: 1, y: 0, transition: { duration: 0.4 } }
+  const getStatusBadge = (score) => {
+    if (score >= 90) return { label: 'Outstanding', color: 'bg-amber-50 text-amber-700 border-amber-200' }
+    if (score >= 80) return { label: 'Excellent',   color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+    if (score >= 60) return { label: 'Good',        color: 'bg-blue-50 text-blue-700 border-blue-200' }
+    if (score >= 40) return { label: 'Passed',      color: 'bg-indigo-50 text-indigo-700 border-indigo-200' }
+    return                  { label: 'Keep Going',  color: 'bg-slate-50 text-slate-600 border-slate-200' }
   }
 
-  const itemVariants = {
-    initial: { opacity: 0, x: -20 },
-    animate: { opacity: 1, x: 0 }
-  }
-
-  const podiumHeights = { 0: 'h-36', 1: 'h-28', 2: 'h-20' } // 1st, 2nd, 3rd
+  const CHART_COLORS = [
+    '#6366f1', '#7c3aed', '#8b5cf6', '#a78bfa',
+    '#c4b5fd', '#818cf8', '#4f46e5', '#4338ca',
+    '#3730a3', '#312e81',
+  ]
 
   return (
     <motion.div
-      variants={containerVariants}
-      initial="initial"
-      animate="animate"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
       className="w-full"
+      style={{ fontFamily: "'Inter', 'Outfit', sans-serif" }}
     >
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-5">
+
+      {/* ═══════════════════ HEADER ═══════════════════ */}
+      <div className="mb-7">
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-5">
           <div className="flex items-center gap-3">
-            <motion.div 
-              whileHover={{ rotate: 15, scale: 1.1 }}
+            <motion.div
+              whileHover={{ rotate: 12, scale: 1.1 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
               className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-amber-200"
             >
-              <Trophy size={24} className="text-white" />
+              <Trophy size={22} className="text-white" />
             </motion.div>
             <div>
-              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900" style={{ fontFamily: 'Outfit, sans-serif' }}>{title}</h2>
-              <p className="text-sm text-slate-500 mt-0.5">See how you rank among participants</p>
+              <h2
+                className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight"
+                style={{ fontFamily: 'Outfit, sans-serif' }}
+              >
+                {title}
+              </h2>
+              <p className="text-sm text-slate-500 mt-0.5 font-medium">
+                See how you rank among participants
+              </p>
             </div>
           </div>
+
           {data.length > 0 && (
-            <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-xl border border-indigo-100">
-              <TrendingUp size={16} className="text-indigo-500" />
-              <span className="text-sm font-semibold text-indigo-600">{data.length} participants</span>
+            <div className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
+              <Users size={15} className="text-indigo-500" />
+              <span className="text-sm font-bold text-indigo-600">{data.length} participants</span>
             </div>
           )}
         </div>
 
-        {/* Filter Buttons */}
+        {/* Filter pills */}
         <div className="flex gap-2 flex-wrap">
           {[
-            { key: 'all', label: 'All Time', icon: <Star size={14} /> },
-            { key: 'top10', label: 'Top 10', icon: <Crown size={14} /> },
-            { key: 'today', label: 'Today', icon: <Clock size={14} /> }
-          ].map(range => (
+            { key: 'all',   label: 'All Time', icon: Star },
+            { key: 'top10', label: 'Top 10',   icon: Crown },
+          ].map(({ key, label, icon: Icon }) => (
             <motion.button
-              key={range.key}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setFilterRange(range.key)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                filterRange === range.key
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-200'
-                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200 hover:border-slate-300'
-              }`}
+              key={key}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setFilterRange(key)}
+              className={[
+                'flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold text-sm transition-all duration-200',
+                filterRange === key
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-200'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200 hover:border-slate-300',
+              ].join(' ')}
             >
-              {range.icon}
-              {range.label}
+              <Icon size={13} />
+              {label}
             </motion.button>
           ))}
         </div>
       </div>
 
-      {/* Empty State */}
+      {/* ═══════════════════ EMPTY STATE ═══════════════════ */}
       {data.length === 0 ? (
         <motion.div
-          variants={itemVariants}
-          initial="initial"
-          animate="animate"
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
           className="text-center py-20 px-4 bg-white rounded-2xl border-2 border-dashed border-slate-200"
         >
-          <motion.div 
+          <motion.div
             animate={{ y: [0, -8, 0] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl mb-5"
+            transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+            className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-amber-100 to-orange-100 rounded-2xl mb-5"
           >
-            <Trophy size={36} className="text-slate-400" />
+            <Trophy size={36} className="text-amber-400" />
           </motion.div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2" style={{ fontFamily: 'Outfit, sans-serif' }}>No Attempts Yet</h3>
-          <p className="text-slate-500 max-w-xs mx-auto">Be the first to take this quiz and claim the top spot on the leaderboard!</p>
+          <h3 className="text-xl font-bold text-slate-900 mb-2" style={{ fontFamily: 'Outfit, sans-serif' }}>
+            No Attempts Yet
+          </h3>
+          <p className="text-slate-500 text-sm max-w-xs mx-auto font-medium leading-relaxed">
+            Be the first to take this quiz and claim the top spot on the leaderboard!
+          </p>
         </motion.div>
       ) : (
         <>
-          {/* Podium for Top 3 */}
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
+
+          {/* ═══════════════════ PODIUM ═══════════════════ */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mb-10"
+            transition={{ delay: 0.1 }}
+            className="mb-8"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+            <div className="grid grid-cols-3 gap-3 sm:gap-4 items-end">
               {podiumOrder.map((pos, i) => {
                 const entry = topThree[pos]
                 if (!entry) return <div key={i} className="h-32" />
 
-                const isFirst = pos === 0
-                const rank = pos + 1
+                const rank          = pos + 1
+                const cfg           = RANK_CONFIG[rank]
+                const isFirst       = rank === 1
                 const isCurrentUser = currentUserId && entry.userId === currentUserId
 
                 return (
                   <motion.div
                     key={entry.userId || entry.name || i}
-                    initial={{ y: 60, opacity: 0, scale: 0.8 }}
+                    initial={{ y: 60, opacity: 0, scale: 0.85 }}
                     animate={{ y: 0, opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.15 + 0.3, type: 'spring', stiffness: 200, damping: 20 }}
-                    className={`relative ${isFirst ? 'sm:order-2 sm:scale-105' : i === 0 ? 'sm:order-1' : 'sm:order-3'}`}
+                    transition={{
+                      delay: i * 0.14 + 0.2,
+                      type: 'spring',
+                      stiffness: 220,
+                      damping: 22,
+                    }}
+                    className={`relative ${cfg.scale}`}
                   >
-                    {/* Current User Indicator */}
+                    {/* "You" badge */}
                     {isCurrentUser && (
-                      <motion.div 
-                        initial={{ y: -10, opacity: 0 }}
+                      <motion.div
+                        initial={{ y: -8, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
-                        className="absolute -top-3 right-0 left-0 flex justify-center z-10"
+                        transition={{ delay: 0.6 }}
+                        className="absolute -top-3.5 left-0 right-0 flex justify-center z-10"
                       >
-                        <div className="px-3 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded-full shadow-lg shadow-indigo-200">
-                          ✨ YOU
-                        </div>
+                        <span className="px-3 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black rounded-full shadow-lg shadow-indigo-200 uppercase tracking-wider">
+                          ✨ You
+                        </span>
                       </motion.div>
                     )}
 
-                    {/* Card */}
-                    <div
-                      className={`rounded-2xl border-2 overflow-hidden transition-all hover:shadow-xl ${
-                        isCurrentUser
-                          ? 'border-indigo-400 bg-indigo-50 shadow-lg shadow-indigo-100'
-                          : isFirst
-                          ? 'border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-50 shadow-lg shadow-amber-100'
-                          : 'border-slate-200 bg-white shadow-md hover:shadow-lg'
-                      }`}
-                    >
-                      {/* Header Bar */}
-                      <div
-                        className={`h-1.5 bg-gradient-to-r ${
-                          isFirst
-                            ? 'from-yellow-400 to-amber-500'
-                            : rank === 2
-                            ? 'from-slate-300 to-slate-400'
-                            : rank === 3
-                            ? 'from-orange-300 to-orange-400'
-                            : isCurrentUser
-                            ? 'from-indigo-500 to-purple-600'
-                            : 'from-slate-300 to-slate-400'
-                        }`}
-                      />
+                    <div className={`rounded-2xl border-2 overflow-hidden transition-all duration-200 hover:shadow-2xl ${cfg.card}`}>
+                      {/* Top stripe */}
+                      <div className={`h-1.5 bg-gradient-to-r ${cfg.stripe}`} />
 
-                      <div className="p-6 text-center">
+                      <div className="p-4 sm:p-5 text-center">
                         {/* Medal */}
-                        <motion.div 
+                        <motion.div
                           animate={isFirst ? { y: [0, -5, 0] } : {}}
-                          transition={{ duration: 2, repeat: Infinity }}
-                          className="text-5xl mb-3"
+                          transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                          className="text-3xl sm:text-4xl mb-2.5"
                         >
-                          {getBadgeForRank(rank)?.icon}
+                          {cfg.medal}
                         </motion.div>
 
                         {/* Avatar */}
                         <motion.div
-                          whileHover={{ scale: 1.1, rotate: 5 }}
-                          className={`w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center font-bold text-lg text-white shadow-lg ${
-                            isFirst
-                              ? 'bg-gradient-to-br from-yellow-400 to-amber-500 shadow-amber-200'
-                              : rank === 2
-                              ? 'bg-gradient-to-br from-slate-400 to-slate-500'
-                              : rank === 3
-                              ? 'bg-gradient-to-br from-orange-400 to-orange-500'
-                              : isCurrentUser
-                              ? 'bg-gradient-to-br from-indigo-500 to-purple-600'
-                              : 'bg-gradient-to-br from-slate-400 to-slate-500'
-                          }`}
+                          whileHover={{ scale: 1.08, rotate: 4 }}
+                          className={`w-12 h-12 sm:w-14 sm:h-14 mx-auto mb-2.5 rounded-2xl flex items-center justify-center font-black text-base sm:text-lg text-white shadow-lg bg-gradient-to-br ${cfg.avatar}`}
                           style={{ fontFamily: 'Outfit, sans-serif' }}
                         >
                           {(entry.name || 'U').charAt(0).toUpperCase()}
                         </motion.div>
 
                         {/* Name */}
-                        <h3 className="font-bold text-slate-900 text-lg mb-1 truncate" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                        <h3
+                          className="font-bold text-slate-900 text-sm sm:text-base mb-1 truncate"
+                          style={{ fontFamily: 'Outfit, sans-serif' }}
+                          title={entry.name}
+                        >
                           {entry.name || 'Anonymous'}
                         </h3>
 
-                        {/* Time if available */}
+                        {/* Time */}
                         {entry.timeTaken && (
-                          <p className="text-xs text-slate-500 mb-3 flex items-center justify-center gap-1">
-                            <Clock size={12} />
+                          <p className="text-[10px] text-slate-500 mb-2 flex items-center justify-center gap-1">
+                            <Clock size={10} />
                             {entry.timeTaken}
                           </p>
                         )}
 
                         {/* Score */}
-                        <div className="flex items-baseline justify-center gap-1 mb-4">
+                        <div className="flex items-baseline justify-center gap-0.5 mb-3">
                           <span
-                            className={`text-4xl font-bold ${
-                              isFirst ? 'text-amber-600' : rank === 2 ? 'text-slate-600' : 'text-orange-600'
-                            }`}
+                            className={`text-2xl sm:text-3xl font-black ${cfg.score}`}
                             style={{ fontFamily: 'Outfit, sans-serif' }}
                           >
                             {entry.score?.toFixed(1) || 0}
                           </span>
-                          <span className="text-lg text-slate-400 font-medium">%</span>
+                          <span className="text-sm text-slate-400 font-semibold">%</span>
                         </div>
 
-                        {/* Bar Indicator */}
-                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        {/* Score bar */}
+                        <div className="w-full bg-white/60 rounded-full h-1.5 overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${entry.score || 0}%` }}
-                            transition={{ duration: 1, ease: 'easeOut', delay: 0.5 }}
-                            className={`h-full rounded-full ${
-                              isFirst
-                                ? 'bg-gradient-to-r from-yellow-400 to-amber-500'
-                                : rank === 2
-                                ? 'bg-gradient-to-r from-slate-300 to-slate-400'
-                                : 'bg-gradient-to-r from-orange-300 to-orange-400'
-                            }`}
+                            transition={{ duration: 1.1, ease: 'easeOut', delay: 0.5 + i * 0.1 }}
+                            className={`h-full rounded-full bg-gradient-to-r ${cfg.bar}`}
                           />
                         </div>
+
+                        {/* Rank label */}
+                        <p className={`text-[10px] font-black uppercase tracking-widest mt-2 ${cfg.score}`}>
+                          {cfg.label} Place
+                        </p>
                       </div>
                     </div>
                   </motion.div>
@@ -257,125 +299,178 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
             </div>
           </motion.div>
 
-          {/* Chart */}
+          {/* ═══════════════════ CHART ═══════════════════ */}
           {showChart && chartData.length > 0 && (
             <motion.div
-              variants={itemVariants}
-              initial="initial"
-              animate="animate"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="mb-10 bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm hover:shadow-md transition-shadow"
+              className="mb-8 bg-white rounded-2xl border border-slate-200 p-5 sm:p-7 shadow-sm hover:shadow-md transition-shadow"
             >
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-indigo-100 rounded-lg">
-                  <BarChart size={20} className="text-indigo-600" />
+                  <BarChart2 size={18} className="text-indigo-600" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Outfit, sans-serif' }}>Score Distribution</h3>
-                <span className="text-xs text-slate-500 ml-auto bg-slate-100 px-2.5 py-1 rounded-lg font-medium">Top 10</span>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                    Score Distribution
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">Top 10 participants</p>
+                </div>
               </div>
 
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(226, 232, 240, 0.5)" />
-                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      background: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '12px',
-                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
-                      color: '#1e293b',
-                      padding: '12px 16px',
-                    }}
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={chartData} barCategoryGap="28%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(226, 232, 240, 0.6)" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
+                    axisLine={false}
+                    tickLine={false}
                   />
-                  <Bar dataKey="score" fill="url(#colorGradient)" radius={[8, 8, 0, 0]} />
-                  <defs>
-                    <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#6366f1" />
-                      <stop offset="100%" stopColor="#8b5cf6" />
-                    </linearGradient>
-                  </defs>
+                  <YAxis
+                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
+                    axisLine={false}
+                    tickLine={false}
+                    domain={[0, 100]}
+                    tickFormatter={v => `${v}%`}
+                  />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99,102,241,0.05)', radius: 8 }} />
+                  <Bar dataKey="score" radius={[8, 8, 0, 0]}>
+                    {chartData.map((_, idx) => (
+                      <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </motion.div>
           )}
 
-          {/* Rest of Leaderboard - Table View */}
+          {/* ═══════════════════ TABLE (4th+) ═══════════════════ */}
           {rest.length > 0 && (
             <motion.div
-              variants={itemVariants}
-              initial="initial"
-              animate="animate"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
               className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm"
             >
+              {/* Table header */}
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-700" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                  Full Rankings
+                </h3>
+                <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2.5 py-1 rounded-lg">
+                  #{4} – #{data.length}
+                </span>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50/80">
-                      <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Rank</th>
-                      <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Participant</th>
-                      <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">Score</th>
-                      <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                      <th className="px-5 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Rank
+                      </th>
+                      <th className="px-5 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Participant
+                      </th>
+                      <th className="px-5 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Score
+                      </th>
+                      <th className="px-5 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden sm:table-cell">
+                        Progress
+                      </th>
+                      <th className="px-5 py-3.5 text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Status
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {rest.map((entry, index) => {
-                      const rank = index + 4
+                      const rank          = index + 4
                       const isCurrentUser = currentUserId && entry.userId === currentUserId
-                      const score = entry.score || 0
+                      const score         = entry.score || 0
+                      const badge         = getStatusBadge(score)
 
                       return (
                         <motion.tr
                           key={entry.userId || entry.name || index}
-                          initial={{ opacity: 0, x: -20 }}
+                          initial={{ opacity: 0, x: -16 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 0.4 + index * 0.04 }}
-                          className={`transition-colors hover:bg-indigo-50/30 ${
-                            isCurrentUser ? 'bg-indigo-50/50 border-l-4 border-l-indigo-500' : ''
-                          }`}
+                          className={[
+                            'transition-colors hover:bg-indigo-50/30 group',
+                            isCurrentUser ? 'bg-indigo-50/50' : '',
+                          ].join(' ')}
                         >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2.5">
-                              <span className="text-lg font-bold text-slate-900" style={{ fontFamily: 'Outfit, sans-serif' }}>#{rank}</span>
+                          {/* Rank */}
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="text-base font-black text-slate-700"
+                                style={{ fontFamily: 'Outfit, sans-serif' }}
+                              >
+                                #{rank}
+                              </span>
                               {rank <= 10 && (
-                                <Flame size={14} className={getMedalColor(score)} />
+                                <Flame size={13} className={getMedalColor(score)} />
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4">
+
+                          {/* Participant */}
+                          <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center font-semibold text-white text-sm shadow-sm">
+                              <div
+                                className={[
+                                  'w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-sm shadow-sm flex-shrink-0',
+                                  isCurrentUser
+                                    ? 'bg-gradient-to-br from-indigo-500 to-purple-600'
+                                    : 'bg-gradient-to-br from-slate-400 to-slate-500',
+                                ].join(' ')}
+                              >
                                 {(entry.name || 'U').charAt(0).toUpperCase()}
                               </div>
                               <div>
-                                <p className="font-semibold text-slate-900 text-sm">{entry.name || 'Anonymous'}</p>
+                                <p className="font-semibold text-slate-900 text-sm leading-tight">
+                                  {entry.name || 'Anonymous'}
+                                </p>
                                 {isCurrentUser && (
-                                  <p className="text-[10px] text-indigo-600 font-bold">✨ You</p>
+                                  <p className="text-[10px] text-indigo-600 font-bold mt-0.5">✨ You</p>
                                 )}
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-xl font-bold text-slate-900" style={{ fontFamily: 'Outfit, sans-serif' }}>{score.toFixed(1)}</span>
+
+                          {/* Score */}
+                          <td className="px-5 py-4">
+                            <div className="flex items-baseline gap-0.5">
+                              <span
+                                className="text-lg font-black text-slate-900"
+                                style={{ fontFamily: 'Outfit, sans-serif' }}
+                              >
+                                {score.toFixed(1)}
+                              </span>
                               <span className="text-xs text-slate-400 font-medium">%</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-center">
-                            <span
-                              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold ${
-                                score >= 80
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : score >= 60
-                                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                  : score >= 40
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                  : 'bg-slate-50 text-slate-600 border border-slate-200'
-                              }`}
-                            >
-                              {score >= 80 ? '⭐ Excellent' : score >= 60 ? '👍 Good' : score >= 40 ? '📈 Passed' : '💪 Keep Trying'}
+
+                          {/* Progress bar */}
+                          <td className="px-5 py-4 hidden sm:table-cell">
+                            <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${score}%` }}
+                                transition={{ duration: 0.8, ease: 'easeOut', delay: 0.5 + index * 0.03 }}
+                                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-600"
+                              />
+                            </div>
+                          </td>
+
+                          {/* Status badge */}
+                          <td className="px-5 py-4 text-center">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold border ${badge.color}`}>
+                              {badge.label}
                             </span>
                           </td>
                         </motion.tr>
@@ -386,6 +481,7 @@ const Leaderboard = ({ data = [], title = 'Quiz Leaderboard', showChart = true, 
               </div>
             </motion.div>
           )}
+
         </>
       )}
     </motion.div>

@@ -17,6 +17,7 @@ const iconMap = {
   Enrollments: <BookPlus size={18} />,
   'Give Feedback': <MessageSquare size={18} />,
   'My Feedbacks': <MessageSquare size={18} />,
+  'AI Quizzes': <Sparkles size={18} />,
 }
 
 const navItems = {
@@ -38,6 +39,7 @@ const navItems = {
   PARTICIPANT: [
     { key: 'available', label: 'Available', icon: 'Available' },
     { key: 'myEnrollments', label: 'Enrollments', icon: 'Enrollments' },
+    { key: 'ai-quizzes', label: 'AI Quizzes', icon: 'AI Quizzes' },
     { key: 'feedback', label: 'Give Feedback', icon: 'Give Feedback' },
     { key: 'myFeedbacks', label: 'My Feedbacks', icon: 'My Feedbacks' },
   ],
@@ -92,8 +94,20 @@ function Layout({ user, children, activeTab, onTabChange, onLogout }) {
           </div>
           {/* Mobile close button */}
           <button
-            className="lg:hidden ml-auto p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
+            className="sidebar-close-btn"
             onClick={closeSidebar}
+            style={{
+              marginLeft: 'auto',
+              padding: '6px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'transparent',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
             <X size={18} />
           </button>
@@ -116,10 +130,10 @@ function Layout({ user, children, activeTab, onTabChange, onLogout }) {
               {activeTab === item.key && (
                 <motion.div
                   layoutId="activeNavIndicator"
-                  className="ml-auto"
+                  style={{ marginLeft: 'auto' }}
                   transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                 >
-                  <ChevronRight size={14} className="text-indigo-500 opacity-60" />
+                  <ChevronRight size={14} className="text-indigo-500" style={{ color: '#6366f1', opacity: 0.6 }} />
                 </motion.div>
               )}
             </motion.button>
@@ -128,35 +142,37 @@ function Layout({ user, children, activeTab, onTabChange, onLogout }) {
 
         {/* Footer */}
         <div className="sidebar-footer">
-          {/* Pro badge */}
+          {/* AI Badge */}
           <motion.div 
             whileHover={{ scale: 1.02 }}
-            className="mx-2 mb-3 p-3 rounded-xl"
             style={{
+              margin: '0 8px 12px',
+              padding: '12px',
+              borderRadius: '12px',
               background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08))',
               border: '1px solid rgba(99,102,241,0.12)',
             }}
           >
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles size={14} className="text-indigo-500" />
-              <span className="text-xs font-bold text-indigo-600">AI-Powered</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <Sparkles size={14} style={{ color: '#6366f1' }} />
+              <span style={{ fontSize: '12px', fontWeight: '700', color: '#4f46e5' }}>AI-Powered</span>
             </div>
-            <p className="text-[10px] text-slate-500 leading-relaxed">
+            <p style={{ fontSize: '10px', color: '#64748b', margin: 0, lineHeight: '1.4' }}>
               Smart quizzes & analytics enabled
             </p>
           </motion.div>
 
-          <div className="sidebar-user">
+          <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px' }}>
             <motion.div 
               whileHover={{ scale: 1.1 }}
               className="sidebar-user-avatar"
             >
               {initials(user.name)}
             </motion.div>
-            <div className="sidebar-user-info">
-              <div className="sidebar-user-name">{user.name}</div>
-              <div className="inline-flex items-center mt-0.5">
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${colors.badge}`}>
+            <div className="sidebar-user-info" style={{ flex: 1, minWidth: 0 }}>
+              <div className="sidebar-user-name" style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>{user.name}</div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: '2px' }}>
+                <span className={`badge ${colors.badge}`} style={{ fontSize: '9px', fontWeight: '700', padding: '2px 6px', textTransform: 'uppercase' }}>
                   {user.role}
                 </span>
               </div>
@@ -194,11 +210,12 @@ function Layout({ user, children, activeTab, onTabChange, onLogout }) {
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="header-btn relative" 
+              className="header-btn" 
+              style={{ position: 'relative' }}
               title="Notifications"
             >
               <Bell size={18} />
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+              <span style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', backgroundColor: '#ef4444', borderRadius: '50%', border: '2px solid #fff' }} />
             </motion.button>
             <motion.button 
               whileHover={{ scale: 1.05, rotate: -10 }}

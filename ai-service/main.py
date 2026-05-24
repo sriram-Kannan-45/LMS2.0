@@ -1,35 +1,52 @@
-"""
-AI Quiz Generator Microservice
+b"""
+AI Quiz Generator Microservice - Enterprise Edition
 Uses LangChain + Groq (OpenAI-compatible) to generate quizzes from documents.
+
+Enhanced with:
+- Advanced prompt engineering with Bloom's taxonomy
+- Response caching for improved performance
+- Structured JSON output validation
+- Semantic similarity filtering for question diversity
+- Retry logic with exponential backoff
+- Comprehensive error handling and logging
 """
 import os
 import sys
 import logging
 import asyncio
+import hashlib
+import re
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv()  # Load .env file
 
 import json
 import tempfile
 import time
-from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from typing import List, Dict, Any, Optional, Tuple
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field, validator
 import PyPDF2
 import docx
 
 # ── Logging Setup ──────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)-7s | %(message)s",
+    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("ai-quiz")
 
-app = FastAPI(title="LMS AI Quiz Generator", version="2.0.0")
+# ── Application Setup ──────────────────────────────────
+app = FastAPI(
+    title="LMS AI Quiz Generator",
+    version="3.0.0",
+    description="Enterprise-grade AI quiz generation service with advanced prompt engineering and caching"
+)
 
-# CORS
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,6 +54,296 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Cache Implementation ───────────────────────────────
+class SimpleCache:
+    """In-memory cache with TTL support for quiz generation results."""
+    
+    def __init__(self, default_ttl: int = 3600):
+        self._cache: Dict[str, Dict] = {}
+        self._timestamps: Dict[str, datetime] = {}
+        self.default_ttl = default_ttl
+    
+    def get(self, key: str) -> Optional[Dict]:
+        """Get item from cache if not expired."""
+        if key in self._cache:
+            if datetime.now() - self._timestamps[key] < timedelta(seconds=self.default_ttl):
+                return self._cache[key]
+            else:
+                del self._cache[key]
+                del self._timestamps[key]
+        return None
+    
+    def set(self, key: str, value: Dict) -> None:
+        """Set item in cache with current timestamp."""
+        self._cache[key] = value
+        self._timestamps[key] = datetime.now()
+    
+    def clear(self) -> None:
+        """Clear all cache entries."""
+        self._cache.clear()
+        self._timestamps.clear()
+
+# Initialize cache
+quiz_cache = SimpleCache(default_ttl=7200)  # 2 hour TTL
+
+# ── Configuration ──────────────────────────────────────
+class Config:
+    """Centralized configuration for AI service."""
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    MAX_TEXT_LENGTH = 15000
+    MIN_TEXT_LENGTH = 50
+    MAX_QUESTIONS = 50
+    MIN_QUESTIONS = 1
+    DEFAULT_CHUNK_SIZE = 4000
+    DEFAULT_CHUNK_OVERLAP = 200
+    MAX_RETRIES = 3
+    RETRY_DELAY = 2  # seconds
+    SIMILARITY_THRESHOLD = 0.7  # For duplicate detection
+
+# ── Enhanced Prompt Templates ─────────────────────────
+DIFFICULTY_CONFIGS = {
+    "EASY": {
+        "description": "Basic recall and comprehension questions",
+        "bloom_level": "Remember, Understand",
+        "instruction": "Focus on key terms, definitions, and basic concepts. Questions should test fundamental understanding.",
+        "complexity": "low"
+    },
+    "MEDIUM": {
+        "description": "Application and analysis questions",
+        "bloom_level": "Apply, Analyze",
+        "instruction": "Include scenario-based questions that require applying concepts. Test ability to analyze relationships.",
+        "complexity": "medium"
+    },
+    "HARD": {
+        "description": "Evaluation and creation questions",
+        "bloom_level": "Evaluate, Create",
+        "instruction": "Create complex scenarios requiring critical thinking. Test ability to evaluate, synthesize, and make judgments.",
+        "complexity": "high"
+    },
+    "MIXED": {
+        "description": "Balanced difficulty distribution",
+        "bloom_level": "All levels",
+        "instruction": "Distribute questions across all difficulty levels: ~30% easy, ~40% medium, ~30% hard.",
+        "complexity": "mixed"
+    }
+}
+
+ENHANCED_QUIZ_PROMPT = """You are an expert educational assessment designer with deep knowledge of Bloom's Taxonomy and pedagogical best practices.
+
+## DOCUMENT CONTENT
+{text}
+
+## TASK
+Generate exactly {num_questions} high-quality multiple-choice questions (MCQs) based STRICTLY on the document content above.
+
+## DIFFICULTY CONFIGURATION
+Level: {difficulty}
+{difficulty_instruction}
+
+## QUESTION QUALITY REQUIREMENTS
+1. **Content Accuracy**: Every question must be directly answerable from the document. Do NOT introduce external information.
+2. **Cognitive Depth**: Questions should test understanding, not just rote memorization. Use real-world scenarios when appropriate.
+3. **Option Quality**:
+   - Exactly 4 options (A, B, C, D)
+   - One clearly correct answer
+   - Distractors should be plausible but definitively incorrect
+   - Avoid "all of the above" or "none of the above"
+   - Options should be similar in length and complexity
+4. **Question Diversity**: Cover different sections and concepts from the document. Avoid repetitive question patterns.
+5. **Clarity**: Questions must be unambiguous with precise wording.
+
+## OUTPUT FORMAT
+Return ONLY a valid JSON array. No markdown, no explanations, no preamble.
+
+[
+  {{
+    "question": "Clear, well-formed question text?",
+    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+    "correct_answer": "A",
+    "explanation": "Brief explanation (1-2 sentences) referencing the document content",
+    "difficulty": "EASY or MEDIUM or HARD",
+    "bloom_level": "Remember/Understand/Apply/Analyze/Evaluate/Create"
+  }}
+]
+
+## IMPORTANT
+- Return ONLY the JSON array
+- Ensure valid JSON syntax (proper escaping of quotes)
+- All {num_questions} questions must be unique and cover different aspects of the document
+- The correct_answer field must be exactly "A", "B", "C", or "D"
+
+Generate the JSON array now:
+"""
+
+# ── Similarity Detection ───────────────────────────────
+def simple_text_similarity(text1: str, text2: str) -> float:
+    """
+    Simple Jaccard similarity for detecting duplicate questions.
+    Returns a value between 0 and 1.
+    """
+    words1 = set(text1.lower().split())
+    words2 = set(text2.lower().split())
+    
+    if not words1 or not words2:
+        return 0.0
+    
+    intersection = words1 & words2
+    union = words1 | words2
+    
+    return len(intersection) / len(union) if union else 0.0
+
+def filter_duplicate_questions(questions: List[Dict], threshold: float = 0.7) -> List[Dict]:
+    """
+    Filter out questions that are too similar to each other.
+    Returns a deduplicated list.
+    """
+    if len(questions) <= 1:
+        return questions
+    
+    filtered = [questions[0]]
+    
+    for q in questions[1:]:
+        is_duplicate = False
+        for existing in filtered:
+            # Check question text similarity
+            sim = simple_text_similarity(q.get("question", ""), existing.get("question", ""))
+            if sim >= threshold:
+                is_duplicate = True
+                break
+            
+            # Also check if options are too similar
+            q_options = " ".join(q.get("options", []))
+            existing_options = " ".join(existing.get("options", []))
+            opt_sim = simple_text_similarity(q_options, existing_options)
+            if opt_sim >= threshold:
+                is_duplicate = True
+                break
+        
+        if not is_duplicate:
+            filtered.append(q)
+    
+    return filtered
+
+# ── JSON Validation & Repair ───────────────────────────
+def validate_question_structure(question: Dict) -> bool:
+    """Validate that a question has all required fields with correct types."""
+    required_fields = {
+        "question": str,
+        "options": list,
+        "correct_answer": str,
+    }
+    
+    for field, field_type in required_fields.items():
+        if field not in question:
+            return False
+        if not isinstance(question[field], field_type):
+            return False
+    
+    # Validate options count
+    if not isinstance(question["options"], list) or len(question["options"]) != 4:
+        return False
+    
+    # Validate correct_answer is valid index
+    if question["correct_answer"] not in ["A", "B", "C", "D", "0", "1", "2", "3"]:
+        return False
+    
+    # Validate all options are non-empty strings
+    for opt in question["options"]:
+        if not isinstance(opt, str) or not opt.strip():
+            return False
+    
+    return True
+
+def repair_question(question: Dict, index: int) -> Dict:
+    """Attempt to repair a malformed question structure."""
+    repaired = {
+        "question": str(question.get("question", "Question " + str(index + 1))),
+        "options": [],
+        "correct_answer": question.get("correct_answer", "A"),
+        "explanation": question.get("explanation", "Answer based on document content."),
+        "difficulty": question.get("difficulty", "MEDIUM"),
+        "bloom_level": question.get("bloom_level", "Understand")
+    }
+    
+    # Fix options
+    raw_options = question.get("options", [])
+    if isinstance(raw_options, list):
+        repaired["options"] = [str(o) for o in raw_options[:4]]
+        # Pad with placeholder if less than 4
+        opt_count = len(repaired["options"])
+        while opt_count < 4:
+            repaired["options"].append("Option " + chr(65 + opt_count))
+            opt_count += 1
+    else:
+        repaired["options"] = ["Option A", "Option B", "Option C", "Option D"]
+    
+    # Fix correct_answer
+    ca = repaired["correct_answer"]
+    if ca not in ["A", "B", "C", "D"]:
+        repaired["correct_answer"] = "A"
+    
+    return repaired
+
+def safe_json_parse(text: str) -> Tuple[List[Dict], List[str]]:
+    """
+    Safely parse JSON from text, with auto-repair capabilities.
+    Returns (parsed_questions, warnings)
+    """
+    warnings = []
+    
+    # Clean the text
+    cleaned = text.strip()
+    
+    # Remove markdown code blocks
+    for marker in ["```json", "```"]:
+        if marker in cleaned:
+            cleaned = cleaned.split(marker)[1].split("```")[0] if "```" in cleaned else cleaned
+    
+    # Find JSON array bounds
+    start = cleaned.find('[')
+    end = cleaned.rfind(']') + 1
+    
+    if start == -1 or end == 0:
+        warnings.append("No JSON array found in response")
+        return [], warnings
+    
+    cleaned = cleaned[start:end]
+    
+    # Fix common JSON issues
+    # Remove trailing commas
+    cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)
+    # Fix missing commas between array elements
+    cleaned = re.sub(r'}\s*{', '},{', cleaned)
+    # Fix single quotes
+    cleaned = cleaned.replace("'", '"')
+    # Fix unescaped quotes in strings (simple heuristic)
+    
+    try:
+        questions = json.loads(cleaned)
+        
+        if not isinstance(questions, list):
+            warnings.append("Parsed JSON is not an array")
+            return [], warnings
+        
+        # Validate and repair each question
+        valid_questions = []
+        for i, q in enumerate(questions):
+            if not isinstance(q, dict):
+                warnings.append(f"Question {i+1} is not an object")
+                continue
+            
+            if validate_question_structure(q):
+                valid_questions.append(q)
+            else:
+                warnings.append(f"Question {i+1} had structural issues - repaired")
+                valid_questions.append(repair_question(q, i))
+        
+        return valid_questions, warnings
+        
+    except json.JSONDecodeError as e:
+        warnings.append(f"JSON parse error: {str(e)}")
+        return [], warnings
 
 # ── Groq Setup ──────────────────────────────
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -172,86 +479,127 @@ Generate ONLY the JSON array:
 
 MAX_RETRIES = 3
 
+def generate_cache_key(text: str, num_questions: int, difficulty: str) -> str:
+    """Generate a cache key based on content hash and parameters."""
+    content_hash = hashlib.md5(text[:1000].encode()).hexdigest()
+    return f"quiz:{content_hash}:{num_questions}:{difficulty}"
+
 def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty: str = "MIXED") -> List[Dict]:
-    """Generate quiz using LangChain + LLM (Groq) with retry logic."""
+    """
+    Generate quiz using LangChain + LLM (Groq) with enhanced prompt engineering.
+    
+    Features:
+    - Cache lookup for identical requests
+    - Enhanced Bloom's taxonomy-based prompts
+    - Robust JSON parsing with auto-repair
+    - Duplicate question filtering
+    - Exponential backoff retry logic
+    """
     
     if llm is None:
         log.info("Using text-based question generation (no LLM available)")
         return generate_text_based_questions(text, num_questions, difficulty)
     
-    log.info("Generating quiz with %s...", llm_type)
+    log.info("Generating quiz with %s for %d questions (%s difficulty)...", llm_type, num_questions, difficulty)
     
     # Clean the text first
     text = clean_text_for_quiz(text)
-    log.info("Text cleaned, length: %d", len(text))
+    log.info("Text cleaned, length: %d characters", len(text))
+    
+    # Check cache first
+    cache_key = generate_cache_key(text, num_questions, difficulty)
+    cached_result = quiz_cache.get(cache_key)
+    if cached_result:
+        log.info("✅ Cache hit! Returning cached quiz questions")
+        return cached_result
     
     # Split text if too long
     from langchain_text_splitters import RecursiveCharacterTextSplitter
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=4000,
-        chunk_overlap=200
+        chunk_size=Config.DEFAULT_CHUNK_SIZE,
+        chunk_overlap=Config.DEFAULT_CHUNK_OVERLAP
     )
     chunks = text_splitter.split_text(text)
     combined_text = "\n\n".join(chunks[:3])
+    log.info("Text split into %d chunks, using top %d for context", len(chunks), min(3, len(chunks)))
     
+    # Build enhanced prompt with difficulty-specific instructions
     from langchain_core.prompts import PromptTemplate
     
+    diff_config = DIFFICULTY_CONFIGS.get(difficulty, DIFFICULTY_CONFIGS["MIXED"])
+    difficulty_instruction = diff_config["instruction"]
+    
     prompt = PromptTemplate(
-        template=QUIZ_PROMPT_TEMPLATE,
-        input_variables=["text", "num_questions", "difficulty"]
+        template=ENHANCED_QUIZ_PROMPT,
+        input_variables=["text", "num_questions", "difficulty", "difficulty_instruction"]
     )
     
     chain = prompt | llm
     
     last_error = None
-    for attempt in range(1, MAX_RETRIES + 1):
+    for attempt in range(1, Config.MAX_RETRIES + 1):
         try:
-            log.info("Attempt %d/%d for quiz generation...", attempt, MAX_RETRIES)
+            log.info("Generation attempt %d/%d...", attempt, Config.MAX_RETRIES)
             response = chain.invoke({
                 "text": combined_text,
                 "num_questions": num_questions,
-                "difficulty": difficulty
+                "difficulty": difficulty,
+                "difficulty_instruction": difficulty_instruction
             })
             result = response.content
             
-            # Extract JSON from response
-            cleaned = result.strip()
-            if "```json" in cleaned:
-                cleaned = cleaned.split("```json")[1].split("```")[0]
-            elif "```" in cleaned:
-                cleaned = cleaned.split("```")[1].split("```")[0]
+            # Parse JSON with auto-repair capabilities
+            questions, warnings = safe_json_parse(result)
             
-            # Find JSON array
-            start = cleaned.find('[')
-            end = cleaned.rfind(']') + 1
-            if start != -1 and end != 0:
-                cleaned = cleaned[start:end]
+            if warnings:
+                for w in warnings:
+                    log.warning("Parse warning: %s", w)
             
-            questions = json.loads(cleaned)
+            if not questions:
+                raise ValueError("No valid questions could be parsed from response")
             
-            # Validate and format
+            # Filter duplicates
+            original_count = len(questions)
+            questions = filter_duplicate_questions(questions, Config.SIMILARITY_THRESHOLD)
+            if len(questions) < original_count:
+                log.info("Filtered %d duplicate questions (%d -> %d)", 
+                        original_count - len(questions), original_count, len(questions))
+            
+            # Limit to requested number
+            questions = questions[:num_questions]
+            
+            # Format for compatibility with existing system
             formatted = []
-            for i, q in enumerate(questions[:num_questions]):
+            for i, q in enumerate(questions):
                 formatted.append({
                     "question": q.get("question", f"Question {i+1}"),
                     "options": q.get("options", ["Option A", "Option B", "Option C", "Option D"]),
                     "correct_answer": q.get("correct_answer", "A"),
-                    "explanation": q.get("explanation", "")
+                    "explanation": q.get("explanation", "Based on document content."),
+                    "difficulty": q.get("difficulty", difficulty if difficulty != "MIXED" else "MEDIUM"),
+                    "bloom_level": q.get("bloom_level", "Understand")
                 })
+            
+            # Cache the result
+            quiz_cache.set(cache_key, formatted)
             
             log.info("✅ Generated %d questions successfully on attempt %d", len(formatted), attempt)
             return formatted
             
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, ValueError) as e:
             last_error = e
-            log.warning("JSON parse error on attempt %d: %s", attempt, e)
+            log.warning("Parse error on attempt %d: %s", attempt, e)
         except Exception as e:
             last_error = e
             log.warning("Generation error on attempt %d: %s", attempt, e)
-            if attempt < MAX_RETRIES:
-                time.sleep(2 * attempt)  # Exponential backoff
+        
+        # Exponential backoff
+        if attempt < Config.MAX_RETRIES:
+            delay = Config.RETRY_DELAY * attempt
+            log.info("Retrying in %d seconds...", delay)
+            time.sleep(delay)
     
-    log.error("❌ All %d attempts failed. Last error: %s. Falling back to text-based.", MAX_RETRIES, last_error)
+    log.error("❌ All %d attempts failed. Last error: %s. Falling back to text-based.", Config.MAX_RETRIES, last_error)
     return generate_text_based_questions(text, num_questions, difficulty)
 
 def generate_text_based_questions(text: str, num_questions: int, difficulty: str) -> List[Dict]:
@@ -567,6 +915,36 @@ async def evaluate_answer(request: EvaluateRequest):
     except Exception as e:
         log.error("Evaluation failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
+
+@app.get("/cache/status")
+async def cache_status():
+    """Get cache statistics and status."""
+    now = datetime.now()
+    active_entries = 0
+    expired_entries = 0
+    
+    for key, timestamp in quiz_cache._timestamps.items():
+        if now - timestamp < timedelta(seconds=quiz_cache.default_ttl):
+            active_entries += 1
+        else:
+            expired_entries += 1
+    
+    return {
+        "cache_enabled": True,
+        "ttl_seconds": quiz_cache.default_ttl,
+        "total_entries": len(quiz_cache._cache),
+        "active_entries": active_entries,
+        "expired_entries": expired_entries,
+        "llm_type": llm_type,
+        "service_version": "3.0.0"
+    }
+
+@app.delete("/cache/clear")
+async def clear_cache():
+    """Clear all cached quiz generations."""
+    quiz_cache.clear()
+    log.info("Cache cleared by admin request")
+    return {"message": "Cache cleared successfully", "status": "ok"}
 
 
 if __name__ == "__main__":

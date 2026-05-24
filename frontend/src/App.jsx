@@ -53,19 +53,33 @@ function AppRoutes({ user, onLogin, onLogout }) {
     exit: { opacity: 0, y: -12 }
   }
 
-  const DashboardWrapper = ({ component: Component, user, onLogout, defaultTab }) => (
-    <Layout user={user} activeTab={activeTab} onTabChange={setActiveTab} onLogout={onLogout}>
-      <motion.div
-        initial="initial"
-        animate="animate"
-        exit="exit"
-        variants={pageVariants}
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <Component user={user} onLogout={onLogout} activeTab={activeTab} onTabChange={setActiveTab} />
-      </motion.div>
-    </Layout>
-  )
+  const DashboardWrapper = ({ component: Component, user, onLogout, defaultTab }) => {
+    useEffect(() => {
+      if (defaultTab && activeTab === 'overview' && user?.role !== 'ADMIN') {
+        setActiveTab(defaultTab)
+      } else if (user?.role === 'PARTICIPANT' && !['available', 'myEnrollments', 'ai-quizzes', 'feedback', 'myFeedbacks'].includes(activeTab)) {
+        setActiveTab(defaultTab)
+      } else if (user?.role === 'TRAINER' && !['trainings', 'feedback', 'profile'].includes(activeTab)) {
+        setActiveTab(defaultTab)
+      } else if (user?.role === 'ADMIN' && !['overview', 'trainings', 'trainers', 'participants', 'feedback', 'surveys', 'createTrainer', 'createTraining'].includes(activeTab)) {
+        setActiveTab(defaultTab)
+      }
+    }, [user?.role, defaultTab])
+
+    return (
+      <Layout user={user} activeTab={activeTab} onTabChange={setActiveTab} onLogout={onLogout}>
+        <motion.div
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          variants={pageVariants}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <Component user={user} onLogout={onLogout} activeTab={activeTab} onTabChange={setActiveTab} />
+        </motion.div>
+      </Layout>
+    )
+  }
 
   return (
     <AnimatePresence mode="wait">

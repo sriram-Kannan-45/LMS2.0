@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import TrainerList from '../components/TrainerList'
 import ParticipantList from '../components/ParticipantList'
 import AnimatedDropdown from '../components/AnimatedDropdown'
+import { useToast } from '../components/Toast'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend
 } from 'chart.js'
@@ -22,7 +23,13 @@ const Stars = ({ v }) => (
 )
 
 function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
+  const { success, error: showError, info, warning } = useToast()
   const [tab, setTab] = useState(activeTab || 'overview')
+
+  useEffect(() => {
+    if (activeTab) setTab(activeTab)
+  }, [activeTab])
+
   const handleTabChange = (newTab) => {
     setTab(newTab)
     if (onTabChange) onTabChange(newTab)
@@ -36,8 +43,6 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [notes, setNotes] = useState([])
   const [noteFilter, setNoteFilter] = useState('')
   const [stats, setStats] = useState({})
-  const [msg, setMsg] = useState('')
-  const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
   const [credentials, setCredentials] = useState(null)
   const [editModal, setEditModal] = useState(null)
@@ -54,11 +59,6 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [confirmModal, setConfirmModal] = useState(null)
 
   const auth = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` })
-
-  const notify = (m, isErr = false) => {
-    if (isErr) setErr(m); else setMsg(m)
-    setTimeout(() => { setErr(''); setMsg('') }, 4500)
-  }
 
   useEffect(() => {
     const loadAll = async () => {
@@ -112,34 +112,34 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
         const r = await fetch(`${API_BASE}/admin/approve-participant/${confirmModal.id}`, { method: 'POST', headers: auth() })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error)
-        notify('Participant approved successfully')
+        success('Participant approved successfully')
         fetchPendingParticipants(); fetchParticipants()
       } else if (confirmModal.action === 'delete-question') {
         const r = await fetch(`${API_BASE}/survey/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
         if (!r.ok) throw new Error('Failed to delete question')
-        notify('Question deleted')
+        success('Question deleted')
         fetchQuestions()
       } else if (confirmModal.action === 'delete-training') {
         const r = await fetch(`${API_BASE}/admin/trainings/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error)
-        notify('Training deleted successfully')
+        success('Training deleted successfully')
         fetchTrainings(); fetchStats()
       } else if (confirmModal.action === 'delete-participant') {
         const r = await fetch(`${API_BASE}/admin/participants/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error)
-        notify('Participant removed successfully')
+        success('Participant removed successfully')
         fetchParticipants(); fetchStats()
       } else if (confirmModal.action === 'delete-trainer') {
         const r = await fetch(`${API_BASE}/admin/trainers/${confirmModal.id}`, { method: 'DELETE', headers: auth() })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error)
-        notify('Trainer removed successfully')
+        success('Trainer removed successfully')
         fetchTrainers(); fetchStats()
       }
     } catch (e) { 
-      notify(e.message, true) 
+      showError(e.message) 
     } finally { 
       setLoading(false)
       setConfirmModal(null)
@@ -201,6 +201,54 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
     } catch {}
   }
 
+  const handleApproveNote = async (noteId) => {
+    setLoading(true)
+    try {
+      // Optimistic update - remove from pending immediately
+      const oldNotes = notes
+      setNotes(prev => prev.filter(note => note.id !== noteId))
+      
+      const r = await fetch(`${API_BASE}/notes/${noteId}/status`, {
+        method: 'PUT',
+        headers: auth(),
+        body: JSON.stringify({ status: 'APPROVED' })
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed to approve note')
+      success('Note approved successfully!')
+    } catch (e) {
+      // Revert on error
+      await fetchNotes(noteFilter)
+      showError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRejectNote = async (noteId) => {
+    setLoading(true)
+    try {
+      // Optimistic update - remove from pending immediately
+      const oldNotes = notes
+      setNotes(prev => prev.filter(note => note.id !== noteId))
+      
+      const r = await fetch(`${API_BASE}/notes/${noteId}/status`, {
+        method: 'PUT',
+        headers: auth(),
+        body: JSON.stringify({ status: 'REJECTED' })
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed to reject note')
+      success('Note rejected successfully!')
+    } catch (e) {
+      // Revert on error
+      await fetchNotes(noteFilter)
+      showError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleCreateTrainer = async (e) => {
     e.preventDefault(); setLoading(true); setCredentials(null)
     try {
@@ -209,8 +257,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       if (!r.ok) throw new Error(d.error)
       setTrainerForm({ name: '', email: '', password: '' })
       fetchTrainers(); fetchStats()
-      notify('Trainer account created successfully.')
-    } catch (e) { notify(e.message, true) }
+      success('Trainer account created successfully.')
+    } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
 
@@ -225,8 +273,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       if (!r.ok) throw new Error(d.error)
       setTrainingForm({ title: '', description: '', trainerId: '', startDate: '', endDate: '', capacity: '' })
       fetchTrainings(); fetchStats()
-      notify('Training session created successfully.')
-    } catch (e) { notify(e.message, true) }
+      success('Training session created successfully.')
+    } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
 
@@ -240,8 +288,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       if (!r.ok) throw new Error(d.error)
       setQuestionForm({ trainingId: '', questionText: '', questionType: 'TEXT', options: '' })
       fetchQuestions()
-      notify('Survey question created.')
-    } catch (e) { notify(e.message, true) }
+      success('Survey question created.')
+    } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
 
@@ -283,8 +331,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
       setEditModal(null); fetchTrainings()
-      notify('Training updated successfully.')
-    } catch (e) { notify(e.message, true) }
+      success('Training updated successfully.')
+    } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
 
@@ -294,8 +342,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API_BASE}/admin/send-reminders/${trainingId}`, { method: 'POST', headers: auth() })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
-      notify(d.message)
-    } catch (e) { notify(e.message, true) }
+      info(d.message)
+    } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
 
@@ -366,9 +414,9 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
     <AnimatePresence>
       <div className="dashboard">
         <div className="tabs-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div className="tabs">
+        <div className="tabs-pills">
           {TABS.map(t => (
-            <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => handleTabChange(t.key)}>
+            <button key={t.key} className={`tab-pill ${tab === t.key ? 'active' : ''}`} onClick={() => handleTabChange(t.key)}>
               {t.label}
             </button>
           ))}
@@ -379,8 +427,6 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
         </div>
       </div>
 
-          {err && <div className="error">{err}</div>}
-          {msg && <div className="success">{msg}</div>}
 
           {/* OVERVIEW */}
           {tab === 'overview' && (
@@ -689,76 +735,160 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
+              className="space-y-6"
             >
-              <div className="card" style={{ marginBottom: 20 }}>
-                <div className="card-header">
-                  <h3>Notes Management ({notes.length})</h3>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button 
-                      className={`btn btn-sm ${!noteFilter ? 'btn-primary' : 'btn-secondary'}`}
-                      onClick={() => { setNoteFilter(''); fetchNotes() }}
-                    >
-                      All
-                    </button>
-                    <button 
-                      className={`btn btn-sm ${noteFilter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
-                      onClick={() => { setNoteFilter('pending'); fetchNotes('pending') }}
-                    >
-                      Pending
-                    </button>
-                    <button 
-                      className={`btn btn-sm ${noteFilter === 'approved' ? 'btn-primary' : 'btn-secondary'}`}
-                      onClick={() => { setNoteFilter('approved'); fetchNotes('approved') }}
-                    >
-                      Approved
-                    </button>
-                  </div>
+              {/* Header with Filters */}
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900 mb-1" style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-primary)' }}>Notes Management</h3>
+                  <p className="text-sm text-slate-500" style={{ color: 'var(--text-secondary)' }}>Manage trainer note submissions</p>
                 </div>
-                {notes.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-icon">📄</div>
-                    <h3>No Notes Found</h3>
-                    <p>
-                      {noteFilter === 'pending' ? 'No pending notes to review.' : 
-                       noteFilter === 'approved' ? 'No approved notes yet.' : 
-                       'Notes will appear here when trainers upload them.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="table-wrapper">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>#</th>
-                          <th>Title</th>
-                          <th>Trainer</th>
-                          <th>Training</th>
-                          <th>Type</th>
-                          <th>Status</th>
-                          <th>Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {notes.map((note, i) => (
-                          <tr key={note.id}>
-                            <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
-                            <td><strong>{note.title}</strong></td>
-                            <td>{note.trainer?.name || '-'}</td>
-                            <td>{note.training?.title || 'General'}</td>
-                            <td><span className="badge badge-blue">{note.fileType}</span></td>
-                            <td>
-                              <span className={`badge ${note.status === 'APPROVED' ? 'badge-green' : 'badge-yellow'}`}>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { key: '', label: 'All', count: notes.length },
+                    { key: 'pending', label: 'Pending', count: notes.filter(n => n.status?.toLowerCase() === 'pending').length },
+                    { key: 'approved', label: 'Approved', count: notes.filter(n => n.status?.toLowerCase() === 'approved').length }
+                  ].map(btn => (
+                    <motion.button
+                      key={btn.key}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => { setNoteFilter(btn.key); fetchNotes(btn.key) }}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold text-sm transition-all border ${
+                        noteFilter === btn.key
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-100'
+                          : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'
+                      }`}
+                      style={{
+                        backgroundColor: noteFilter === btn.key ? 'var(--accent)' : 'var(--bg-surface)',
+                        borderColor: noteFilter === btn.key ? 'var(--accent)' : 'var(--border-default)',
+                        color: noteFilter === btn.key ? 'var(--text-inverse)' : 'var(--text-secondary)'
+                      }}
+                    >
+                      {btn.label}
+                      <span 
+                        className="text-xs font-bold px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: noteFilter === btn.key ? 'rgba(255, 255, 255, 0.2)' : 'var(--bg-subtle)',
+                          color: noteFilter === btn.key ? 'var(--text-inverse)' : 'var(--text-primary)'
+                        }}
+                      >
+                        {btn.count}
+                      </span>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes List */}
+              {notes.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="card text-center"
+                  style={{
+                    padding: '80px 20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px dashed var(--border-default)',
+                    background: 'var(--bg-surface)',
+                    boxShadow: 'none'
+                  }}
+                >
+                  <div className="text-5xl mb-3">📄</div>
+                  <h3 className="text-xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>No notes found</h3>
+                  <p style={{ color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto' }}>
+                    {noteFilter === 'pending' ? 'All pending notes have been reviewed.' : 
+                     noteFilter === 'approved' ? 'No approved notes yet.' : 
+                     'Notes will appear here when trainers upload them.'}
+                  </p>
+                </motion.div>
+              ) : (
+                <div className="space-y-4">
+                  {notes.map((note, idx) => {
+                    const statusConfig = {
+                      'PENDING': { 
+                        text: 'var(--warning)', 
+                        badgeClass: 'badge badge-yellow', 
+                        badge: '⏳' 
+                      },
+                      'APPROVED': { 
+                        text: 'var(--success)', 
+                        badgeClass: 'badge badge-green', 
+                        badge: '✅' 
+                      },
+                      'REJECTED': { 
+                        text: 'var(--danger)', 
+                        badgeClass: 'badge badge-red', 
+                        badge: '❌' 
+                      }
+                    }
+                    const config = statusConfig[note.status?.toUpperCase()] || statusConfig['PENDING']
+                    
+                    return (
+                      <motion.div
+                        key={note.id || idx}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        whileHover={{ x: 4, boxShadow: 'var(--shadow-md)' }}
+                        className="card"
+                        style={{
+                          borderLeft: `4px solid ${config.text}`,
+                          borderColor: `var(--border-default) var(--border-default) var(--border-default) ${config.text}`,
+                          padding: '20px'
+                        }}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                              <span className={config.badgeClass} style={{ flexShrink: 0 }}>
+                                <span className="mr-1">{config.badge}</span>
                                 {note.status}
                               </span>
-                            </td>
-                            <td>{fmtDate(note.created_at)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-lg truncate" style={{ margin: 0, color: 'var(--text-primary)' }}>{note.title}</h4>
+                                <p className="text-sm mt-1" style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                                  {note.trainer?.name || 'Unknown'} • {fmtDate(note.created_at)}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-sm line-clamp-2" style={{ color: 'var(--text-secondary)', margin: 0 }}>{note.content}</p>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {note.status === 'PENDING' && (
+                              <>
+                                <motion.button
+                                  whileHover={{ scale: 1.02 }}
+                                  whileTap={{ scale: 0.98 }}
+                                  onClick={() => handleRejectNote(note.id)}
+                                  disabled={loading}
+                                  className="btn btn-sm btn-danger"
+                                >
+                                  Reject
+                                </motion.button>
+                                <motion.button
+                                  whileHover={{ scale: 1.02 }}
+                                  whileTap={{ scale: 0.98 }}
+                                  onClick={() => handleApproveNote(note.id)}
+                                  disabled={loading}
+                                  className="btn btn-sm btn-success"
+                                >
+                                  Approve
+                                </motion.button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              )}
             </motion.div>
           )}
 

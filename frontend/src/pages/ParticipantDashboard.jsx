@@ -1,12 +1,23 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { Calendar, User, Users, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import Layout from '../components/Layout'
 import AIQuizList from '../components/AIQuizList'
 import QuizTaking from '../components/QuizTaking'
+import { useToast } from '../components/Toast'
+import Pagination from '../components/Pagination'
+import SortableTableHeader from '../components/SortableTableHeader'
 
 import { API_BASE as API } from '../api/api'
 
 function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
+  const { success, error: showError, info } = useToast()
   const [tab, setTab] = useState(activeTab || 'available')
+
+  useEffect(() => {
+    if (activeTab) setTab(activeTab)
+  }, [activeTab])
+
   const handleTabChange = (newTab) => {
     setTab(newTab)
     if (onTabChange) onTabChange(newTab)
@@ -14,21 +25,18 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [trainings, setTrainings] = useState([])
   const [enrollments, setEnrollments] = useState([])
   const [feedbacks, setFeedbacks] = useState([])
-  const [msg, setMsg] = useState('')
-  const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
   const [feedbackModal, setFeedbackModal] = useState(null)
   const [fbForm, setFbForm] = useState({ trainerRating: 0, subjectRating: 0, comments: '', anonymous: false })
   const [questions, setQuestions] = useState([])
   const [answers, setAnswers] = useState({})
   const [cancelConfirmModal, setCancelConfirmModal] = useState(null)
+  const [enrollmentSort, setEnrollmentSort] = useState({ key: '', direction: 'asc' })
+  const [enrollmentPage, setEnrollmentPage] = useState(1)
+  const itemsPerPage = 5
 
   const auth = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` })
 
-  const notify = (m, isErr = false) => {
-    if (isErr) setErr(m); else setMsg(m)
-    setTimeout(() => { setErr(''); setMsg('') }, 4000)
-  }
 
   useEffect(() => { fetchAll() }, [])
 
@@ -64,9 +72,9 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API}/participant/enroll`, { method: 'POST', headers: auth(), body: JSON.stringify({ trainingId }) })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
-      notify('Enrolled successfully')
+      success('Enrolled successfully!')
       fetchAll()
-    } catch (e) { notify(e.message, true) }
+    } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
 
@@ -81,9 +89,9 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       const r = await fetch(`${API}/participant/enroll/${trainingId}`, { method: 'DELETE', headers: auth() })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
-      notify('Enrollment cancelled')
+      success('Enrollment cancelled successfully!')
       fetchAll()
-    } catch (e) { notify(e.message, true) }
+    } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
 
@@ -100,7 +108,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   const handleSubmitFeedback = async (e) => {
     e.preventDefault()
-    if (!fbForm.trainerRating || !fbForm.subjectRating) { notify('Please rate both trainer and subject', true); return }
+    if (!fbForm.trainerRating || !fbForm.subjectRating) { showError('Please rate both trainer and subject'); return }
     setLoading(true)
     try {
       const surveyAnswers = Object.entries(answers).map(([qid, val]) => {
@@ -120,16 +128,39 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Server error')
-      notify(d.message || 'Feedback submitted successfully')
+      success(d.message || 'Feedback submitted successfully!')
       setFeedbackModal(null)
       fetchFeedbacks()
-    } catch (e) { notify(e.message, true) }
+    } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
 
   const isEnrolled = (id) => enrollments.some(e => e.trainingId === id)
   const hasFeedback = (id) => feedbacks.some(f => f.trainingId === id)
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'
+
+  // Sort enrollments
+  const sortedEnrollments = [...enrollments].sort((a, b) => {
+    if (!enrollmentSort.key) return 0
+    const aVal = a[enrollmentSort.key] || ''
+    const bVal = b[enrollmentSort.key] || ''
+    const comparison = String(aVal).localeCompare(String(bVal))
+    return enrollmentSort.direction === 'asc' ? comparison : -comparison
+  })
+
+  // Paginate enrollments
+  const paginatedEnrollments = sortedEnrollments.slice(
+    (enrollmentPage - 1) * itemsPerPage,
+    enrollmentPage * itemsPerPage
+  )
+  const totalEnrollmentPages = Math.ceil(sortedEnrollments.length / itemsPerPage)
+
+  const handleEnrollmentSort = (key) => {
+    setEnrollmentSort(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
 
   const StarPicker = ({ value, onChange }) => (
     <div className="stars">
@@ -171,17 +202,15 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
   const handleQuizComplete = (result) => {
     setActiveQuiz(null)
     setQuizAttemptId(null)
-    if (result) notify(`Quiz submitted! Score: ${result.percentage?.toFixed(1) ?? 0}%`)
+    if (result) success(`Quiz submitted! Score: ${result.percentage?.toFixed(1) ?? 0}%`)
   }
 
   return (
     <div className="dashboard">
-      {err && <div className="error">{err}</div>}
-      {msg && <div className="success">{msg}</div>}
 
-      <div className="tabs">
+      <div className="tabs-pills">
         {TABS.map(t => (
-          <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => handleTabChange(t.key)}>
+          <button key={t.key} className={`tab-pill ${tab === t.key ? 'active' : ''}`} onClick={() => handleTabChange(t.key)}>
             {t.label}
           </button>
         ))}
@@ -198,35 +227,76 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
                 const full = t.isFull
                 const pct = t.capacity ? Math.round(((t.enrolledCount || 0) / t.capacity) * 100) : null
                 return (
-                  <div key={t.id} className="training-card">
+                  <motion.div 
+                    key={t.id} 
+                    className="training-card card-hover-lift"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    whileHover={{ scale: 1.02 }}
+                  >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                       <div className="training-card-title" style={{ flex: 1, paddingRight: 10 }}>{t.title}</div>
-                      {enrolled && <span className="badge badge-green">Enrolled</span>}
-                      {full && !enrolled && <span className="badge badge-red">Full</span>}
+                      {enrolled && <span className="badge badge-green"><CheckCircle size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Enrolled</span>}
+                      {full && !enrolled && <span className="badge badge-red"><XCircle size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Full</span>}
                     </div>
                     <div className="training-card-desc">{t.description || 'No description available.'}</div>
                     <div className="training-meta">
-                      <div className="meta-item"><span className="meta-key">Instructor:</span><span>{t.trainerName || 'TBA'}</span></div>
-                      <div className="meta-item"><span className="meta-key">Dates:</span><span>{fmtDate(t.startDate)} - {fmtDate(t.endDate)}</span></div>
-                      <div className="meta-item"><span className="meta-key">Enrolled:</span><span>{t.enrolledCount ?? 0} {t.capacity ? `/ ${t.capacity}` : ''}</span></div>
+                      <div className="meta-item">
+                        <User size={14} style={{ color: 'var(--text-muted)' }} />
+                        <span className="meta-key">Instructor:</span>
+                        <span>{t.trainerName || 'TBA'}</span>
+                      </div>
+                      <div className="meta-item">
+                        <Calendar size={14} style={{ color: 'var(--text-muted)' }} />
+                        <span className="meta-key">Dates:</span>
+                        <span>{fmtDate(t.startDate)} - {fmtDate(t.endDate)}</span>
+                      </div>
+                      <div className="meta-item">
+                        <Users size={14} style={{ color: 'var(--text-muted)' }} />
+                        <span className="meta-key">Enrolled:</span>
+                        <span>{t.enrolledCount ?? 0} {t.capacity ? `/ ${t.capacity}` : ''}</span>
+                      </div>
                     </div>
                     {pct !== null && (
                       <div style={{ marginBottom: 14 }}>
-                        <div className="progress-bar"><div className="progress-fill" style={{ width: `${pct}%`, background: pct > 80 ? 'var(--danger)' : undefined }} /></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                          <span>Capacity Fill</span>
+                          <span style={{ fontWeight: 600 }}>{pct}%</span>
+                        </div>
+                        <div className="progress-bar progress-bar-animated">
+                          <motion.div 
+                            className="progress-fill"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ duration: 0.8, ease: "easeOut" }}
+                            style={{ background: pct > 80 ? 'var(--danger)' : undefined }}
+                          />
+                        </div>
                       </div>
                     )}
                     {!enrolled && !full && (
-                      <button className="btn btn-primary btn-full" onClick={() => handleEnroll(t.id)} disabled={loading}>
-                        Enroll in Program
-                      </button>
+                      <motion.button 
+                        className="btn btn-primary btn-full ripple"
+                        onClick={() => handleEnroll(t.id)} 
+                        disabled={loading}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {loading ? 'Enrolling...' : 'Enroll in Program'}
+                      </motion.button>
                     )}
                     {enrolled && (
-                      <button className="btn btn-full" style={{ color: 'var(--text-secondary)' }} disabled>Already Enrolled</button>
+                      <button className="btn btn-full" style={{ color: 'var(--text-secondary)' }} disabled>
+                        <CheckCircle size={14} style={{ marginRight: 6 }} /> Already Enrolled
+                      </button>
                     )}
                     {full && !enrolled && (
-                      <button className="btn btn-full" disabled style={{ opacity: 0.5 }}>Training is Full</button>
+                      <button className="btn btn-full" disabled style={{ opacity: 0.5 }}>
+                        <AlertCircle size={14} style={{ marginRight: 6 }} /> Training is Full
+                      </button>
                     )}
-                  </div>
+                  </motion.div>
                 )
               })}
             </div>
@@ -235,72 +305,110 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       )}
 
       {tab === 'myEnrollments' && (
-        <div className="card">
-          <div className="card-header">
-            <h3>My Enrollments ({enrollments.length})</h3>
-          </div>
-          {enrollments.length === 0 ? (
-            <div className="empty-state"><p>Not enrolled in any training yet.</p></div>
-          ) : (
-            <div className="table-wrapper">
-              <table className="table">
-                <thead><tr><th>Training</th><th>Trainer</th><th>Start Date</th><th>End Date</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody>
-                  {enrollments.map(e => (
-                    <tr key={e.id}>
-                      <td><strong>{e.trainingTitle}</strong></td>
-                      <td>{e.trainerName || '-'}</td>
-                      <td>{fmtDate(e.startDate)}</td>
-                      <td>{fmtDate(e.endDate)}</td>
-                      <td><span className="badge badge-green">Enrolled</span></td>
-                      <td>
-                        <button className="btn btn-sm btn-danger" onClick={() => handleCancelEnrollment(e.trainingId)}>Cancel</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="card">
+            <div className="card-header">
+              <h3>My Enrollments ({enrollments.length})</h3>
             </div>
-          )}
-        </div>
+            {enrollments.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">📚</div>
+                <h3>No Enrollments Yet</h3>
+                <p>You haven't enrolled in any training programs yet.</p>
+              </div>
+            ) : (
+              <>
+                <div className="table-wrapper">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <SortableTableHeader sortKey="trainingTitle" currentSort={enrollmentSort.key} sortDirection={enrollmentSort.direction} onSort={handleEnrollmentSort}>Training</SortableTableHeader>
+                        <SortableTableHeader sortKey="trainerName" currentSort={enrollmentSort.key} sortDirection={enrollmentSort.direction} onSort={handleEnrollmentSort}>Trainer</SortableTableHeader>
+                        <SortableTableHeader sortKey="startDate" currentSort={enrollmentSort.key} sortDirection={enrollmentSort.direction} onSort={handleEnrollmentSort}>Start Date</SortableTableHeader>
+                        <SortableTableHeader sortKey="endDate" currentSort={enrollmentSort.key} sortDirection={enrollmentSort.direction} onSort={handleEnrollmentSort}>End Date</SortableTableHeader>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedEnrollments.map(e => (
+                        <tr key={e.id}>
+                          <td><strong>{e.trainingTitle}</strong></td>
+                          <td>{e.trainerName || '-'}</td>
+                          <td>{fmtDate(e.startDate)}</td>
+                          <td>{fmtDate(e.endDate)}</td>
+                          <td><span className="badge badge-green">Enrolled</span></td>
+                          <td>
+                            <button className="btn btn-sm btn-danger" onClick={() => handleCancelEnrollment(e.trainingId)}>Cancel</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {totalEnrollmentPages > 1 && (
+                  <Pagination
+                    currentPage={enrollmentPage}
+                    totalPages={totalEnrollmentPages}
+                    onPageChange={setEnrollmentPage}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        </motion.div>
       )}
 
       {tab === 'feedback' && (
-        <div className="card">
-          <div className="card-header">
-            <h3>Submit Feedback</h3>
-          </div>
-          {enrollments.length === 0 ? (
-            <div className="empty-state"><p>Enroll in a training first.</p></div>
-          ) : (
-            <div className="table-wrapper">
-              <table className="table">
-                <thead><tr><th>Training</th><th>Trainer</th><th>Start Date</th><th>Action</th></tr></thead>
-                <tbody>
-                  {enrollments.map(e => {
-                    const started = new Date() >= new Date(e.startDate)
-                    const submitted = hasFeedback(e.trainingId)
-                    return (
-                      <tr key={e.id}>
-                        <td><strong>{e.trainingTitle}</strong></td>
-                        <td>{e.trainerName || '-'}</td>
-                        <td>{fmtDate(e.startDate)}</td>
-                        <td>
-                          {submitted
-                            ? <span className="badge badge-green">Submitted</span>
-                            : started
-                              ? <button className="btn btn-sm btn-primary" onClick={() => openFeedback(e)}>Give Feedback</button>
-                              : <span className="badge badge-gray">Not started</span>
-                          }
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="card">
+            <div className="card-header">
+              <h3>Submit Feedback</h3>
             </div>
-          )}
-        </div>
+            {enrollments.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">💬</div>
+                <h3>No Trainings Yet</h3>
+                <p>Enroll in a training program first to submit feedback.</p>
+              </div>
+            ) : (
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead><tr><th>Training</th><th>Trainer</th><th>Start Date</th><th>Action</th></tr></thead>
+                  <tbody>
+                    {enrollments.map(e => {
+                      const started = new Date() >= new Date(e.startDate)
+                      const submitted = hasFeedback(e.trainingId)
+                      return (
+                        <tr key={e.id}>
+                          <td><strong>{e.trainingTitle}</strong></td>
+                          <td>{e.trainerName || '-'}</td>
+                          <td>{fmtDate(e.startDate)}</td>
+                          <td>
+                            {submitted
+                              ? <span className="badge badge-green"><CheckCircle size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Submitted</span>
+                              : started
+                                ? <button className="btn btn-sm btn-primary" onClick={() => openFeedback(e)}>Give Feedback</button>
+                                : <span className="badge badge-gray"><Clock size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Not started</span>
+                            }
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </motion.div>
       )}
 
       {tab === 'ai-quizzes' && (
@@ -324,31 +432,41 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       )}
 
       {tab === 'myFeedbacks' && (
-        <div className="card">
-          <div className="card-header">
-            <h3>My Feedbacks ({feedbacks.length})</h3>
-          </div>
-          {feedbacks.length === 0 ? (
-            <div className="empty-state"><p>No feedback submitted yet.</p></div>
-          ) : (
-            <div className="table-wrapper">
-              <table className="table">
-                <thead><tr><th>Training</th><th>Trainer Rating</th><th>Subject Rating</th><th>Comments</th><th>Date</th></tr></thead>
-                <tbody>
-                  {feedbacks.map(f => (
-                    <tr key={f.id}>
-                      <td><strong>{f.trainingTitle}</strong></td>
-                      <td><Stars v={f.trainerRating} /></td>
-                      <td><Stars v={f.subjectRating} /></td>
-                      <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200 }}>{f.comments || '-'}</td>
-                      <td>{fmtDate(f.submittedAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="card">
+            <div className="card-header">
+              <h3>My Feedbacks ({feedbacks.length})</h3>
             </div>
-          )}
-        </div>
+            {feedbacks.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">📝</div>
+                <h3>No Feedback Yet</h3>
+                <p>Your submitted feedback will appear here.</p>
+              </div>
+            ) : (
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead><tr><th>Training</th><th>Trainer Rating</th><th>Subject Rating</th><th>Comments</th><th>Date</th></tr></thead>
+                  <tbody>
+                    {feedbacks.map(f => (
+                      <tr key={f.id}>
+                        <td><strong>{f.trainingTitle}</strong></td>
+                        <td><Stars v={f.trainerRating} /></td>
+                        <td><Stars v={f.subjectRating} /></td>
+                        <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200 }}>{f.comments || '-'}</td>
+                        <td>{fmtDate(f.submittedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </motion.div>
       )}
 
       {feedbackModal && (

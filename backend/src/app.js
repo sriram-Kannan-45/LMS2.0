@@ -129,7 +129,10 @@ app.use((req, res) => {
 const startServer = async () => {
   try {
     await connectDB();
-    await sequelize.sync({ alter: true });
+    // ✅ IMPORTANT: Never use alter: true in production
+    // See src/config/db.js for detailed explanation
+    // Sync is already handled safely in connectDB()
+    // await sequelize.sync({ alter: false });
 
     // Initialize Socket.IO
     const io = initializeSocket(server);
