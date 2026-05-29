@@ -36,6 +36,12 @@ export const API = {
   REGISTER:        `${API_BASE}/auth/register`,
   CHANGE_PASSWORD: `${API_BASE}/auth/change-password`,
 
+  FORGOT_PASSWORD: {
+    SEND_OTP:   `${API_BASE}/auth/forgot-password/send-otp`,
+    VERIFY_OTP: `${API_BASE}/auth/forgot-password/verify-otp`,
+    RESET:      `${API_BASE}/auth/forgot-password/reset`
+  },
+
   ADMIN: {
     CREATE_TRAINER:  `${API_BASE}/admin/create-trainer`,
     TRAININGS:       `${API_BASE}/admin/trainings`,
@@ -74,6 +80,29 @@ export const API = {
     START:              (quizId)   => `${API_BASE}/ai-quiz/participant/start/${quizId}`,
     SUBMIT:             (attemptId)=> `${API_BASE}/ai-quiz/participant/submit/${attemptId}`,
     LEADERBOARD:        (quizId)   => `${API_BASE}/ai-quiz/leaderboard/${quizId}`
+  },
+
+  /** Lesson workflow: lessons + quiz/assessment gating, results & dashboards */
+  LESSONS: {
+    // Trainer authoring
+    CREATE:             `${API_BASE}/lessons`,
+    TRAINER_LIST:       `${API_BASE}/lessons/trainer`,
+    ATTACH_QUIZ:        (lessonId) => `${API_BASE}/lessons/${lessonId}/quizzes`,
+    CREATE_ASSESSMENT:  (lessonId) => `${API_BASE}/lessons/${lessonId}/assessments`,
+    // Trainer dashboard + publishing
+    DASHBOARD:          (lessonId) => `${API_BASE}/lessons/${lessonId}/dashboard`,
+    PUBLISH_QUIZ:       (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/publish`,
+    // Trainer assessment review
+    SUBMISSIONS:        (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/submissions`,
+    GRADE:              (submissionId) => `${API_BASE}/lessons/submissions/${submissionId}/grade`,
+    PUBLISH_ASSESSMENT: (submissionId) => `${API_BASE}/lessons/submissions/${submissionId}/publish`,
+    // Participant
+    PARTICIPANT_LIST:   `${API_BASE}/lessons/participant`,
+    VIEW_CONTENT:       (lessonId) => `${API_BASE}/lessons/${lessonId}/view`,
+    COMPLETE_QUIZ:      (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/complete`,
+    SUBMIT_ASSESSMENT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/submit`,
+    QUIZ_RESULT:        (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/result`,
+    ASSESSMENT_RESULT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/result`
   }
 };
 

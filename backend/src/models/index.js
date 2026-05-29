@@ -13,6 +13,7 @@ const ActivityLog = require('./activityLog');
 const LiveSession = require('./liveSession');
 const Attendance = require('./attendance');
 const ChatMessage = require('./chatMessage');
+const ParticipantProfile = require('./participantProfile');
 
 const AIDocument = require('./aiDocument');
 const AIQuiz = require('./aiQuiz');
@@ -20,6 +21,23 @@ const AIQuestion = require('./aiQuestion');
 const QuizAttempt = require('./quizAttempt');
 const QuizAnswer = require('./quizAnswer');
 const QuizResult = require('./quizResult');
+
+const PasswordResetOtp = require('./PasswordResetOtp');
+const AssessmentSession = require('./AssessmentSession');
+
+// Lesson workflow module (lessons + quiz/assessment gating + progress)
+const Lesson = require('./lesson');
+const LessonQuiz = require('./lessonQuiz');
+const LessonAssessment = require('./lessonAssessment');
+const AssessmentSubmission = require('./assessmentSubmission');
+const QuizProgress = require('./quizProgress');
+const LessonProgress = require('./lessonProgress');
+
+// Proctoring module
+const ExamSession = require('./examSession');
+const Violation = require('./violation');
+const DeviceFingerprint = require('./deviceFingerprint');
+const ProctorActivity = require('./proctorActivity');
 
 // --- Core LMS Associations ---
 
@@ -51,6 +69,10 @@ User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' });
 Note.belongsTo(User, { foreignKey: 'trainerId', as: 'trainer' });
 Note.belongsTo(Training, { foreignKey: 'trainingId', as: 'training', required: false });
 
+// ParticipantProfile (1-1 with User)
+User.hasOne(ParticipantProfile, { foreignKey: 'userId', as: 'participantProfile' });
+ParticipantProfile.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
 // --- AI Quiz System ---
 AIDocument.belongsTo(User, { foreignKey: 'trainerId', as: 'trainer' });
 AIDocument.belongsTo(Training, { foreignKey: 'trainingId', as: 'training' });
@@ -74,6 +96,55 @@ QuizResult.belongsTo(QuizAttempt, { foreignKey: 'attemptId', as: 'attempt' });
 QuizResult.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
 QuizResult.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
 
+// --- Proctoring Associations ---
+ExamSession.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
+ExamSession.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
+ExamSession.belongsTo(QuizAttempt, { foreignKey: 'attemptId', as: 'attempt' });
+ExamSession.belongsTo(DeviceFingerprint, { foreignKey: 'deviceFingerprintId', as: 'device' });
+ExamSession.hasMany(Violation, { foreignKey: 'sessionId', as: 'violations' });
+ExamSession.hasMany(ProctorActivity, { foreignKey: 'sessionId', as: 'activities' });
+
+Violation.belongsTo(ExamSession, { foreignKey: 'sessionId', as: 'session' });
+Violation.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
+
+ProctorActivity.belongsTo(ExamSession, { foreignKey: 'sessionId', as: 'session' });
+
+DeviceFingerprint.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+User.hasMany(DeviceFingerprint, { foreignKey: 'userId', as: 'devices' });
+User.hasMany(ExamSession, { foreignKey: 'participantId', as: 'examSessions' });
+
+// --- Secure Assessment Session lock (separate from proctoring module) ---
+AssessmentSession.belongsTo(QuizAttempt, { foreignKey: 'attemptId', as: 'attempt' });
+AssessmentSession.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
+AssessmentSession.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
+AssessmentSession.belongsTo(User, { foreignKey: 'resetByAdmin', as: 'resetAdmin' });
+QuizAttempt.hasOne(AssessmentSession, { foreignKey: 'attemptId', as: 'assessmentSession' });
+User.hasMany(AssessmentSession, { foreignKey: 'participantId', as: 'assessmentSessions' });
+
+// --- Lesson Workflow Associations ---
+Lesson.belongsTo(Training, { foreignKey: 'trainingId', as: 'training' });
+Lesson.belongsTo(User, { foreignKey: 'trainerId', as: 'trainer' });
+Training.hasMany(Lesson, { foreignKey: 'trainingId', as: 'lessons' });
+
+Lesson.hasMany(LessonQuiz, { foreignKey: 'lessonId', as: 'quizzes' });
+LessonQuiz.belongsTo(Lesson, { foreignKey: 'lessonId', as: 'lesson' });
+LessonQuiz.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
+
+Lesson.hasMany(LessonAssessment, { foreignKey: 'lessonId', as: 'assessments' });
+LessonAssessment.belongsTo(Lesson, { foreignKey: 'lessonId', as: 'lesson' });
+
+LessonAssessment.hasMany(AssessmentSubmission, { foreignKey: 'assessmentId', as: 'submissions' });
+AssessmentSubmission.belongsTo(LessonAssessment, { foreignKey: 'assessmentId', as: 'assessment' });
+AssessmentSubmission.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
+
+LessonQuiz.hasMany(QuizProgress, { foreignKey: 'lessonQuizId', as: 'progress' });
+QuizProgress.belongsTo(LessonQuiz, { foreignKey: 'lessonQuizId', as: 'lessonQuiz' });
+QuizProgress.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
+
+Lesson.hasMany(LessonProgress, { foreignKey: 'lessonId', as: 'progress' });
+LessonProgress.belongsTo(Lesson, { foreignKey: 'lessonId', as: 'lesson' });
+LessonProgress.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
+
 module.exports = {
   sequelize,
   User,
@@ -89,10 +160,26 @@ module.exports = {
   LiveSession,
   Attendance,
   ChatMessage,
+  ParticipantProfile,
   AIDocument,
   AIQuiz,
   AIQuestion,
   QuizAttempt,
   QuizAnswer,
-  QuizResult
+  QuizResult,
+  // Proctoring
+  ExamSession,
+  Violation,
+  DeviceFingerprint,
+  ProctorActivity,
+  PasswordResetOtp,
+  // Secure Assessment session lock
+  AssessmentSession,
+  // Lesson workflow module
+  Lesson,
+  LessonQuiz,
+  LessonAssessment,
+  AssessmentSubmission,
+  QuizProgress,
+  LessonProgress
 };

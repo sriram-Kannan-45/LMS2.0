@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Calendar, Users, Star, Upload, FileText, CheckCircle, XCircle, Clock, MessageSquare, TrendingUp } from 'lucide-react'
+import { Calendar, Users, Star, FileText, CheckCircle, XCircle, Clock, MessageSquare, TrendingUp } from 'lucide-react'
 import TrainerForm from '../components/TrainerForm'
 import TrainerAIQuiz from '../components/TrainerAIQuiz'
+import NotesSection from '../components/trainer/notes/NotesSection'
+import ParticipantProfileView from '../components/shared/ParticipantProfileView'
 import { useToast } from '../components/Toast'
 import Pagination from '../components/Pagination'
 import SortableTableHeader from '../components/SortableTableHeader'
@@ -34,12 +36,11 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   const [replyModal, setReplyModal] = useState(null)
   const [replyText, setReplyText] = useState('')
+  const [viewingParticipant, setViewingParticipant] = useState(null)
 
   useEffect(() => {
     fetchTrainings()
     fetchFeedbacks()
-    fetchTrainingsList()
-    fetchNotes()
   }, [])
 
   const fetchTrainings = async () => {
@@ -120,64 +121,13 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   const TABS = [
     { key: 'trainings', label: 'My Trainings' },
-    { key: 'notes', label: 'Upload Notes' },
+    { key: 'notes', label: 'Notes & Resources' },
     { key: 'ai-quiz', label: 'AI Quiz Generator' },
     { key: 'feedback', label: 'Feedback Received' },
     { key: 'profile', label: 'My Profile' },
   ]
 
-  const [noteForm, setNoteForm] = useState({ title: '', description: '', link: '', trainingId: '' })
-  const [noteFile, setNoteFile] = useState(null)
-  const [uploading, setUploading] = useState(false)
-  const [notes, setNotes] = useState([])
-  const [trainingsList, setTrainingsList] = useState([])
-
-
-  const handleUploadNote = async (e) => {
-    e.preventDefault()
-    if (!noteForm.title || (!noteFile && !noteForm.link)) {
-      showError('Title and file or link required')
-      return
-    }
-    setUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('title', noteForm.title)
-      formData.append('description', noteForm.description)
-      formData.append('link', noteForm.link)
-      formData.append('trainingId', noteForm.trainingId)
-      if (noteFile) formData.append('file', noteFile)
-
-      const r = await fetch(`${API}/notes`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${user.token}` },
-        body: formData
-      })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error)
-      success('Note uploaded! Waiting for admin approval.')
-      setNoteForm({ title: '', description: '', link: '', trainingId: '' })
-      setNoteFile(null)
-      fetchNotes()
-    } catch (e) { showError(e.message) }
-    finally { setUploading(false) }
-  }
-
-  const fetchNotes = async () => {
-    try {
-      const r = await fetch(`${API}/notes/my-notes`, { headers: auth() })
-      const d = await r.json()
-      setNotes(d.notes || [])
-    } catch {}
-  }
-
-  const fetchTrainingsList = async () => {
-    try {
-      const r = await fetch(`${API}/trainer/trainings`, { headers: auth() })
-      const d = await r.json()
-      setTrainingsList(d.trainings || [])
-    } catch {}
-  }
+  // Note management is fully encapsulated in <NotesSection />.
 
   return (
     <div className="dashboard">
@@ -311,7 +261,27 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
                       {paginatedFeedbacks.map(f => (
                         <tr key={f.id}>
                           <td><strong>{f.trainingTitle}</strong></td>
-                          <td>{f.anonymous ? <span className="badge badge-gray">Anonymous</span> : f.participantName}</td>
+                          <td>{f.anonymous ? <span className="badge badge-gray">Anonymous</span> : (
+                            f.participantId ? (
+                              <button
+                                type="button"
+                                onClick={() => setViewingParticipant({ id: f.participantId, name: f.participantName })}
+                                style={{
+                                  background: 'transparent',
+                                  border: 0,
+                                  padding: 0,
+                                  color: 'var(--text-link, #2563eb)',
+                                  cursor: 'pointer',
+                                  font: 'inherit',
+                                  textDecoration: 'underline',
+                                  textUnderlineOffset: 2,
+                                }}
+                                title="View profile"
+                              >
+                                {f.participantName}
+                              </button>
+                            ) : f.participantName
+                          )}</td>
                           <td><Stars v={f.trainerRating} /></td>
                           <td><Stars v={f.subjectRating} /></td>
                           <td style={{ maxWidth: 200, fontSize: 12, color: 'var(--text-secondary)' }}>{f.comments || '-'}</td>
@@ -348,80 +318,8 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}
         >
-          <div className="card">
-            <div className="card-header">
-              <h3><Upload size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Upload Note</h3>
-            </div>
-            <form onSubmit={handleUploadNote}>
-              <div className="form-group">
-                <label className="form-label">Title *</label>
-                <input className="form-control" type="text" value={noteForm.title}
-                  onChange={e => setNoteForm(p => ({ ...p, title: e.target.value }))} required placeholder="Enter note title" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Description</label>
-                <textarea className="form-control" value={noteForm.description}
-                  onChange={e => setNoteForm(p => ({ ...p, description: e.target.value }))} placeholder="Optional description..." rows={3} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Related Training (optional)</label>
-                <select className="form-control" value={noteForm.trainingId}
-                  onChange={e => setNoteForm(p => ({ ...p, trainingId: e.target.value }))}>
-                  <option value="">Select training</option>
-                  {trainingsList.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">File OR Link</label>
-                <input type="file" onChange={e => setNoteFile(e.target.files[0])} className="form-control" />
-                <div style={{ margin: '8px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>OR</div>
-                <input className="form-control" type="url" placeholder="https://example.com/resource"
-                  value={noteForm.link} onChange={e => { setNoteForm(p => ({ ...p, link: e.target.value })); setNoteFile(null) }} />
-              </div>
-              <motion.button 
-                type="submit" 
-                className="btn btn-primary btn-full" 
-                disabled={uploading}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {uploading ? 'Uploading...' : <><Upload size={16} style={{ marginRight: 6 }} /> Upload Note</>}
-              </motion.button>
-            </form>
-          </div>
-          <div className="card">
-            <div className="card-header">
-              <h3><FileText size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> My Notes ({notes.length})</h3>
-            </div>
-            {notes.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">📄</div>
-                <h3>No Notes Yet</h3>
-                <p>Upload notes to share with participants.</p>
-              </div>
-            ) : (
-              <div className="notes-list">
-                {notes.map(n => {
-                  const statusColors = {
-                    PENDING: 'badge-yellow',
-                    APPROVED: 'badge-green',
-                    REJECTED: 'badge-red'
-                  }
-                  return (
-                    <div key={n.id} className="note-card">
-                      <div className="note-title">{n.title}</div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-                        <span className={`badge ${n.fileType ? 'badge-blue' : 'badge-gray'}`}>{n.fileType || 'Link'}</span>
-                        <span className={`badge ${statusColors[n.status] || 'badge-gray'}`}>{n.status}</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+          <NotesSection user={user} />
         </motion.div>
       )}
 
@@ -465,6 +363,13 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
           </div>
         </div>
       )}
+
+      <ParticipantProfileView
+        open={!!viewingParticipant}
+        userId={viewingParticipant?.id}
+        fallback={viewingParticipant ? { name: viewingParticipant.name } : null}
+        onClose={() => setViewingParticipant(null)}
+      />
     </div>
   )
 }

@@ -32,22 +32,22 @@ const TrainerAIQuiz = ({ user }) => {
   // ── Data Fetching ─────────────────────────────
   const fetchTrainings = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/trainer/trainings`, { headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE}/trainer/trainings`, { headers: getAuthHeaders(user) });
       const data = await res.json();
       setTrainings(data.trainings || []);
     } catch (err) { console.error('Failed to fetch trainings:', err); }
-  }, []);
+  }, [user]);
 
   const fetchQuizzes = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/ai-quiz/trainer/quizzes`, { headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE}/ai-quiz/trainer/quizzes`, { headers: getAuthHeaders(user) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch quizzes');
       setQuizzes(data.quizzes || []);
     } catch (err) {
       console.error('Failed to fetch quizzes:', err);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => { fetchTrainings(); fetchQuizzes(); }, [fetchTrainings, fetchQuizzes]);
 
@@ -91,8 +91,8 @@ const TrainerAIQuiz = ({ user }) => {
   // ── Upload & Generate ─────────────────────────
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file || uploadInProgress.current) return;
     if (!file) { setError('Please select a file to upload'); return; }
+    if (uploadInProgress.current) return;
 
     uploadInProgress.current = true;
     setLoading(true);
@@ -109,7 +109,7 @@ const TrainerAIQuiz = ({ user }) => {
     try {
       const res = await fetch(`${API_BASE}/ai-quiz/trainer/upload-document`, {
         method: 'POST',
-        headers: { ...getAuthHeaders() },
+        headers: getAuthHeaders(user),
         body: formData
       });
       const data = await res.json();
@@ -152,7 +152,7 @@ const TrainerAIQuiz = ({ user }) => {
     try {
       const res = await fetch(`${API_BASE}/ai-quiz/trainer/quiz/${editingQuiz.id}`, {
         method: 'PUT',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(user), 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: editingQuiz.title, timeLimit: editingQuiz.timeLimit, status: editingQuiz.status })
       });
       if (!res.ok) throw new Error('Failed to update');
@@ -167,7 +167,7 @@ const TrainerAIQuiz = ({ user }) => {
     try {
       const res = await fetch(`${API_BASE}/ai-quiz/trainer/quiz/${quiz.id}`, {
         method: 'PUT',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(user), 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'PUBLISHED' })
       });
       if (!res.ok) throw new Error('Failed to publish');
@@ -180,7 +180,7 @@ const TrainerAIQuiz = ({ user }) => {
   const fetchLeaderboard = async (quizId) => {
     if (!quizId) return;
     try {
-      const res = await fetch(`${API_BASE}/ai-quiz/leaderboard/${quizId}`, { headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE}/ai-quiz/leaderboard/${quizId}`, { headers: getAuthHeaders(user) });
       const data = await res.json();
       setLeaderboardData(data.leaderboard || []);
     } catch (err) { console.error('Failed to fetch leaderboard:', err); }

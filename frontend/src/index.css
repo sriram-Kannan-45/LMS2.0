@@ -88,6 +88,25 @@ input:-webkit-autofill:focus {
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* Global hygiene — prevents horizontal scrollbars from rogue 100vw children,
+   stops layout shift when modals lock body scroll (scrollbar-gutter
+   reserves the gutter space at all times), and ensures #root spans the
+   viewport without exceeding it. */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+html {
+  scroll-behavior: smooth;
+  /* Reserve the scrollbar gutter so opening a modal (which sets
+     overflow:hidden on body) doesn't push content sideways. */
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: 'Inter', sans-serif;
   background-color: var(--bg-base);
@@ -212,7 +231,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 .sidebar-logout-btn:hover { background: var(--danger-bg); color: var(--danger); transform: rotate(-15deg); }
 
-.main-content { flex: 1; margin-left: 260px; display: flex; flex-direction: column; min-height: 100vh; }
+.main-content { flex: 1; margin-left: 260px; display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }
 
 .top-header {
   height: 60px; background: var(--bg-surface); border-bottom: 1px solid var(--border-default);
@@ -1703,4 +1722,118 @@ textarea.form-control { resize: vertical; min-height: 80px; height: auto; }
   .stats-grid {
     grid-template-columns: 1fr;
   }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RESPONSIVE LAYOUT — sidebar slide-in / off-canvas behaviour
+   ──────────────────────────────────────────────────────────────────────
+   The sidebar is a fixed 260 px panel on desktop. On tablet/phone we
+   hide it off-canvas and reveal it via the existing hamburger button
+   (Layout.jsx already wires sidebarOpen state + the .open class).
+   Without these rules the sidebar permanently overlapped content on
+   smaller screens.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  .sidebar {
+    transform: translateX(-100%);
+    box-shadow: none;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: 0 18px 50px -10px rgba(15, 23, 42, 0.25);
+  }
+  .sidebar-toggle {
+    display: inline-flex;
+  }
+  .sidebar-overlay {
+    display: none; /* JSX adds inline display:block when .open */
+  }
+  .sidebar-close-btn {
+    display: inline-flex !important;
+  }
+  .main-content {
+    margin-left: 0;
+  }
+  .page-content {
+    padding: var(--space-3);
+  }
+}
+
+/* Hide the in-sidebar close button on desktop where the sidebar is always
+   visible. */
+@media (min-width: 1025px) {
+  .sidebar-close-btn {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .top-header {
+    padding: 0 var(--space-3);
+  }
+  .top-header-title {
+    font-size: 14px;
+  }
+  .page-content {
+    padding: var(--space-2);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   STABILITY HARDENING
+   ──────────────────────────────────────────────────────────────────────
+   Small rules that keep cards from "shaking" while text is being
+   selected, and prevent the layout from jumping when modals open.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Selecting text inside an interactive card shouldn't trigger hover
+   transforms on the card itself. Prevent text-selection on icons,
+   chips, and decorative wrappers (still allow it inside <p>, headings,
+   spans, etc.). */
+button,
+.nav-icon,
+.sidebar-logo,
+.sidebar-user-avatar,
+.classic-logo,
+.pf-avatar,
+.pf-avatar__placeholder,
+.pf-mini__icon {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Anything we animate with transform/opacity benefits from GPU-accelerated
+   compositing — eliminates the subtle 1-pixel jitter that can appear when
+   hovering near a hover-transform boundary. */
+.sidebar-nav-item,
+.classic-logo,
+.training-card,
+.stat-card,
+.note-card,
+.pf-mini,
+.pf-activity,
+.pf-skill,
+.tr-notes__resource {
+  will-change: transform;
+}
+
+/* Defensive: never let an embedded <img> overflow its parent (a common
+   cause of horizontal scroll on small screens). */
+img,
+video,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Long URLs, hashes, IDs etc. shouldn't blow out flex/grid columns. */
+.notes-list .note-title,
+.training-card-desc,
+.pf-activity__title,
+.tr-notes__resource-title {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }

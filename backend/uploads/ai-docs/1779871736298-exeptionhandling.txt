@@ -1,0 +1,83 @@
+exeption handling
+
+
+Build in exception
+==================
+
+Assertion 
+
+AttributeError
+
+EOFerror
+
+FlotingPointError
+
+GeneratorExits
+
+EXCEPTION handling  - Mechanishm 
+
+1. find the problem hit
+2. inform that an error has occurred throw
+3. received the error information catch 
+4. take  handle
+
+try:
+	run this code
+
+	raise
+
+except:
+
+	run this code of an execeoption 
+else :
+
+finaly :
+
+we implement the no of expect
+
+we can implement the else also
+		     ---- 
+
+
+
+FILE HANDLE
+===========
+
+maily two types of files is are used
+
+1.text file 
+2.binary file
+
+need a specific applications
+
+open file
+=========
+
+fileObj = open (filename , access_mode ) 
+
+	<file.closed>
+	<file.mode>
+	<file.name>
+
+mode
+====
+
+<r> - read default no need to mention
+<w> - write / override
+<+r> or <r+> - both
+<a> - append
+<b> - binary mode 
+
+<rb> - read binary mode
+<wb> - write a binary file
+<wb+> - both read write binary 
+
+<a+> - read and append
+
+close - file.close()
+
+with 
+====
+
+with open (filename , access ) as file_object : // it closed automatically 
+

@@ -22,24 +22,24 @@ const aiService = {
   checkHealth,
 
   async generateQuizFromText(content, numQuestions = 10, difficulty = 'MIXED') {
-    // Clean content for better quiz generation
-    let cleanContent = content.substring(0, 15000);
-    
-    // Remove email addresses
-    cleanContent = cleanContent.replace(/[\w.-]+?@\w+\.\w{2,}\b/g, '[EMAIL]');
-    // Remove URLs
-    cleanContent = cleanContent.replace(/https?:\/\/\S+/g, '[URL]');
-    // Remove special characters but keep sentence structure
-    cleanContent = cleanContent.replace(/[|•■◆▪–—]+/g, ' ');
-    // Fix broken sentences
-    cleanContent = cleanContent.replace(/([a-z])\n([a-z])/g, '$1 $2');
-    cleanContent = cleanContent.replace(/(\w)\n(\w)/g, '$1 $2');
-    // Remove excessive newlines
-    cleanContent = cleanContent.replace(/\n{2,}/g, '. ');
-    // Clean up spaces
-    cleanContent = cleanContent.replace(/  +/g, ' ');
+    // Light cleaning ONLY — the Python AI service does its own normalization
+    // (clean_text_for_quiz). Doing aggressive cleaning here AND there can
+    // collapse sentence boundaries and corrupt context, which is a major
+    // reason quizzes ended up not knowledge-based.
+    let cleanContent = (content || '').toString();
+    // Strip the most obvious noise that survives extraction:
+    cleanContent = cleanContent.replace(/\u0000/g, '');           // null bytes
+    cleanContent = cleanContent.replace(/[\r\f\v]+/g, ' ');       // form feeds, vertical tabs
+    cleanContent = cleanContent.replace(/[ \t]+/g, ' ');          // collapse runs of spaces
     cleanContent = cleanContent.trim();
-    
+
+    // Cap to 15000 chars — the Python service uses RecursiveCharacterTextSplitter
+    // and will spread chunks across this slice. The aiQuizRoutes layer also
+    // already strips image/figure tokens before calling us.
+    if (cleanContent.length > 15000) {
+      cleanContent = cleanContent.substring(0, 15000);
+    }
+
     if (!cleanContent || cleanContent.length < 50) {
       throw new Error('Document text is too short to generate a quiz. Minimum 50 characters required.');
     }

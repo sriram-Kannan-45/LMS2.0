@@ -170,29 +170,43 @@ const router = express.Router();
       });
 
       try {
-        // Clean content - aggressively remove any image references that might confuse the AI
+        // Strip image references that might confuse the AI. Keep newlines and
+        // sentence punctuation intact — the Python service does the heavier
+        // text normalization, and over-cleaning here was destroying context.
         let cleanContent = content.substring(0, 15000);
         // Remove image filename patterns (image.png, fig1.jpg, etc.)
-        cleanContent = cleanContent.replace(/\b(image|img|fig|figure)\d*\.(png|jpg|jpeg|gif|bmp|webp|svg)\b/gi, '[IMAGE]');
-        cleanContent = cleanContent.replace(/\b(image|img|fig|figure)\s*\d+\.(png|jpg|jpeg|gif|bmp|webp|svg)\b/gi, '[IMAGE]');
-        // Remove markdown/image tags
-        cleanContent = cleanContent.replace(/!\[.*?\]\(.*?\)/g, '[IMAGE]');
-        cleanContent = cleanContent.replace(/\[image:?\s*[^\]]*\]/gi, '[IMAGE] ');
-        // Remove "Figure X:" or "Fig. X:" patterns
-        cleanContent = cleanContent.replace(/\b(figure|fig)\.?\s*\d+[:\-–—]\s*/gi, '[IMAGE] ');
-        // Remove any remaining file path references to images
-        cleanContent = cleanContent.replace(/[C-Z]:\\.*\.(png|jpg|jpeg|gif|bmp|webp|svg)/gi, '[IMAGE]');
-        cleanContent = cleanContent.replace(/(\/|\\)[^\s]+\.(png|jpg|jpeg|gif|bmp|webp|svg)/gi, '[IMAGE]');
-        
+        cleanContent = cleanContent.replace(/\b(image|img|fig|figure)\d*\.(png|jpg|jpeg|gif|bmp|webp|svg)\b/gi, ' ');
+        cleanContent = cleanContent.replace(/\b(image|img|fig|figure)\s*\d+\.(png|jpg|jpeg|gif|bmp|webp|svg)\b/gi, ' ');
+        // Remove markdown image tags
+        cleanContent = cleanContent.replace(/!\[.*?\]\(.*?\)/g, ' ');
+        cleanContent = cleanContent.replace(/\[image:?\s*[^\]]*\]/gi, ' ');
+        // Remove "Figure X:" or "Fig. X:" labels
+        cleanContent = cleanContent.replace(/\b(figure|fig)\.?\s*\d+[:\-–—]\s*/gi, ' ');
+        // Remove file path references to images
+        cleanContent = cleanContent.replace(/[C-Z]:\\[^\s]*\.(png|jpg|jpeg|gif|bmp|webp|svg)/gi, ' ');
+        cleanContent = cleanContent.replace(/(\/|\\)[^\s]+\.(png|jpg|jpeg|gif|bmp|webp|svg)/gi, ' ');
+
         console.log('[aiQuizRoutes] Sending', cleanContent.length, 'chars to AI service');
         const result = await aiService.generateQuizFromText(cleanContent, parseInt(numQuestions), difficulty);
-        
+
         const questions = result.questions || [];
         const quizTitle = result.title || `Quiz: ${req.file.originalname}`;
-        
-        // Update quiz title
+
+        // CRITICAL: refuse to save a quiz with zero questions. Previously we
+        // happily saved an empty AIQuiz record, leaving the trainer with a
+        // useless DRAFT and the participant with "no questions yet" errors.
+        if (questions.length === 0) {
+          await document.update({ status: 'ERROR' });
+          await quiz.destroy();
+          return res.status(502).json({
+            error: 'AI service returned no questions',
+            details: 'The document was processed but the LLM did not produce any usable questions. Please verify the document has enough structured content and that the AI service is reachable.'
+          });
+        }
+
+        // Update quiz title to whatever the LLM chose
         await quiz.update({ title: quizTitle });
-        
+
         console.log(`[aiQuizRoutes] Saving ${questions.length} questions for quiz #${quiz.id}...`);
         for (let i = 0; i < questions.length; i++) {
           const q = questions[i];
@@ -212,14 +226,21 @@ const router = express.Router();
         await document.update({ status: 'READY' });
         await quiz.reload({ include: [{ model: AIQuestion, as: 'questions' }] });
         console.log(`[aiQuizRoutes] Quiz reloaded — questions count: ${quiz.questions?.length ?? 0}`);
-        
-        res.status(201).json({ 
-          message: `Quiz "${quizTitle}" generated successfully`, 
-          quiz 
+
+        res.status(201).json({
+          message: `Quiz "${quizTitle}" generated successfully with ${questions.length} questions`,
+          quiz
         });
       } catch (err) {
-        await document.update({ status: 'ERROR' });
-        res.status(500).json({ error: 'AI generation failed: ' + err.message });
+        // Roll the failed quiz back so we don't leak empty DRAFT rows.
+        try {
+          await document.update({ status: 'ERROR' });
+          await quiz.destroy();
+          console.warn(`[aiQuizRoutes] Rolled back quiz #${quiz.id} after failure: ${err.message}`);
+        } catch (rollbackErr) {
+          console.error('[aiQuizRoutes] Rollback failed:', rollbackErr.message);
+        }
+        return res.status(500).json({ error: 'AI generation failed: ' + err.message });
       }
     } catch (error) {
       console.error('Upload document error:', error);
@@ -294,12 +315,106 @@ router.post('/participant/start/:quizId',
         return res.status(422).json({ error: 'This quiz has no questions yet. Please contact your trainer.' });
       }
 
+      // ── Secure assessment session lock ────────────────────────────────
+      // The frontend (new gate flow) supplies deviceFingerprint in the body;
+      // legacy / proctoring callers may omit it. We treat a missing
+      // fingerprint as "permissive" (skip device-conflict check) so that
+      // existing flows aren't broken.
+      const crypto = require('crypto');
+      const { Op } = require('sequelize');
+      const { AssessmentSession } = require('../models');
+
+      const ipAddress = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim();
+      const userAgent = (req.headers['user-agent'] || '').slice(0, 1024);
+      const deviceFingerprint = (req.body?.deviceFingerprint || '').toString().slice(0, 512) || null;
+
+      // Compute expiry: timeLimit minutes + 15 min buffer; fallback 3 h.
+      const now = new Date();
+      const minutes = Number.isFinite(quiz.timeLimit) && quiz.timeLimit > 0 ? quiz.timeLimit : 0;
+      const ttlMs = minutes > 0 ? (minutes + 15) * 60_000 : 3 * 60 * 60_000;
+      const expiresAt = new Date(now.getTime() + ttlMs);
+
+      // Check existing active session for THIS user + quiz.
+      const activeForUser = await AssessmentSession.findOne({
+        where: {
+          participantId: req.user.id,
+          quizId: quiz.id,
+          status: 'ACTIVE',
+          expiresAt: { [Op.gt]: now },
+        },
+        order: [['locked_at', 'DESC']],
+      });
+
+      // Resume an existing in-progress attempt if one exists.
       const existing = await QuizAttempt.findOne({
         where: { quizId: quiz.id, participantId: req.user.id, status: 'IN_PROGRESS' }
       });
+
       if (existing) {
-        console.log(`[participant/start] Resuming existing attempt #${existing.id}`);
-        return res.json({ attemptId: existing.id, quiz });
+        // We're resuming. If a session row exists for this attempt, decide
+        // whether the calling device is allowed to use it.
+        let session = activeForUser && activeForUser.attemptId === existing.id
+          ? activeForUser
+          : await AssessmentSession.findOne({ where: { attemptId: existing.id, status: 'ACTIVE' } });
+
+        if (session) {
+          const fpMatches =
+            !session.deviceFingerprint ||
+            !deviceFingerprint ||
+            session.deviceFingerprint === deviceFingerprint;
+          const ipMatches =
+            !session.ipAddress || !ipAddress || session.ipAddress === ipAddress;
+
+          if (fpMatches && ipMatches) {
+            console.log(`[participant/start] Resuming attempt #${existing.id} with existing session #${session.id}`);
+            return res.json({
+              attemptId: existing.id,
+              quiz,
+              sessionToken: session.sessionToken,
+            });
+          }
+
+          // Device conflict — only refuse if the caller actually sent a
+          // fingerprint (so legacy clients still work).
+          if (deviceFingerprint) {
+            console.warn(`[participant/start] Device conflict for user #${req.user.id} on quiz #${quiz.id} — refusing with 423`);
+            return res.status(423).json({
+              error: 'SESSION_LOCKED',
+              message:
+                'This assessment is already active on another device. Please contact the administrator for device change approval.',
+              lockedAt: session.lockedAt,
+              sessionId: session.id,
+            });
+          }
+        }
+
+        // No session row yet for the existing attempt — create one now.
+        const newToken = crypto.randomBytes(32).toString('hex');
+        session = await AssessmentSession.create({
+          attemptId: existing.id,
+          quizId: quiz.id,
+          participantId: req.user.id,
+          ipAddress: ipAddress || null,
+          userAgent: userAgent || null,
+          deviceFingerprint,
+          sessionToken: newToken,
+          status: 'ACTIVE',
+          lockedAt: now,
+          expiresAt,
+        });
+        return res.json({ attemptId: existing.id, quiz, sessionToken: session.sessionToken });
+      }
+
+      // No existing attempt — but maybe a session row for a new quiz exists
+      // already from another device. Honor the same conflict rule.
+      if (activeForUser && deviceFingerprint && activeForUser.deviceFingerprint && activeForUser.deviceFingerprint !== deviceFingerprint) {
+        return res.status(423).json({
+          error: 'SESSION_LOCKED',
+          message:
+            'This assessment is already active on another device. Please contact the administrator for device change approval.',
+          lockedAt: activeForUser.lockedAt,
+          sessionId: activeForUser.id,
+        });
       }
 
       const attempt = await QuizAttempt.create({
@@ -308,8 +423,22 @@ router.post('/participant/start/:quizId',
         status: 'IN_PROGRESS'
       });
 
-      console.log(`[participant/start] Created attempt #${attempt.id} for quiz #${quiz.id}`);
-      res.status(201).json({ attemptId: attempt.id, quiz });
+      const sessionToken = crypto.randomBytes(32).toString('hex');
+      await AssessmentSession.create({
+        attemptId: attempt.id,
+        quizId: quiz.id,
+        participantId: req.user.id,
+        ipAddress: ipAddress || null,
+        userAgent: userAgent || null,
+        deviceFingerprint,
+        sessionToken,
+        status: 'ACTIVE',
+        lockedAt: now,
+        expiresAt,
+      });
+
+      console.log(`[participant/start] Created attempt #${attempt.id} + session for quiz #${quiz.id}`);
+      res.status(201).json({ attemptId: attempt.id, quiz, sessionToken });
     } catch (error) {
       console.error('[participant/start] Error:', error.message);
       res.status(500).json({ error: error.message });
@@ -318,9 +447,21 @@ router.post('/participant/start/:quizId',
 );
 
 // POST /api/ai-quiz/participant/submit/:attemptId
+// Optional session lock: when X-Assessment-Session header is present we
+// validate it via validateAssessmentSession. Legacy callers (proctoring,
+// older clients) that don't send the header are unaffected.
+const validateAssessmentSession = require('../middleware/validateAssessmentSession');
+const optionalAssessmentSession = (req, res, next) => {
+  if (req.headers['x-assessment-session'] || req.headers['X-Assessment-Session']) {
+    return validateAssessmentSession(req, res, next);
+  }
+  return next();
+};
+
 router.post('/participant/submit/:attemptId',
   authenticateToken,
   roleMiddleware('PARTICIPANT'),
+  optionalAssessmentSession,
   async (req, res) => {
     try {
       const { answers } = req.body;
@@ -377,7 +518,17 @@ router.post('/participant/submit/:attemptId',
       const maxScore = quiz.questions.length * 100;
       const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
 
-      await attempt.update({ status: 'EVALUATED', submittedAt: new Date() });
+      // Compute time taken (seconds) if attempt has a startedAt timestamp.
+      // The QuizAttempt.timeTaken column already exists but was previously unused.
+      const submittedAt = new Date();
+      let timeTaken = null;
+      try {
+        if (attempt.startedAt) {
+          timeTaken = Math.max(0, Math.round((submittedAt.getTime() - new Date(attempt.startedAt).getTime()) / 1000));
+        }
+      } catch (e) { /* non-fatal */ }
+
+      await attempt.update({ status: 'EVALUATED', submittedAt, ...(timeTaken != null ? { timeTaken } : {}) });
 
       const result = await QuizResult.create({
         attemptId: attempt.id,
@@ -388,6 +539,57 @@ router.post('/participant/submit/:attemptId',
         percentage,
         evaluatedAt: new Date()
       });
+
+      // ─── Realtime: broadcast updated leaderboards to subscribed clients ────
+      // Best-effort emit only — never let socket failures break the response.
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          const buildLeaderboard = async (where) => {
+            const rows = await QuizResult.findAll({
+              where,
+              include: [{ model: User, as: 'participant', attributes: ['id', 'name'] }],
+              order: [['percentage', 'DESC']]
+            });
+            return rows.map((r, idx) => ({
+              rank: idx + 1,
+              userId: r.participantId,
+              name: r.participant?.name || 'Unknown',
+              score: parseFloat(r.percentage),
+              totalScore: parseFloat(r.totalScore),
+              maxScore: parseFloat(r.maxScore)
+            }));
+          };
+          // Quiz-scoped
+          const quizLb = (await buildLeaderboard({ quizId: quiz.id })).slice(0, 50);
+          io.to(`leaderboard:quiz:${quiz.id}`).emit('leaderboard:update', { scope: 'quiz', id: String(quiz.id), leaderboard: quizLb });
+          // Training-scoped (if quiz attached to a training)
+          if (quiz.trainingId) {
+            const trainingQuizIds = (await AIQuiz.findAll({
+              where: { trainingId: quiz.trainingId },
+              attributes: ['id']
+            })).map(q => q.id);
+            const trainLb = (await buildLeaderboard({ quizId: trainingQuizIds })).slice(0, 50);
+            io.to(`leaderboard:training:${quiz.trainingId}`).emit('leaderboard:update', { scope: 'training', id: String(quiz.trainingId), leaderboard: trainLb });
+          }
+          // Global
+          const globalLb = (await buildLeaderboard({})).slice(0, 50);
+          io.to('leaderboard:global').emit('leaderboard:update', { scope: 'global', id: '', leaderboard: globalLb });
+        }
+      } catch (emitErr) {
+        console.warn('[submit] leaderboard emit failed:', emitErr.message);
+      }
+
+      // Best-effort: mark the assessment session EXPIRED so the participant
+      // is no longer locked to this device. Skipped if no session existed
+      // (legacy / proctored flow without X-Assessment-Session).
+      try {
+        if (req.assessmentSession) {
+          await req.assessmentSession.update({ status: 'EXPIRED' });
+        }
+      } catch (e) {
+        console.warn('[submit] session free failed:', e.message);
+      }
 
       res.json({ message: 'Quiz submitted successfully', result });
     } catch (error) {
@@ -470,6 +672,275 @@ router.get('/participant/quizzes',
     } catch (error) {
       console.error('[participant/quizzes] Error:', error.message);
       res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════
+// PARTICIPANT ANALYTICS & GLOBAL LEADERBOARD (additive — student dashboard)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/ai-quiz/participant/stats
+ * Aggregated quiz performance for the authenticated participant.
+ * Returns: totalQuizzes, averageScore, bestRank, bestScore, accuracyTrend[], breakdownByQuiz[]
+ */
+router.get('/participant/stats',
+  authenticateToken,
+  roleMiddleware('PARTICIPANT'),
+  async (req, res) => {
+    try {
+      const { Op, fn, col, literal } = require('sequelize');
+      const userId = req.user.id;
+
+      // All results for this participant (with quiz title)
+      const myResults = await QuizResult.findAll({
+        where: { participantId: userId },
+        include: [{ model: AIQuiz, as: 'quiz', attributes: ['id', 'title', 'trainingId'] }],
+        order: [['evaluated_at', 'ASC']]
+      });
+
+      const totalQuizzes = myResults.length;
+      const averageScore = totalQuizzes > 0
+        ? Number((myResults.reduce((s, r) => s + parseFloat(r.percentage), 0) / totalQuizzes).toFixed(2))
+        : 0;
+      const bestScore = totalQuizzes > 0
+        ? Number(Math.max(...myResults.map(r => parseFloat(r.percentage))).toFixed(2))
+        : 0;
+
+      // Compute current rank in each quiz the user has taken, then take the lowest (best)
+      let bestRank = null;
+      const breakdownByQuiz = [];
+      const seenQuizIds = new Set();
+      for (const r of myResults) {
+        if (seenQuizIds.has(r.quizId)) continue;
+        seenQuizIds.add(r.quizId);
+
+        // Use the participant's BEST percentage on this quiz when computing rank
+        const myBest = Math.max(
+          ...myResults.filter(x => x.quizId === r.quizId).map(x => parseFloat(x.percentage))
+        );
+        const higherCount = await QuizResult.count({
+          where: { quizId: r.quizId, percentage: { [Op.gt]: myBest } },
+          distinct: true,
+          col: 'participantId'
+        });
+        const rank = higherCount + 1;
+        if (bestRank === null || rank < bestRank) bestRank = rank;
+
+        breakdownByQuiz.push({
+          quizId: r.quizId,
+          title: r.quiz?.title || 'Quiz',
+          bestScore: Number(myBest.toFixed(2)),
+          rank,
+          attempts: myResults.filter(x => x.quizId === r.quizId).length,
+        });
+      }
+
+      // Accuracy trend — score vs. evaluated date (most recent 14 attempts)
+      const trend = myResults
+        .slice(-14)
+        .map((r) => ({
+          date: r.evaluatedAt ? new Date(r.evaluatedAt).toISOString().slice(0, 10) : null,
+          score: Number(parseFloat(r.percentage).toFixed(2)),
+          quizTitle: r.quiz?.title || 'Quiz',
+        }))
+        .filter(x => x.date != null);
+
+      res.json({
+        stats: {
+          totalQuizzes,
+          averageScore,
+          bestRank,
+          bestScore,
+          accuracyTrend: trend,
+          breakdownByQuiz,
+        }
+      });
+    } catch (error) {
+      console.error('[participant/stats] Error:', error.message);
+      res.status(500).json({ error: 'Server error fetching stats' });
+    }
+  }
+);
+
+/**
+ * GET /api/ai-quiz/participant/global-leaderboard
+ *   ?scope=global|training|quiz
+ *   &id=<trainingId|quizId>   (required when scope != global)
+ *
+ * Returns the top-50 participants for that scope, with rank, score (best %),
+ * accuracy, time taken (best attempt), and avatar initials.
+ */
+router.get('/participant/global-leaderboard',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { Op } = require('sequelize');
+      const scope = (req.query.scope || 'global').toLowerCase();
+      const id = req.query.id ? String(req.query.id) : null;
+
+      // Build the where-clause for QuizResult
+      const where = {};
+      if (scope === 'quiz' && id) {
+        where.quizId = id;
+      } else if (scope === 'training' && id) {
+        const trainingQuizzes = await AIQuiz.findAll({
+          where: { trainingId: id },
+          attributes: ['id']
+        });
+        const ids = trainingQuizzes.map(q => q.id);
+        if (ids.length === 0) return res.json({ leaderboard: [] });
+        where.quizId = ids;
+      }
+
+      // Pull all results in scope, then group by participant taking their BEST
+      const rows = await QuizResult.findAll({
+        where,
+        include: [
+          { model: User, as: 'participant', attributes: ['id', 'name', 'profilePic'] },
+          { model: QuizAttempt, as: 'attempt', attributes: ['id', 'timeTaken'], required: false }
+        ],
+        order: [['percentage', 'DESC']]
+      });
+
+      // Aggregate per participant — pick best %, with tie-break on shortest timeTaken
+      const byUser = new Map();
+      for (const r of rows) {
+        const uid = r.participantId;
+        const score = parseFloat(r.percentage);
+        const timeTaken = r.attempt?.timeTaken ?? null;
+        const accuracy = r.maxScore > 0 ? Number(((parseFloat(r.totalScore) / parseFloat(r.maxScore)) * 100).toFixed(1)) : score;
+        const existing = byUser.get(uid);
+        if (
+          !existing ||
+          score > existing.score ||
+          (score === existing.score && timeTaken != null && (existing.timeTaken == null || timeTaken < existing.timeTaken))
+        ) {
+          byUser.set(uid, {
+            userId: uid,
+            name: r.participant?.name || 'Unknown',
+            avatar: r.participant?.profilePic || null,
+            score: Number(score.toFixed(2)),
+            accuracy,
+            timeTaken,                       // seconds (or null)
+            attempts: (existing?.attempts || 0) + 1
+          });
+        } else {
+          existing.attempts += 1;
+        }
+      }
+
+      const sorted = Array.from(byUser.values()).sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.timeTaken == null && b.timeTaken == null) return 0;
+        if (a.timeTaken == null) return 1;
+        if (b.timeTaken == null) return -1;
+        return a.timeTaken - b.timeTaken;
+      });
+
+      const leaderboard = sorted.slice(0, 50).map((entry, idx) => ({
+        rank: idx + 1,
+        ...entry,
+        isCurrentUser: entry.userId === req.user.id,
+      }));
+
+      res.json({ scope, id, leaderboard });
+    } catch (error) {
+      console.error('[participant/global-leaderboard] Error:', error.message);
+      res.status(500).json({ error: 'Server error fetching leaderboard' });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════
+// ADMIN — assessment session management (locked sessions + reset override)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/ai-quiz/admin/locked-sessions
+ * Returns every ACTIVE session for the admin/trainer panel.
+ * Includes participant + quiz lookups for display.
+ */
+router.get('/admin/locked-sessions',
+  authenticateToken,
+  roleMiddleware('ADMIN', 'TRAINER'),
+  async (req, res) => {
+    try {
+      const { Op } = require('sequelize');
+      const { AssessmentSession } = require('../models');
+
+      const rows = await AssessmentSession.findAll({
+        where: {
+          status: 'ACTIVE',
+          expiresAt: { [Op.gt]: new Date() },
+        },
+        include: [
+          { model: User, as: 'participant', attributes: ['id', 'name', 'email'] },
+          { model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] },
+        ],
+        order: [['locked_at', 'DESC']],
+      });
+
+      const sessions = rows.map((s) => ({
+        id: s.id,
+        attemptId: s.attemptId,
+        participantId: s.participantId,
+        participantName: s.participant?.name || 'Unknown',
+        participantEmail: s.participant?.email || '',
+        quizId: s.quizId,
+        quizTitle: s.quiz?.title || `Quiz #${s.quizId}`,
+        ipAddress: s.ipAddress,
+        userAgent: s.userAgent,
+        deviceFingerprint: s.deviceFingerprint,
+        lockedAt: s.lockedAt,
+        expiresAt: s.expiresAt,
+        status: s.status,
+      }));
+
+      res.json({ sessions });
+    } catch (err) {
+      console.error('[admin/locked-sessions] Error:', err.message);
+      res.status(500).json({ error: 'Server error fetching sessions' });
+    }
+  }
+);
+
+/**
+ * POST /api/ai-quiz/admin/reset-session/:sessionId
+ * Body: { reason?: string }
+ * Marks the session RESET so the participant can restart from a new device.
+ */
+router.post('/admin/reset-session/:sessionId',
+  authenticateToken,
+  roleMiddleware('ADMIN', 'TRAINER'),
+  async (req, res) => {
+    try {
+      const { AssessmentSession } = require('../models');
+      const id = req.params.sessionId;
+      const reason = (req.body?.reason || '').toString().slice(0, 500);
+
+      const session = await AssessmentSession.findByPk(id);
+      if (!session) return res.status(404).json({ error: 'Session not found' });
+
+      if (session.status === 'RESET') {
+        return res.status(409).json({ error: 'Session has already been reset' });
+      }
+
+      await session.update({
+        status: 'RESET',
+        resetByAdmin: req.user.id,
+        resetAt: new Date(),
+      });
+
+      console.log(`[admin/reset-session] session #${id} reset by user #${req.user.id}${reason ? ' — reason: ' + reason : ''}`);
+      res.json({
+        message: 'Session reset successfully. Participant may now restart on a new device.',
+        sessionId: session.id,
+      });
+    } catch (err) {
+      console.error('[admin/reset-session] Error:', err.message);
+      res.status(500).json({ error: 'Server error resetting session' });
     }
   }
 );

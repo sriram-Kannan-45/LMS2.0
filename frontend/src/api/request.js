@@ -24,9 +24,10 @@ export async function apiRequest(url, options = {}) {
   }
 }
 
-export function getAuthHeaders() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  return user.token 
-    ? { Authorization: `Bearer ${user.token}` }
+export function getAuthHeaders(userProp) {
+  const user = userProp || JSON.parse(localStorage.getItem('user') || '{}');
+  const token = user?.token || user?.accessToken || '';
+  return token
+    ? { Authorization: `Bearer ${token}` }
     : {};
 }

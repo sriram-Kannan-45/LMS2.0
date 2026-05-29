@@ -30,32 +30,55 @@ const notesUpload = multer({
   storage: notesStorage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.mp4', '.webm', '.mov'];
+    // Expanded format list — covers common educational resources.
+    // NB: Files beyond IMAGE/VIDEO/PDF are classified as LINK in DB
+    // (existing ENUM constraint) but the original filename is preserved so
+    // the UI can show the correct icon and label.
+    const allowedTypes = [
+      // Documents
+      '.pdf', '.doc', '.docx', '.odt', '.rtf', '.txt', '.md',
+      // Spreadsheets
+      '.xls', '.xlsx', '.csv', '.ods',
+      // Presentations
+      '.ppt', '.pptx', '.odp',
+      // Images
+      '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg',
+      // Videos
+      '.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v',
+      // Audio
+      '.mp3', '.wav', '.m4a', '.ogg',
+      // Archives
+      '.zip', '.rar', '.7z', '.tar', '.gz',
+    ];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowedTypes.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Allowed: pdf, jpg, png, gif, mp4, webm, mov'), false);
+      cb(new Error(`Unsupported file type "${ext}". Allowed: documents, sheets, slides, images, video, audio, archives.`), false);
     }
   }
 });
 
-// Helper to detect file type
+// Helper to detect file type — maps to the existing ENUM
+// (PDF | IMAGE | VIDEO | LINK). Anything that isn't natively previewable in
+// the browser gets stored as LINK; the original filename + extension drive
+// the rich UI icons on the frontend.
 const detectFileType = (file, link) => {
   if (link) return 'LINK';
   if (!file) return null;
-  
+
   const mime = file.mimetype || '';
-  if (mime.includes('image')) return 'IMAGE';
-  if (mime.includes('video')) return 'VIDEO';
-  if (mime.includes('pdf')) return 'PDF';
-  
-  // Fallback to extension
+  if (mime.startsWith('image/')) return 'IMAGE';
+  if (mime.startsWith('video/')) return 'VIDEO';
+  if (mime === 'application/pdf') return 'PDF';
+
+  // Fallback to extension when mime is generic (octet-stream)
   const ext = path.extname(file.originalname).toLowerCase();
-  if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) return 'IMAGE';
-  if (['.mp4', '.webm', '.mov'].includes(ext)) return 'VIDEO';
+  if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'].includes(ext)) return 'IMAGE';
+  if (['.mp4', '.webm', '.mov', '.mkv', '.avi', '.m4v'].includes(ext)) return 'VIDEO';
   if (ext === '.pdf') return 'PDF';
-  
+
+  // Documents, spreadsheets, slides, archives, audio, etc.
   return 'LINK';
 };
 
@@ -166,6 +189,118 @@ router.get(
     } catch (error) {
       console.error('Get trainer notes error:', error.message);
       res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// TRAINER: Edit own note (title, description, training, link, optionally replace file)
+// - Updating title/description/training keeps current status untouched.
+// - Replacing the file (or swapping link → file / file → link) resets status
+//   to PENDING so admins re-approve, mirroring the original upload flow.
+router.put(
+  '/:id',
+  authenticateToken,
+  roleMiddleware('TRAINER'),
+  notesUpload.single('file'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const trainerId = req.user.id;
+      const { title, description, link, trainingId, removeFile } = req.body;
+
+      const note = await Note.findByPk(id);
+      if (!note) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
+      if (note.trainerId !== trainerId) {
+        return res.status(403).json({ error: 'Not authorized to edit this note' });
+      }
+
+      const patch = {};
+      let resetStatus = false;
+      let oldFileToDelete = null;
+
+      if (typeof title === 'string' && title.trim()) {
+        patch.title = title.trim();
+      } else if (typeof title === 'string' && !title.trim()) {
+        return res.status(422).json({ error: 'Title cannot be empty' });
+      }
+
+      if (typeof description === 'string') {
+        patch.description = description.trim() || null;
+      }
+
+      if (trainingId !== undefined) {
+        patch.trainingId = trainingId ? parseInt(trainingId) : null;
+      }
+
+      // File replacement
+      if (req.file) {
+        // Stash old local file path for cleanup AFTER save succeeds
+        if (note.fileUrl && !note.fileUrl.startsWith('http')) {
+          oldFileToDelete = path.join(__dirname, '../../..', note.fileUrl);
+        }
+        patch.fileUrl = `/uploads/notes/${req.file.filename}`;
+        patch.fileName = req.file.originalname;
+        patch.fileSize = req.file.size;
+        patch.fileType = detectFileType(req.file, null);
+        resetStatus = true;
+      } else if (link && link.trim()) {
+        // Swap to a link instead of a file
+        if (note.fileUrl && !note.fileUrl.startsWith('http')) {
+          oldFileToDelete = path.join(__dirname, '../../..', note.fileUrl);
+        }
+        patch.fileUrl = link.trim();
+        patch.fileName = null;
+        patch.fileSize = null;
+        patch.fileType = 'LINK';
+        resetStatus = true;
+      } else if (removeFile === 'true' || removeFile === true) {
+        return res.status(422).json({ error: 'A note must have a file or link' });
+      }
+
+      if (resetStatus) {
+        patch.status = 'PENDING';
+      }
+
+      await note.update(patch);
+
+      // Best-effort cleanup of replaced file (don't fail the request on FS errors)
+      if (oldFileToDelete) {
+        try {
+          if (fs.existsSync(oldFileToDelete)) fs.unlinkSync(oldFileToDelete);
+        } catch (cleanupErr) {
+          console.error('Old file cleanup failed:', cleanupErr.message);
+        }
+      }
+
+      // If file was replaced, notify admins again (mirrors upload flow)
+      if (resetStatus) {
+        try {
+          const trainer = await User.findByPk(trainerId);
+          const adminUsers = await User.findAll({ where: { role: 'ADMIN' } });
+          for (const admin of adminUsers) {
+            await Notification.create({
+              userId: admin.id,
+              message: `Trainer ${trainer?.name || 'Unknown'} updated note: ${patch.title || note.title}`,
+              type: 'NOTE_UPLOAD',
+              isRead: false
+            });
+          }
+        } catch (notifyErr) {
+          console.error('Admin notification on note edit failed:', notifyErr.message);
+        }
+      }
+
+      res.json({
+        message: resetStatus
+          ? 'Note updated. File replaced — pending admin approval.'
+          : 'Note updated successfully.',
+        note
+      });
+    } catch (error) {
+      console.error('Edit note error:', error.message, error.stack);
+      res.status(500).json({ error: 'Server error updating note' });
     }
   }
 );

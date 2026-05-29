@@ -2,13 +2,20 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ToastProvider } from './components/Toast'
+import { AppThemeProvider } from './context/AppThemeContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
 import AdminDashboard from './pages/AdminDashboard'
 import TrainerDashboard from './pages/TrainerDashboard'
 import ParticipantDashboard from './pages/ParticipantDashboard'
 import ParticipantQuizzes from './pages/ParticipantQuizzes'
+import PreExamReadiness from './pages/PreExamReadiness'
+import ExamPage from './pages/ExamPage'
+import ExamResultPage from './pages/ExamResultPage'
+import TrainerProctoringPage from './pages/TrainerProctoringPage'
+import NotificationsPanel from './components/student/shell/NotificationsPanel'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -35,11 +42,13 @@ function App() {
   }
 
   return (
-    <ToastProvider>
-      <BrowserRouter>
-        <AppRoutes user={user} onLogin={handleLogin} onLogout={handleLogout} />
-      </BrowserRouter>
-    </ToastProvider>
+    <AppThemeProvider>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppRoutes user={user} onLogin={handleLogin} onLogout={handleLogout} />
+        </BrowserRouter>
+      </ToastProvider>
+    </AppThemeProvider>
   )
 }
 
@@ -55,19 +64,25 @@ function AppRoutes({ user, onLogin, onLogout }) {
 
   const DashboardWrapper = ({ component: Component, user, onLogout, defaultTab }) => {
     useEffect(() => {
-      if (defaultTab && activeTab === 'overview' && user?.role !== 'ADMIN') {
+      if (defaultTab && activeTab === 'overview' && user?.role !== 'ADMIN' && user?.role !== 'PARTICIPANT') {
         setActiveTab(defaultTab)
-      } else if (user?.role === 'PARTICIPANT' && !['available', 'myEnrollments', 'ai-quizzes', 'feedback', 'myFeedbacks'].includes(activeTab)) {
+      } else if (user?.role === 'PARTICIPANT' && !['overview', 'available', 'myEnrollments', 'lessons', 'ai-quizzes', 'feedback', 'myFeedbacks', 'leaderboard', 'achievements', 'profile'].includes(activeTab)) {
         setActiveTab(defaultTab)
-      } else if (user?.role === 'TRAINER' && !['trainings', 'feedback', 'profile'].includes(activeTab)) {
+      } else if (user?.role === 'TRAINER' && !['trainings', 'notes', 'ai-quiz', 'feedback', 'profile'].includes(activeTab)) {
         setActiveTab(defaultTab)
-      } else if (user?.role === 'ADMIN' && !['overview', 'trainings', 'trainers', 'participants', 'feedback', 'surveys', 'createTrainer', 'createTraining'].includes(activeTab)) {
+      } else if (user?.role === 'ADMIN' && !['overview', 'pending', 'trainings', 'trainers', 'participants', 'sessions', 'notes', 'feedback', 'surveys', 'createTrainer', 'createTraining'].includes(activeTab)) {
         setActiveTab(defaultTab)
       }
     }, [user?.role, defaultTab])
 
     return (
-      <Layout user={user} activeTab={activeTab} onTabChange={setActiveTab} onLogout={onLogout}>
+      <Layout
+        user={user}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onLogout={onLogout}
+        headerSlot={user?.role === 'PARTICIPANT' ? <NotificationsPanel /> : null}
+      >
         <motion.div
           initial="initial"
           animate="animate"
@@ -86,6 +101,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
       <Routes location={location} key={location.pathname}>
         <Route path="/login" element={<Login onLogin={onLogin} />} />
         <Route path="/register" element={<Register onLogin={onLogin} />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
 
         <Route
           path="/admin"
@@ -113,7 +129,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           path="/participant"
           element={
             user?.role === 'PARTICIPANT' ? (
-              <DashboardWrapper component={ParticipantDashboard} user={user} onLogout={onLogout} defaultTab="available" />
+              <DashboardWrapper component={ParticipantDashboard} user={user} onLogout={onLogout} defaultTab="overview" />
             ) : (
               <Navigate to="/login" />
             )
@@ -130,6 +146,30 @@ function AppRoutes({ user, onLogin, onLogout }) {
             ) : (
               <Navigate to="/login" />
             )
+          }
+        />
+
+        {/* Pre-exam readiness page (gate). Auth-guarded inside the component. */}
+        <Route
+          path="/participant/exam/:quizId"
+          element={
+            user?.role === 'PARTICIPANT'
+              ? <PreExamReadiness />
+              : <Navigate to="/login" />
+          }
+        />
+
+        {/* Classical exam page (active session). Auth handled inside the page. */}
+        <Route path="/exam/:sessionId" element={<ExamPage />} />
+        <Route path="/exam/:sessionId/result" element={<ExamResultPage />} />
+
+        {/* Trainer live proctoring dashboard */}
+        <Route
+          path="/trainer/proctor/:quizId"
+          element={
+            (user?.role === 'TRAINER' || user?.role === 'ADMIN')
+              ? <TrainerProctoringPage />
+              : <Navigate to="/login" />
           }
         />
 

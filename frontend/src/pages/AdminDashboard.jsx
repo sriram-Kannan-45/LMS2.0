@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import TrainerList from '../components/TrainerList'
 import ParticipantList from '../components/ParticipantList'
+import ParticipantProfileView from '../components/shared/ParticipantProfileView'
+import AssessmentSessionsPanel from '../components/admin/AssessmentSessionsPanel'
 import AnimatedDropdown from '../components/AnimatedDropdown'
 import { useToast } from '../components/Toast'
 import {
@@ -44,6 +46,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [noteFilter, setNoteFilter] = useState('')
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(false)
+  const [viewingParticipant, setViewingParticipant] = useState(null)
   const [credentials, setCredentials] = useState(null)
   const [editModal, setEditModal] = useState(null)
   const [editForm, setEditForm] = useState({})
@@ -353,6 +356,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
     { key: 'trainings', label: 'Trainings' },
     { key: 'trainers', label: 'Trainers' },
     { key: 'participants', label: 'Participants' },
+    { key: 'sessions', label: 'Assessment Sessions' },
     { key: 'notes', label: 'Notes Management' },
     { key: 'feedback', label: 'Feedback Reports' },
     { key: 'surveys', label: 'Survey Config' },
@@ -652,9 +656,21 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                     loading={false}
                     onDelete={handleDeleteParticipant}
                     onRefresh={() => fetchParticipants()}
+                    onView={(p) => setViewingParticipant(p)}
                   />
                 )}
               </div>
+            </motion.div>
+          )}
+
+          {/* ASSESSMENT SESSIONS */}
+          {tab === 'sessions' && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <AssessmentSessionsPanel />
             </motion.div>
           )}
 
@@ -1180,6 +1196,16 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
           </motion.div>
         )}
       </div>
+      <ParticipantProfileView
+        open={!!viewingParticipant}
+        userId={viewingParticipant?.id}
+        fallback={viewingParticipant ? {
+          name: viewingParticipant.name,
+          email: viewingParticipant.email,
+          createdAt: viewingParticipant.created_at || viewingParticipant.joinedAt,
+        } : null}
+        onClose={() => setViewingParticipant(null)}
+      />
     </AnimatePresence>
   )
 }

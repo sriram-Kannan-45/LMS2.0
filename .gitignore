@@ -20,6 +20,11 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# DB backups / dumps (contain user data)
+*.sql
+*.sql.gz
+backup-*
+
 # Environment
 .env
 .env.local

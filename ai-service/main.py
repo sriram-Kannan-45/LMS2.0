@@ -479,9 +479,57 @@ Generate ONLY the JSON array:
 
 MAX_RETRIES = 3
 
+def _question_is_grounded(question: Dict, doc_tokens: set) -> bool:
+    """
+    Heuristic: a question is "grounded" if the question text or its correct
+    option contains at least one meaningful (4+ char) token that also appears
+    in the document. Helps catch LLM hallucinations where the model invents
+    content not present in the source.
+    """
+    parts = [str(question.get("question", ""))]
+    options = question.get("options", []) or []
+    ca = str(question.get("correct_answer", "A")).upper()
+    if ca in ("A", "B", "C", "D") and len(options) == 4:
+        parts.append(str(options[ord(ca) - 65]))
+    else:
+        parts.extend(str(o) for o in options)
+
+    candidate = " ".join(parts).lower()
+    candidate_tokens = {
+        t for t in re.findall(r"[a-z][a-z0-9]{3,}", candidate)
+        if t not in {"which", "what", "where", "when", "the", "this", "that",
+                     "with", "from", "into", "according", "document", "based",
+                     "following", "statement", "correct", "describes", "best"}
+    }
+
+    return bool(candidate_tokens & doc_tokens)
+
+
+def filter_grounded_questions(questions: List[Dict], doc_text: str) -> List[Dict]:
+    """Drop questions that don't reference any vocabulary from the document."""
+    doc_tokens = set(re.findall(r"[a-z][a-z0-9]{3,}", doc_text.lower()))
+    if not doc_tokens:
+        return questions  # Document too short to validate
+
+    grounded: List[Dict] = []
+    dropped = 0
+    for q in questions:
+        if _question_is_grounded(q, doc_tokens):
+            grounded.append(q)
+        else:
+            dropped += 1
+    if dropped:
+        log.warning("Dropped %d ungrounded LLM question(s) — no document overlap", dropped)
+    return grounded
+
+
 def generate_cache_key(text: str, num_questions: int, difficulty: str) -> str:
-    """Generate a cache key based on content hash and parameters."""
-    content_hash = hashlib.md5(text[:1000].encode()).hexdigest()
+    """
+    Generate a cache key based on FULL content hash and parameters.
+    Previously only hashed first 1000 chars, which caused two different
+    documents with similar headers/abstracts to share the same cached quiz.
+    """
+    content_hash = hashlib.md5(text.encode("utf-8", errors="ignore")).hexdigest()
     return f"quiz:{content_hash}:{num_questions}:{difficulty}"
 
 def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty: str = "MIXED") -> List[Dict]:
@@ -520,8 +568,22 @@ def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty:
         chunk_overlap=Config.DEFAULT_CHUNK_OVERLAP
     )
     chunks = text_splitter.split_text(text)
-    combined_text = "\n\n".join(chunks[:3])
-    log.info("Text split into %d chunks, using top %d for context", len(chunks), min(3, len(chunks)))
+
+    # Select chunks SPREAD across the document instead of only the first 3.
+    # This way questions cover the full content, not just the introduction.
+    if len(chunks) <= 5:
+        selected_chunks = chunks
+    else:
+        # Pick first, middle, and last; plus two interpolated chunks for coverage.
+        n = len(chunks)
+        indices = sorted({0, n // 4, n // 2, (3 * n) // 4, n - 1})
+        selected_chunks = [chunks[i] for i in indices]
+
+    combined_text = "\n\n".join(selected_chunks)
+    log.info(
+        "Text split into %d chunks, using %d spread chunks (indices cover entire document) for context",
+        len(chunks), len(selected_chunks)
+    )
     
     # Build enhanced prompt with difficulty-specific instructions
     from langchain_core.prompts import PromptTemplate
@@ -564,7 +626,18 @@ def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty:
             if len(questions) < original_count:
                 log.info("Filtered %d duplicate questions (%d -> %d)", 
                         original_count - len(questions), original_count, len(questions))
-            
+
+            # Filter ungrounded questions (those that don't reference any
+            # vocabulary from the source document — likely LLM hallucinations).
+            before_ground = len(questions)
+            questions = filter_grounded_questions(questions, combined_text)
+            if len(questions) < before_ground:
+                log.info("Grounding filter: kept %d / %d questions",
+                         len(questions), before_ground)
+
+            if not questions:
+                raise ValueError("All generated questions failed grounding validation — none referenced the document content")
+
             # Limit to requested number
             questions = questions[:num_questions]
             
@@ -602,78 +675,169 @@ def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty:
     log.error("❌ All %d attempts failed. Last error: %s. Falling back to text-based.", Config.MAX_RETRIES, last_error)
     return generate_text_based_questions(text, num_questions, difficulty)
 
+def _split_into_sentences(text: str) -> List[str]:
+    """Split document text into clean, usable sentences."""
+    raw = re.split(r'(?<=[.!?])\s+', text)
+    seen = set()
+    out = []
+    for s in raw:
+        s = s.strip()
+        # Keep sentences that are reasonably sized AND contain enough words
+        if 30 <= len(s) <= 280 and len(s.split()) >= 6 and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
+def _extract_key_terms(text: str) -> List[str]:
+    """Extract candidate key terms from the document for question seeding."""
+    # Multi-word capitalized phrases (likely concepts, e.g., "Build in Exception")
+    phrases = re.findall(r'\b[A-Z][A-Za-z]+(?:\s+[A-Za-z]+){1,4}\b', text)
+    # Long lowercase technical words (e.g., "photosynthesis")
+    long_words = re.findall(r'\b[a-z]{8,}\b', text)
+    candidates = phrases + long_words
+
+    # Deduplicate while preserving order, drop common stopwords
+    stop = {
+        "however", "therefore", "additionally", "furthermore", "moreover",
+        "according", "regarding", "concerning", "throughout", "altogether"
+    }
+    seen = set()
+    out = []
+    for c in candidates:
+        cl = c.lower()
+        if cl in stop or cl in seen:
+            continue
+        seen.add(cl)
+        out.append(c)
+    return out
+
+
 def generate_text_based_questions(text: str, num_questions: int, difficulty: str) -> List[Dict]:
-    """Generate questions based on text content without LLM."""
-    import re
-    log.info("Generating text-based questions from document...")
-    
+    """
+    Knowledge-based fallback when the LLM is unavailable.
+
+    Builds fill-in-the-blank style MCQs where:
+      - The CORRECT option is the actual sentence from the document containing the term.
+      - The DISTRACTORS are OTHER real sentences from the document (similar length).
+    This guarantees every option is grounded in the document and the correct
+    answer position is randomized — much better than the previous fallback that
+    used hard-coded strings like "This is contradicted by the document".
+    """
+    import random
+    log.info("Generating knowledge-based fallback questions from document...")
+
     text = clean_text_for_quiz(text)
-    
-    phrases = re.findall(r'\b[A-Z][a-z]+(?:\s+[a-z]+){1,3}\b', text)
-    if not phrases:
-        phrases = re.findall(r'\b\w{5,}\b', text)
-    
-    if not phrases:
-        log.info("No good phrases found, using sample questions")
-        return generate_sample_questions(num_questions, difficulty)
-    
-    log.info("Found %d key phrases", len(phrases))
-    
-    sentences = []
-    for phrase in phrases[:num_questions * 2]:
-        pattern = re.escape(phrase)
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            start = max(0, text.rfind('.', 0, match.start()) + 1)
-            end = text.find('.', match.end())
-            if end == -1:
-                end = len(text)
-            sentence = text[start:end].strip()
-            if 20 < len(sentence) < 200 and sentence not in sentences:
-                sentences.append(sentence)
-    
-    if not sentences:
-        sentences = [s.strip() for s in re.split(r'[.!?]+', text) if 20 < len(s.strip()) < 200]
-    
-    if not sentences:
-        log.info("No good sentences found, using sample questions")
-        return generate_sample_questions(num_questions, difficulty)
-    
-    log.info("Using %d sentences for questions", len(sentences))
-    
-    questions = []
-    for i in range(num_questions):
-        sentence = sentences[i % len(sentences)]
-        key_phrase = phrases[i % len(phrases)]
-        
-        question_text = f"What does the document say about '{key_phrase}'?"
+    sentences = _split_into_sentences(text)
+    key_terms = _extract_key_terms(text)
+
+    if not sentences or len(sentences) < 4:
+        # Not enough material to build genuine MCQs — bubble up the failure.
+        log.warning(
+            "Document yielded only %d usable sentences and %d key terms — cannot build "
+            "knowledge-based fallback. Refusing to return placeholder questions.",
+            len(sentences), len(key_terms)
+        )
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Document text is too sparse or unstructured to generate a knowledge-based "
+                "quiz. Please upload a richer document or check that AI service (LLM) is "
+                "reachable."
+            )
+        )
+
+    # Map each key term to the first sentence that mentions it
+    term_to_sentence: Dict[str, str] = {}
+    for term in key_terms:
+        pattern = re.compile(re.escape(term), re.IGNORECASE)
+        for s in sentences:
+            if pattern.search(s):
+                if term not in term_to_sentence:
+                    term_to_sentence[term] = s
+                break
+
+    # Fall back to using sentences directly if we couldn't link terms reliably
+    if len(term_to_sentence) < min(4, num_questions):
+        log.info("Term mapping sparse, using sentence-based seeding")
+        # Use unique sentences as questions: "Which statement appears in the document?"
+        random.shuffle(sentences)
+        seeds = [(f"Statement {i+1}", s) for i, s in enumerate(sentences[:num_questions])]
+    else:
+        seeds = list(term_to_sentence.items())[:num_questions]
+
+    questions: List[Dict] = []
+    for i, (term, correct_sentence) in enumerate(seeds):
+        # Build distractors from OTHER sentences that don't mention the term
+        pattern = re.compile(re.escape(term), re.IGNORECASE) if term and not term.startswith("Statement") else None
+        candidate_distractors = [
+            s for s in sentences
+            if s != correct_sentence and (pattern is None or not pattern.search(s))
+        ]
+        if len(candidate_distractors) < 3:
+            # Allow reuse — relax the no-term constraint
+            candidate_distractors = [s for s in sentences if s != correct_sentence]
+
+        random.shuffle(candidate_distractors)
+        distractors = candidate_distractors[:3]
+        if len(distractors) < 3:
+            log.warning("Not enough distinct distractors for question %d, skipping", i + 1)
+            continue
+
+        # Randomize correct answer position
+        options = distractors + [correct_sentence]
+        random.shuffle(options)
+        correct_index = options.index(correct_sentence)
+        correct_letter = chr(ord("A") + correct_index)
+
+        # Phrase the question
+        if term.startswith("Statement"):
+            question_text = "Which of the following statements is supported by the document?"
+        else:
+            question_text = f"According to the document, which statement correctly describes \"{term}\"?"
+
         questions.append({
             "question": question_text,
-            "options": [
-                sentence[:120] + ("..." if len(sentence) > 120 else ""),
-                "This is contradicted by the document",
-                "This information is not present in the document",
-                "The document describes a different concept"
-            ],
-            "correct_answer": "A",
-            "explanation": "This information is directly stated in the document"
+            "options": [o[:280] for o in options],
+            "correct_answer": correct_letter,
+            "explanation": f"This statement is taken directly from the document content.",
+            "difficulty": difficulty if difficulty != "MIXED" else "MEDIUM",
+            "bloom_level": "Remember",
         })
-    
-    log.info("✅ Generated %d text-based questions", len(questions))
+
+        if len(questions) >= num_questions:
+            break
+
+    if not questions:
+        raise HTTPException(
+            status_code=422,
+            detail="Could not generate any knowledge-based questions from the document content."
+        )
+
+    log.info("✅ Generated %d knowledge-based fallback questions", len(questions))
     return questions
 
+
 def generate_sample_questions(num_questions: int, difficulty: str) -> List[Dict]:
-    """Fallback sample questions if AI fails."""
-    log.info("Generating sample questions...")
-    questions = []
-    for i in range(num_questions):
-        questions.append({
-            "question": f"Sample MCQ {i+1}: What is the main concept discussed?",
-            "options": ["Option A", "Option B", "Option C", "Option D"],
-            "correct_answer": "A",
-            "explanation": "Option A is correct based on the document"
-        })
-    return questions
+    """
+    DEPRECATED placeholder generator.
+
+    Previously this returned questions like "Sample MCQ 1: What is the main
+    concept discussed?" with options ["Option A", "Option B", ...]. Those are
+    NOT knowledge-based — they were saved to the DB and shown to participants,
+    making the quiz feature look broken.
+
+    We now always raise so the API surface returns a clear error rather than
+    silently storing meaningless placeholder questions.
+    """
+    raise HTTPException(
+        status_code=500,
+        detail=(
+            "Quiz generation failed and no usable knowledge-based fallback was possible. "
+            "Please ensure the LLM service is reachable and the document contains enough "
+            "structured text."
+        )
+    )
 
 def evaluate_short_answer(question_text: str, model_answer: str, user_answer: str) -> Dict:
     """Evaluate short answer using AI."""

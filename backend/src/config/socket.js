@@ -16,9 +16,23 @@ const logger = require('../utils/logger');
  * @returns {Object} Socket.IO instance
  */
 const initializeSocket = (server) => {
+  const allowedSocketOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+    'http://127.0.0.1:5175',
+  ].filter(Boolean);
+
   const io = socketIO(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+      origin: (origin, cb) => {
+        if (!origin) return cb(null, true);
+        if (allowedSocketOrigins.includes(origin)) return cb(null, true);
+        return cb(new Error(`Socket.IO CORS: origin ${origin} not allowed`));
+      },
       credentials: true,
       methods: ['GET', 'POST'],
     },
@@ -149,6 +163,10 @@ const initializeSocket = (server) => {
 
     // Register live session and chat events
     require('../socket/events/liveEvents')(io, socket);
+    // Register leaderboard subscription events
+    require('../socket/events/leaderboardEvents')(io, socket);
+    // Register proctoring events
+    require('../socket/events/proctorEvents')(io, socket);
   });
 
   return io;

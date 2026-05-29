@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LayoutDashboard, GraduationCap, Users, MessageSquare, ClipboardList, UserPlus, BookPlus, BookOpen, User, LogOut, Menu, Bell, X, ChevronRight, Sparkles } from 'lucide-react'
+import { LayoutDashboard, GraduationCap, Users, MessageSquare, ClipboardList, UserPlus, BookPlus, BookOpen, User, LogOut, Menu, Bell, X, ChevronRight, Sparkles, Trophy, Award, FileText, Home } from 'lucide-react'
+import ProfileDropdown from './student/profile/ProfileDropdown'
 
 const iconMap = {
   Dashboard: <LayoutDashboard size={18} />,
@@ -18,6 +19,11 @@ const iconMap = {
   'Give Feedback': <MessageSquare size={18} />,
   'My Feedbacks': <MessageSquare size={18} />,
   'AI Quizzes': <Sparkles size={18} />,
+  Overview: <Home size={18} />,
+  Leaderboard: <Trophy size={18} />,
+  Achievements: <Award size={18} />,
+  Lessons: <FileText size={18} />,
+  Profile: <User size={18} />,
 }
 
 const navItems = {
@@ -37,11 +43,16 @@ const navItems = {
     { key: 'profile', label: 'My Profile', icon: 'My Profile' },
   ],
   PARTICIPANT: [
-    { key: 'available', label: 'Available', icon: 'Available' },
-    { key: 'myEnrollments', label: 'Enrollments', icon: 'Enrollments' },
-    { key: 'ai-quizzes', label: 'AI Quizzes', icon: 'AI Quizzes' },
+    { key: 'overview', label: 'Overview', icon: 'Overview' },
+    { key: 'available', label: 'Courses', icon: 'Available' },
+    { key: 'myEnrollments', label: 'My Courses', icon: 'Enrollments' },
+    { key: 'lessons', label: 'Lessons', icon: 'Lessons' },
+    { key: 'ai-quizzes', label: 'Quizzes', icon: 'AI Quizzes' },
+    { key: 'leaderboard', label: 'Leaderboard', icon: 'Leaderboard' },
+    { key: 'achievements', label: 'Achievements', icon: 'Achievements' },
     { key: 'feedback', label: 'Give Feedback', icon: 'Give Feedback' },
     { key: 'myFeedbacks', label: 'My Feedbacks', icon: 'My Feedbacks' },
+    { key: 'profile', label: 'Profile', icon: 'Profile' },
   ],
 }
 
@@ -51,10 +62,11 @@ const roleColors = {
   PARTICIPANT: { gradient: 'from-blue-500 to-indigo-500', badge: 'bg-blue-100 text-blue-700' },
 }
 
-function Layout({ user, children, activeTab, onTabChange, onLogout }) {
+function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const items = navItems[user.role] || []
   const colors = roleColors[user.role] || roleColors.PARTICIPANT
+  const isParticipant = user.role === 'PARTICIPANT'
 
   const initials = (name) =>
     name ? name.trim().split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U'
@@ -62,7 +74,7 @@ function Layout({ user, children, activeTab, onTabChange, onLogout }) {
   const closeSidebar = () => setSidebarOpen(false)
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout${isParticipant ? ' theme-academic' : ''}`}>
       {/* Sidebar Overlay (mobile) */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -207,25 +219,36 @@ function Layout({ user, children, activeTab, onTabChange, onLogout }) {
             </h2>
           </div>
           <div className="top-header-right">
-            <motion.button 
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="header-btn" 
-              style={{ position: 'relative' }}
-              title="Notifications"
-            >
-              <Bell size={18} />
-              <span style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', backgroundColor: '#ef4444', borderRadius: '50%', border: '2px solid #fff' }} />
-            </motion.button>
-            <motion.button 
-              whileHover={{ scale: 1.05, rotate: -10 }}
-              whileTap={{ scale: 0.95 }}
-              className="header-btn" 
-              onClick={onLogout} 
-              title="Sign Out"
-            >
-              <LogOut size={18} />
-            </motion.button>
+            {headerSlot}
+            {!headerSlot && (
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="header-btn" 
+                style={{ position: 'relative' }}
+                title="Notifications"
+              >
+                <Bell size={18} />
+                <span style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', backgroundColor: '#ef4444', borderRadius: '50%', border: '2px solid #fff' }} />
+              </motion.button>
+            )}
+            {isParticipant ? (
+              <ProfileDropdown
+                user={user}
+                onTabChange={onTabChange}
+                onLogout={onLogout}
+              />
+            ) : (
+              <motion.button
+                whileHover={{ scale: 1.05, rotate: -10 }}
+                whileTap={{ scale: 0.95 }}
+                className="header-btn"
+                onClick={onLogout}
+                title="Sign Out"
+              >
+                <LogOut size={18} />
+              </motion.button>
+            )}
           </div>
         </header>
 

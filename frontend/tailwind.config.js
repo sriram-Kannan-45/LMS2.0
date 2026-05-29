@@ -7,6 +7,18 @@ export default {
   theme: {
     extend: {
       colors: {
+        brand: {
+          50: '#f5f3ff',
+          100: '#ede9fe',
+          200: '#ddd6fe',
+          300: '#c4b5fd',
+          400: '#a78bfa',
+          500: '#a855f7',
+          600: '#9333ea',
+          700: '#7c3aed',
+          800: '#6b21a8',
+          900: '#581c87',
+        },
         slate: {
           50: '#f8fafc',
           100: '#f1f5f9',
@@ -74,12 +86,25 @@ export default {
       animation: {
         in: 'fadeIn 0.2s ease-in-out',
         spin: 'spin 1s linear infinite',
+        'gradient-shift': 'gradientShift 8s ease infinite',
+        float: 'float 6s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
           from: { opacity: '0' },
           to: { opacity: '1' },
         },
+        gradientShift: {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-8px)' },
+        },
+      },
+      backgroundImage: {
+        'ai-mesh': 'radial-gradient(ellipse 80% 50% at 20% -10%, rgba(124,58,237,0.15), transparent), radial-gradient(ellipse 60% 40% at 90% 10%, rgba(168,85,247,0.1), transparent)',
       },
       transitionDuration: {
         fast: '150ms',
