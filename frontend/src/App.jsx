@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ToastProvider } from './components/Toast'
@@ -16,6 +16,24 @@ import ExamPage from './pages/ExamPage'
 import ExamResultPage from './pages/ExamResultPage'
 import TrainerProctoringPage from './pages/TrainerProctoringPage'
 import NotificationsPanel from './components/student/shell/NotificationsPanel'
+import AssessmentLobby from './components/coding-assessment/AssessmentLobby'
+import CodingAssessmentForm from './components/coding-assessment/CodingAssessmentForm'
+import CodingAssessmentResults from './components/coding-assessment/CodingAssessmentResults'
+
+// Coding Assessment route wrappers (read :assessmentId from the URL)
+function ParticipantCodingPage() {
+  const { assessmentId } = useParams()
+  const navigate = useNavigate()
+  return <div className="p-4"><AssessmentLobby assessmentId={assessmentId} onExit={() => navigate('/participant')} /></div>
+}
+function TrainerCodingFormPage() {
+  const navigate = useNavigate()
+  return <div className="p-4"><CodingAssessmentForm onClose={() => navigate('/trainer')} /></div>
+}
+function TrainerCodingResultsPage() {
+  const { assessmentId } = useParams()
+  return <div className="p-4"><CodingAssessmentResults assessmentId={assessmentId} /></div>
+}
 
 function App() {
   const [user, setUser] = useState(null)
@@ -66,9 +84,9 @@ function AppRoutes({ user, onLogin, onLogout }) {
     useEffect(() => {
       if (defaultTab && activeTab === 'overview' && user?.role !== 'ADMIN' && user?.role !== 'PARTICIPANT') {
         setActiveTab(defaultTab)
-      } else if (user?.role === 'PARTICIPANT' && !['overview', 'available', 'myEnrollments', 'lessons', 'ai-quizzes', 'feedback', 'myFeedbacks', 'leaderboard', 'achievements', 'profile'].includes(activeTab)) {
+      } else if (user?.role === 'PARTICIPANT' && !['overview', 'available', 'myEnrollments', 'lessons', 'ai-quizzes', 'coding', 'feedback', 'myFeedbacks', 'leaderboard', 'achievements', 'profile'].includes(activeTab)) {
         setActiveTab(defaultTab)
-      } else if (user?.role === 'TRAINER' && !['courses', 'trainings', 'notes', 'ai-quiz', 'feedback', 'profile'].includes(activeTab)) {
+      } else if (user?.role === 'TRAINER' && !['courses', 'trainings', 'notes', 'ai-quiz', 'coding', 'feedback', 'profile'].includes(activeTab)) {
         setActiveTab(defaultTab)
       } else if (user?.role === 'ADMIN' && !['overview', 'programs', 'pending', 'trainings', 'trainers', 'participants', 'sessions', 'notes', 'feedback', 'surveys', 'createTrainer', 'createTraining'].includes(activeTab)) {
         setActiveTab(defaultTab)
@@ -172,6 +190,14 @@ function AppRoutes({ user, onLogin, onLogout }) {
               : <Navigate to="/login" />
           }
         />
+
+        {/* Coding Assessment module */}
+        <Route path="/participant/coding/:assessmentId"
+          element={user?.role === 'PARTICIPANT' ? <ParticipantCodingPage /> : <Navigate to="/login" />} />
+        <Route path="/trainer/coding"
+          element={user?.role === 'TRAINER' ? <TrainerCodingFormPage /> : <Navigate to="/login" />} />
+        <Route path="/trainer/coding/:assessmentId/results"
+          element={(user?.role === 'TRAINER' || user?.role === 'ADMIN') ? <TrainerCodingResultsPage /> : <Navigate to="/login" />} />
 
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>

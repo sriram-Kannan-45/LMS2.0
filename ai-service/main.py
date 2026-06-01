@@ -1242,6 +1242,106 @@ async def clear_cache():
     return {"message": "Cache cleared successfully", "status": "ok"}
 
 
+# ── Coding Assessment AI endpoints (Modules A & B) ─────
+class CodingQuestionRequest(BaseModel):
+    topic: str
+    difficulty: str = "medium"
+    language: str = "any"
+
+class CodeReviewRequest(BaseModel):
+    title: str
+    language: str = "python"
+    code: str
+    passed: int = 0
+    total: int = 0
+
+CODING_QUESTION_SYSTEM = (
+    "You are an expert competitive programming question author. "
+    "Generate a coding problem in strict JSON. Return ONLY valid JSON, no markdown.\n"
+    "Schema:\n"
+    "{\n"
+    '  "title": string,\n'
+    '  "problem_description": string,\n'
+    '  "input_format": string,\n'
+    '  "output_format": string,\n'
+    '  "constraints": string,\n'
+    '  "sample_input": string,\n'
+    '  "sample_output": string,\n'
+    '  "explanation": string,\n'
+    '  "test_cases": [ { "input": string, "expected_output": string, "is_hidden": boolean } ],\n'
+    '  "difficulty": "easy"|"medium"|"hard",\n'
+    '  "marks": number,\n'
+    '  "tags": string[]\n'
+    "}\n"
+    "Generate exactly 2 visible (is_hidden=false) and 5 hidden (is_hidden=true) test cases. "
+    "Suggest marks by difficulty: easy=10, medium=20, hard=30."
+)
+
+CODE_REVIEW_SYSTEM = (
+    "You are a senior software engineer doing a code review for a student. "
+    "Be constructive, educational, and specific. Return ONLY valid JSON, no markdown.\n"
+    "Schema:\n"
+    "{\n"
+    '  "summary": string,\n'
+    '  "strengths": string[],\n'
+    '  "weaknesses": string[],\n'
+    '  "time_complexity": string,\n'
+    '  "space_complexity": string,\n'
+    '  "suggestions": string[],\n'
+    '  "optimized_snippet": string\n'
+    "}"
+)
+
+
+def _invoke_json(prompt: str):
+    """Invoke the LLM and parse its JSON response (with repair). Returns dict/list or None."""
+    response = llm.invoke(prompt)
+    text = response.content if hasattr(response, "content") else str(response)
+    try:
+        return json.loads(text)
+    except Exception:
+        parsed, _ = _try_json_repair(text)
+        return parsed
+
+
+@app.post("/generate-coding-question")
+async def generate_coding_question(req: CodingQuestionRequest):
+    if llm is None:
+        raise HTTPException(status_code=503, detail="LLM not configured")
+    prompt = (
+        CODING_QUESTION_SYSTEM
+        + f"\n\nTopic: {req.topic}. Difficulty: {req.difficulty}. Language hint: {req.language}."
+    )
+    try:
+        parsed = _invoke_json(prompt)
+        if not isinstance(parsed, dict) or "title" not in parsed:
+            raise ValueError("malformed question JSON")
+        parsed.setdefault("test_cases", [])
+        return {"question": parsed}
+    except Exception as e:
+        log.error("Coding question generation failed: %s", e)
+        raise HTTPException(status_code=422, detail="AI returned malformed response. Try again.")
+
+
+@app.post("/review-code")
+async def review_code(req: CodeReviewRequest):
+    if llm is None:
+        raise HTTPException(status_code=503, detail="LLM not configured")
+    prompt = (
+        CODE_REVIEW_SYSTEM
+        + f"\n\nProblem: {req.title}\nLanguage: {req.language}\n"
+        + f"Test results: {req.passed}/{req.total} test cases passed\nCode:\n{req.code}"
+    )
+    try:
+        parsed = _invoke_json(prompt)
+        if not isinstance(parsed, dict) or "summary" not in parsed:
+            raise ValueError("malformed review JSON")
+        return {"review": parsed}
+    except Exception as e:
+        log.error("Code review failed: %s", e)
+        raise HTTPException(status_code=422, detail="AI returned malformed response. Try again.")
+
+
 if __name__ == "__main__":
     import uvicorn
     log.info("Starting AI Quiz Generator on port 8000...")

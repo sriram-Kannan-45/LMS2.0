@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LayoutDashboard, GraduationCap, Users, MessageSquare, ClipboardList, UserPlus, BookPlus, BookOpen, User, LogOut, Menu, Bell, X, ChevronRight, Sparkles, Trophy, Award, FileText, Home } from 'lucide-react'
+import { LayoutDashboard, GraduationCap, Users, MessageSquare, ClipboardList, UserPlus, BookPlus, BookOpen, User, LogOut, Menu, Bell, X, ChevronRight, Sparkles, Trophy, Award, FileText, Home, Code } from 'lucide-react'
 import ProfileDropdown from './student/profile/ProfileDropdown'
 
 const iconMap = {
@@ -25,6 +25,7 @@ const iconMap = {
   Leaderboard: <Trophy size={18} />,
   Achievements: <Award size={18} />,
   Lessons: <FileText size={18} />,
+  Coding: <Code size={18} />,
   Profile: <User size={18} />,
 }
 
@@ -43,6 +44,7 @@ const navItems = {
   TRAINER: [
     { key: 'courses', label: 'My Courses', icon: 'My Courses' },
     { key: 'trainings', label: 'My Trainings', icon: 'My Trainings' },
+    { key: 'coding', label: 'Coding Tests', icon: 'Coding' },
     { key: 'feedback', label: 'Feedback', icon: 'Feedback' },
     { key: 'profile', label: 'My Profile', icon: 'My Profile' },
   ],
@@ -52,6 +54,7 @@ const navItems = {
     { key: 'myEnrollments', label: 'My Courses', icon: 'Enrollments' },
     { key: 'lessons', label: 'Lessons', icon: 'Lessons' },
     { key: 'ai-quizzes', label: 'Quizzes', icon: 'AI Quizzes' },
+    { key: 'coding', label: 'Coding Tests', icon: 'Coding' },
     { key: 'leaderboard', label: 'Leaderboard', icon: 'Leaderboard' },
     { key: 'achievements', label: 'Achievements', icon: 'Achievements' },
     { key: 'feedback', label: 'Give Feedback', icon: 'Give Feedback' },

@@ -31,6 +31,7 @@ const profileRoutes = require('./routes/profileRoutes');
 const participantProfileRoutes = require('./routes/participantProfileRoutes');
 const proctoringRoutes = require('./routes/proctoringRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
+const codingAssessmentRoutes = require('./routes/codingAssessmentRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -93,6 +94,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/participant-profile', participantProfileRoutes);
 app.use('/api/proctor', proctoringRoutes);
 app.use('/api/lessons', lessonRoutes);
+app.use('/api/coding', codingAssessmentRoutes);
 
 // Health check for AI service (separate path to avoid conflict with router)
 app.get('/api/ai/health', async (req, res) => {
@@ -285,6 +287,25 @@ const startServer = async () => {
       logger.info('lesson workflow tables ready');
     } catch (e) {
       logger.error('Could not sync lesson workflow tables', { error: e.message });
+    }
+
+    // Coding Assessment tables — additive sync, scoped to module
+    try {
+      const {
+        CodingAssessment, CodingQuestion, TestCase, CodingAttempt,
+        CodingSubmission, SubmissionResult, CodingViolation, PlagiarismReport,
+      } = require('./models');
+      await CodingAssessment.sync({ alter: true });
+      await CodingQuestion.sync({ alter: true });
+      await TestCase.sync({ alter: true });
+      await CodingAttempt.sync({ alter: true });
+      await CodingSubmission.sync({ alter: true });
+      await SubmissionResult.sync({ alter: true });
+      await CodingViolation.sync({ alter: true });
+      await PlagiarismReport.sync({ alter: true });
+      logger.info('coding assessment tables ready');
+    } catch (e) {
+      logger.error('Could not sync coding assessment tables', { error: e.message });
     }
 
     // Add course-centric indexes that were intentionally omitted from the

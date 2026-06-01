@@ -6,6 +6,7 @@ import TrainerAIQuiz from '../components/TrainerAIQuiz'
 import NotesSection from '../components/trainer/notes/NotesSection'
 import ParticipantProfileView from '../components/shared/ParticipantProfileView'
 import TrainerCourses from './TrainerCourses'
+import TrainerCodingAssessments from '../components/coding-assessment/TrainerCodingAssessments'
 import { useToast } from '../components/Toast'
 import Pagination from '../components/Pagination'
 import SortableTableHeader from '../components/SortableTableHeader'
@@ -125,6 +126,7 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
     { key: 'trainings', label: 'My Trainings' },
     { key: 'notes', label: 'Notes & Resources' },
     { key: 'ai-quiz', label: 'AI Quiz Generator' },
+    { key: 'coding', label: 'Coding Tests' },
     { key: 'feedback', label: 'Feedback Received' },
     { key: 'profile', label: 'My Profile' },
   ]
@@ -331,6 +333,10 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
 
       {tab === 'ai-quiz' && (
         <TrainerAIQuiz user={user} />
+      )}
+
+      {tab === 'coding' && (
+        <TrainerCodingAssessments />
       )}
 
       {tab === 'profile' && (

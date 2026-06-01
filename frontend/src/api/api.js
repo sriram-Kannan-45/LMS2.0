@@ -168,6 +168,26 @@ export const API = {
 
     ASSESSMENT_SUBMIT: (assessmentId) => `${API_BASE}/participant/assessments/${assessmentId}/submit`,
     ASSESSMENT_RESULT: (assessmentId) => `${API_BASE}/participant/assessments/${assessmentId}/result`,
+  },
+
+  /** Coding Assessment module (Judge0 sandbox + AI gen/review + plagiarism) */
+  CODING: {
+    // Trainer
+    ASSESSMENTS:          `${API_BASE}/coding/assessments`,
+    ASSESSMENT:     (id) => `${API_BASE}/coding/assessments/${id}`,
+    QUESTIONS:      (id) => `${API_BASE}/coding/assessments/${id}/questions`,
+    GENERATE_Q:     (id) => `${API_BASE}/coding/assessments/${id}/generate-question`,
+    PLAGIARISM_CHECK:   (id) => `${API_BASE}/coding/assessments/${id}/plagiarism-check`,
+    PLAGIARISM_REPORTS: (id) => `${API_BASE}/coding/assessments/${id}/plagiarism-reports`,
+    RESULTS:        (id) => `${API_BASE}/coding/assessments/${id}/results`,
+    // Participant
+    P_ASSESSMENTS:        `${API_BASE}/coding/participant/assessments`,
+    P_ASSESSMENT:   (id) => `${API_BASE}/coding/participant/assessments/${id}`,
+    START:          (id) => `${API_BASE}/coding/participant/assessments/${id}/start`,
+    RUN:     (attemptId) => `${API_BASE}/coding/participant/attempts/${attemptId}/run`,
+    SUBMIT:  (attemptId) => `${API_BASE}/coding/participant/attempts/${attemptId}/submit`,
+    REVIEW:      (subId) => `${API_BASE}/coding/participant/submissions/${subId}/review`,
+    VIOLATION:(attemptId)=> `${API_BASE}/coding/participant/attempts/${attemptId}/violation`,
   }
 };
 
