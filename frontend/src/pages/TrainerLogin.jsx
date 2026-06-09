@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '../components/Toast'
 import { API } from '../api/api'
-import loginIllustration from '../assets/login-illustration.png'
+import loginIllustration from '../assets/green.png'
 
 /* ─── Floating AI Cards Data (Tailored for Trainer role) ─── */
 const AI_CARDS = [
@@ -17,7 +17,7 @@ const AI_CARDS = [
     icon: Sparkles,
     title: 'AI Content Gen',
     subtitle: '1-click quiz creator',
-    accent: '#7c3aed',
+    accent: '#22c55e',
     pos: { top: '6%', left: '3%' },
     from: { x: -40, y: -20 },
   },
@@ -337,40 +337,27 @@ function TrainerLogin({ onLogin }) {
             <div className="classic-card-accent" />
 
             <div className="classic-card-body">
-              {/* Organization Logo */}
-              <div className="classic-logo-header">
-                <div className="classic-logo-icon-wrapper">
-                  <svg className="classic-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {/* WaveInit Logo */}
+              <div className="waveinit-logo-container">
+                <div className="waveinit-logo-icon-box">
+                  <svg className="waveinit-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <defs>
-                      <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                      <linearGradient id="waveinit-logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
                         <stop stopColor="var(--brand-600)" />
                         <stop offset="1" stopColor="var(--brand-400)" />
                       </linearGradient>
                     </defs>
-                    <rect width="32" height="32" rx="8" fill="url(#logo-grad)" />
-                    <path d="M16 8L23 12V20L16 24L9 20V12L16 8Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx="16" cy="16" r="2.5" fill="white" />
-                    <line x1="16" y1="8" x2="16" y2="13.5" stroke="white" strokeWidth="1.5" />
-                    <line x1="9" y1="20" x2="14" y2="17.5" stroke="white" strokeWidth="1.5" />
-                    <line x1="23" y1="20" x2="18" y2="17.5" stroke="white" strokeWidth="1.5" />
+                    <rect width="32" height="32" rx="8" fill="url(#waveinit-logo-grad)" />
+                    <path d="M7 16C9.5 16 11 11 13 11C15 11 16.5 21 18.5 21C20.5 21 22 16 25 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <span className="classic-logo-text">feed<span className="classic-logo-highlight">Web</span></span>
+                <span className="waveinit-logo-text">Wave<span className="waveinit-logo-highlight">Init</span></span>
               </div>
 
-              {/* Title Header with Icon */}
-              <div className="classic-title-section">
-                <div className="classic-title-icon-box">
-                  <GraduationCap size={24} />
-                </div>
-                <div>
-                  <h2 className="classic-card-title">Trainer Hub</h2>
-                  <p className="classic-card-subtitle">Course Creation & Performance Analytics</p>
-                </div>
-              </div>
-
-              <div className="classic-welcome-banner">
-                Manage your classrooms, design interactive assessments, and track student success with AI insights.
+              {/* Portal Header */}
+              <div className="portal-header-section">
+                <h1 className="portal-title">Trainer Hub</h1>
+                <p className="portal-subtitle">Course Creation & Mentoring Space</p>
               </div>
 
               {/* Alerts */}
@@ -518,7 +505,7 @@ function TrainerLogin({ onLogin }) {
           </div>
 
           {/* Footer */}
-          <p className="classic-footer">© 2026 · FeedWeb LMS · Trainer Portal</p>
+          <p className="classic-footer">© 2026 · WaveInit LMS · Trainer Portal</p>
         </motion.div>
       </section>
 
@@ -1056,89 +1043,39 @@ function TrainerLogin({ onLogin }) {
           padding: clamp(24px, 3.4vh, 36px) clamp(24px, 4vw, 38px);
         }
 
-        .classic-logo-header {
+        .waveinit-logo-container {
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 10px;
-          margin-bottom: clamp(16px, 2.2vh, 24px);
+          margin-bottom: clamp(20px, 3vh, 32px);
+          user-select: none;
         }
-        .classic-logo-icon-wrapper {
-          width: 34px;
-          height: 34px;
+        .waveinit-logo-icon-box {
+          width: 32px;
+          height: 32px;
           display: flex;
           align-items: center;
           justify-content: center;
         }
-        .classic-logo-svg {
+        .waveinit-logo-svg {
           width: 100%;
           height: 100%;
-          border-radius: 9px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+          border-radius: 8px;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
         }
-        .classic-logo-text {
+        .waveinit-logo-text {
           font-family: 'Outfit', 'Inter', sans-serif;
-          font-size: 20px;
+          font-size: 21px;
           font-weight: 800;
           color: var(--ink-900);
-          letter-spacing: -0.03em;
-          display: flex;
-          align-items: center;
+          letter-spacing: -0.02em;
+          line-height: 1;
         }
-        .classic-logo-highlight {
-          background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-400) 100%);
+        .waveinit-logo-highlight {
+          background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-500) 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
-        }
-
-        .classic-title-section {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: clamp(14px, 2vh, 20px);
-        }
-
-        .classic-title-icon-box {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: var(--brand-100);
-          color: var(--brand-700);
-          flex-shrink: 0;
-          box-shadow: 0 4px 14px rgba(124,58,237,0.1);
-        }
-
-        .classic-card-title {
-          font-size: clamp(20px, 2.6vh, 24px);
-          font-weight: 800;
-          color: var(--ink-900);
-          font-family: 'Outfit', 'Inter', sans-serif;
-          margin: 0;
-          letter-spacing: -0.02em;
-          line-height: 1.15;
-        }
-
-        .classic-card-subtitle {
-          font-size: clamp(12px, 1.4vh, 13.5px);
-          color: var(--ink-500);
-          margin: 2px 0 0;
-          font-weight: 500;
-          line-height: 1.3;
-          letter-spacing: 0.005em;
-        }
-
-        .classic-welcome-banner {
-          font-size: 13px;
-          line-height: 1.5;
-          color: var(--ink-700);
-          background: rgba(124,58,237,0.04);
-          border: 1px solid rgba(124,58,237,0.08);
-          border-radius: 12px;
-          padding: 12px 14px;
-          margin-bottom: clamp(16px, 2.2vh, 24px);
-          font-weight: 500;
         }
 
         /* Alerts */
