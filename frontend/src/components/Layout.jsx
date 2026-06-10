@@ -251,12 +251,6 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
       {/* Main Content */}
       <main className="main-content">
         <div className="page-content">
-          {/* Active Tab Page Title Header */}
-          <div className="page-content-header" style={{ marginBottom: '24px' }}>
-            <h1 className="page-title" style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>
-              {items.find(i => i.key === activeTab)?.label || 'Dashboard'}
-            </h1>
-          </div>
           {children}
         </div>
       </main>
