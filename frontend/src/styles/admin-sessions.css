@@ -10,6 +10,17 @@
   flex-direction: column;
   gap: 16px;
 }
+.as-panel h2 {
+  margin: 0 0 2px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+}
+.as-panel p {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
 
 /* Header ─────────────────────────────────────────────────────────────────── */
 .as-header {

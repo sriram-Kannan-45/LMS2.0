@@ -28,15 +28,21 @@ const iconMap = {
   Lessons: <FileText size={18} />,
   Coding: <Code size={18} />,
   Profile: <User size={18} />,
+  ClipboardList: <ClipboardList size={18} />,
+  FileText: <FileText size={18} />,
+  Notes: <FileText size={18} />,
 }
 
 const navItems = {
   ADMIN: [
     { key: 'overview', label: 'Dashboard', icon: 'Dashboard' },
     { key: 'programs', label: 'Programs & Courses', icon: 'Courses' },
+    { key: 'pending', label: 'Pending Approval', icon: 'Overview' },
     { key: 'trainings', label: 'Trainings', icon: 'Trainings' },
     { key: 'trainers', label: 'Trainers', icon: 'Trainers' },
     { key: 'participants', label: 'Participants', icon: 'Participants' },
+    { key: 'sessions', label: 'Sessions', icon: 'AI Quizzes' },
+    { key: 'notes', label: 'Notes', icon: 'Lessons' },
     { key: 'feedback', label: 'Feedback', icon: 'Feedback' },
     { key: 'surveys', label: 'Surveys', icon: 'Surveys' },
     { key: 'createTrainer', label: 'Add Trainer', icon: 'Add Trainer' },
