@@ -453,106 +453,110 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                   {/* Card 1: Total Trainings */}
-                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-blue-500">
+                  <div className="stat-card p-6 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Trainings</span>
-                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.totalTrainings ?? 0}</h4>
+                        <div className="stat-label">Total Trainings</div>
+                        <div className="stat-value mt-2">{stats.totalTrainings ?? 0}</div>
                       </div>
-                      <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-100/30 dark:border-blue-900/20 transition-transform duration-300 group-hover:scale-110">
-                        <BookOpen className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-zinc-800/60 text-slate-600 dark:text-slate-400 flex items-center justify-center border border-slate-200/60 dark:border-zinc-700/60 flex-shrink-0">
+                        <BookOpen className="w-5 h-5" />
                       </div>
                     </div>
                   </div>
 
                   {/* Card 2: Trainers */}
-                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-violet-500">
+                  <div className="stat-card p-6 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Trainers</span>
-                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.totalTrainers ?? 0}</h4>
+                        <div className="stat-label">Trainers</div>
+                        <div className="stat-value mt-2">{stats.totalTrainers ?? 0}</div>
                       </div>
-                      <div className="w-12 h-12 rounded-xl bg-violet-50 dark:bg-violet-950/20 text-violet-600 dark:text-violet-400 flex items-center justify-center border border-violet-100/30 dark:border-violet-900/20 transition-transform duration-300 group-hover:scale-110">
-                        <Users className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-zinc-800/60 text-slate-600 dark:text-slate-400 flex items-center justify-center border border-slate-200/60 dark:border-zinc-700/60 flex-shrink-0">
+                        <Users className="w-5 h-5" />
                       </div>
                     </div>
                   </div>
 
                   {/* Card 3: Participants */}
-                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-emerald-500">
+                  <div className="stat-card p-6 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Participants</span>
-                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.totalParticipants ?? 0}</h4>
+                        <div className="stat-label">Participants</div>
+                        <div className="stat-value mt-2">{stats.totalParticipants ?? 0}</div>
                       </div>
-                      <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-100/30 dark:border-emerald-900/20 transition-transform duration-300 group-hover:scale-110">
-                        <GraduationCap className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-zinc-800/60 text-slate-600 dark:text-slate-400 flex items-center justify-center border border-slate-200/60 dark:border-zinc-700/60 flex-shrink-0">
+                        <GraduationCap className="w-5 h-5" />
                       </div>
                     </div>
                   </div>
 
                   {/* Card 4: Active Enrollments */}
-                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-amber-500">
+                  <div className="stat-card p-6 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Active Enrollments</span>
-                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.totalEnrollments ?? 0}</h4>
+                        <div className="stat-label">Active Enrollments</div>
+                        <div className="stat-value mt-2">{stats.totalEnrollments ?? 0}</div>
                       </div>
-                      <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-100/30 dark:border-amber-900/20 transition-transform duration-300 group-hover:scale-110">
-                        <ClipboardList className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-zinc-800/60 text-slate-600 dark:text-slate-400 flex items-center justify-center border border-slate-200/60 dark:border-zinc-700/60 flex-shrink-0">
+                        <ClipboardList className="w-5 h-5" />
                       </div>
                     </div>
                   </div>
 
                   {/* Card 5: Feedback Responses */}
-                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-rose-500">
+                  <div className="stat-card p-6 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Feedback Responses</span>
-                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.totalFeedbacks ?? 0}</h4>
+                        <div className="stat-label">Feedback Responses</div>
+                        <div className="stat-value mt-2">{stats.totalFeedbacks ?? 0}</div>
                       </div>
-                      <div className="w-12 h-12 rounded-xl bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 flex items-center justify-center border border-rose-100/30 dark:border-rose-900/20 transition-transform duration-300 group-hover:scale-110">
-                        <MessageSquare className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-zinc-800/60 text-slate-600 dark:text-slate-400 flex items-center justify-center border border-slate-200/60 dark:border-zinc-700/60 flex-shrink-0">
+                        <MessageSquare className="w-5 h-5" />
                       </div>
                     </div>
                   </div>
 
                   {/* Card 6: Avg Trainer Rating */}
-                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-yellow-500">
+                  <div className="stat-card p-6 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Avg Trainer Rating</span>
-                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.avgTrainerRating ?? '0.0'} <span className="text-xs text-slate-400 font-semibold">/ 5</span></h4>
+                        <div className="stat-label">Avg Trainer Rating</div>
+                        <div className="stat-value mt-2">
+                          {stats.avgTrainerRating ?? '0.0'} <span className="text-xs text-slate-400 font-semibold">/ 5</span>
+                        </div>
                       </div>
-                      <div className="w-12 h-12 rounded-xl bg-yellow-50 dark:bg-yellow-950/20 text-yellow-600 dark:text-yellow-400 flex items-center justify-center border border-yellow-100/30 dark:border-yellow-900/20 transition-transform duration-300 group-hover:scale-110">
-                        <Star className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-zinc-800/60 text-slate-600 dark:text-slate-400 flex items-center justify-center border border-slate-200/60 dark:border-zinc-700/60 flex-shrink-0">
+                        <Star className="w-5 h-5" />
                       </div>
                     </div>
                   </div>
 
                   {/* Card 7: Top Trainer */}
-                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-indigo-500">
+                  <div className="stat-card p-6 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1 pr-2">
-                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Top Trainer</span>
-                        <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 mt-2 truncate">{topTrainer.name}</h4>
-                        <span className="text-xs text-slate-500 font-semibold">Avg: {topTrainer.avg > 0 ? topTrainer.avg.toFixed(1) : '-'}</span>
+                        <div className="stat-label">Top Trainer</div>
+                        <div className="stat-value mt-2 truncate text-lg font-bold" style={{ fontSize: '18px' }}>{topTrainer.name}</div>
+                        <div className="text-xs text-slate-500 font-semibold mt-1">Avg: {topTrainer.avg > 0 ? topTrainer.avg.toFixed(1) : '-'}</div>
                       </div>
-                      <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-100/30 dark:border-indigo-900/20 transition-transform duration-300 group-hover:scale-110 flex-shrink-0">
-                        <Trophy className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-zinc-800/60 text-slate-600 dark:text-slate-400 flex items-center justify-center border border-slate-200/60 dark:border-zinc-700/60 flex-shrink-0">
+                        <Trophy className="w-5 h-5" />
                       </div>
                     </div>
                   </div>
 
                   {/* Card 8: Overall Satisfaction */}
-                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-teal-500">
+                  <div className="stat-card p-6 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                       <div>
-                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Satisfaction</span>
-                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.satisfactionScore ?? '0.0'} <span className="text-xs text-slate-400 font-semibold">/ 5</span></h4>
+                        <div className="stat-label">Satisfaction</div>
+                        <div className="stat-value mt-2">
+                          {stats.satisfactionScore ?? '0.0'} <span className="text-xs text-slate-400 font-semibold">/ 5</span>
+                        </div>
                       </div>
-                      <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-950/20 text-teal-600 dark:text-teal-400 flex items-center justify-center border border-teal-100/30 dark:border-teal-900/20 transition-transform duration-300 group-hover:scale-110">
-                        <Award className="w-6 h-6" />
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-zinc-800/60 text-slate-600 dark:text-slate-400 flex items-center justify-center border border-slate-200/60 dark:border-zinc-700/60 flex-shrink-0">
+                        <Award className="w-5 h-5" />
                       </div>
                     </div>
                   </div>
@@ -712,70 +716,52 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
             >
-              {/* Gradient Page Header */}
-              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 sm:p-8 text-white shadow-lg mb-8 group">
-                <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl group-hover:scale-110 transition-transform duration-500" />
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 relative z-10">
-                  <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-violet-200">Management Console</span>
-                    <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">Registered Participants</h3>
-                    <p className="text-sm text-violet-100 mt-2 font-medium">
-                      Total registered: <span className="bg-white/20 px-2 py-0.5 rounded-full text-white font-bold">{participants.length}</span>
-                    </p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button 
-                      className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer" 
-                      onClick={() => fetchParticipants()}
-                    >
-                      Refresh List
-                    </button>
-                    <button 
-                      className="px-4 py-2 bg-white hover:bg-violet-50 text-violet-600 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer" 
-                      onClick={() => setAddParticipantModal(true)}
-                    >
-                      + Add Participant
-                    </button>
-                  </div>
+              <div className="card">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Registered Participants ({participants.length})</h3>
+                  <button 
+                    className="btn btn-primary btn-sm rounded-xl cursor-pointer" 
+                    onClick={() => setAddParticipantModal(true)}
+                  >
+                    + Add Participant
+                  </button>
                 </div>
-              </div>
 
-              {initialLoading ? (
-                <div className="card p-8">
+                {initialLoading ? (
                   <div className="empty-state">
                     <div className="empty-icon">⏳</div>
                     <p>Loading participants...</p>
                   </div>
-                </div>
-              ) : (
-                <ParticipantList 
-                  participants={participants}
-                  loading={false}
-                  onDelete={handleDeleteParticipant}
-                  onRefresh={() => fetchParticipants()}
-                  onView={(p) => setViewingParticipant(p)}
-                  onApprove={async (id) => {
-                    const r = await fetch(`${API_BASE}/admin/approve-participant/${id}`, { method: 'POST', headers: auth() })
-                    if (r.ok) {
-                      success('Participant approved successfully')
-                      fetchParticipants()
-                    } else {
-                      const d = await r.json()
-                      showError(d.error || 'Failed to approve participant')
-                    }
-                  }}
-                  onReject={async (id) => {
-                    const r = await fetch(`${API_BASE}/admin/reject-participant/${id}`, { method: 'POST', headers: auth() })
-                    if (r.ok) {
-                      success('Participant rejected successfully')
-                      fetchParticipants()
-                    } else {
-                      const d = await r.json()
-                      showError(d.error || 'Failed to reject participant')
-                    }
-                  }}
-                />
-              )}
+                ) : (
+                  <ParticipantList 
+                    participants={participants}
+                    loading={false}
+                    onDelete={handleDeleteParticipant}
+                    onRefresh={() => fetchParticipants()}
+                    onView={(p) => setViewingParticipant(p)}
+                    onApprove={async (id) => {
+                      const r = await fetch(`${API_BASE}/admin/approve-participant/${id}`, { method: 'POST', headers: auth() })
+                      if (r.ok) {
+                        success('Participant approved successfully')
+                        fetchParticipants()
+                      } else {
+                        const d = await r.json()
+                        showError(d.error || 'Failed to approve participant')
+                      }
+                    }}
+                    onReject={async (id) => {
+                      const r = await fetch(`${API_BASE}/admin/reject-participant/${id}`, { method: 'POST', headers: auth() })
+                      if (r.ok) {
+                        success('Participant rejected successfully')
+                        fetchParticipants()
+                      } else {
+                        const d = await r.json()
+                        showError(d.error || 'Failed to reject participant')
+                      }
+                    }}
+                  />
+                )}
+              </div>
             </motion.div>
           )}
 

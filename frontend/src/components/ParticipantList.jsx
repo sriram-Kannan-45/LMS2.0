@@ -201,47 +201,43 @@ function ParticipantList({
         {resultsMessage}
       </div>
 
-      {/* Desktop Responsive Table */}
-      <div className="hidden md:block table-wrapper border border-slate-200/60 dark:border-zinc-800/60 rounded-2xl overflow-hidden bg-white dark:bg-zinc-900/30 shadow-sm hover:shadow-md transition-shadow duration-300">
-        <table className="w-full text-left border-collapse">
+      {/* Participant Table */}
+      <div className="table-wrapper">
+        <table className="table">
           <thead>
-            <tr className="border-b border-slate-200 dark:border-zinc-800/60 bg-slate-50/75 dark:bg-zinc-900/40">
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Participant</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Phone</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Registration Date</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-right">Actions</th>
+            <tr>
+              <th>Avatar</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Registration Date</th>
+              <th>Status</th>
+              <th className="text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/60">
+          <tbody>
             {paginatedItems.map((p) => (
-              <tr key={p.id} className="hover:bg-slate-50/40 dark:hover:bg-zinc-900/20 transition-colors duration-150 group">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-950/40 flex items-center justify-center text-sm font-bold transition-transform duration-300 group-hover:scale-105">
-                      {getInitials(p.name)}
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors duration-200">{p.name || '-'}</h4>
-                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">{p.email}</p>
-                    </div>
+              <tr key={p.id}>
+                <td>
+                  <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-xs font-bold border border-slate-200/50 dark:border-zinc-700/50">
+                    {getInitials(p.name)}
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 font-medium">
-                  {p.phone || '-'}
-                </td>
-                <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 font-medium">
+                <td className="font-semibold text-slate-800 dark:text-slate-100">{p.name || '-'}</td>
+                <td className="text-slate-600 dark:text-slate-400">{p.email}</td>
+                <td className="text-slate-600 dark:text-slate-400">{p.phone || '-'}</td>
+                <td className="text-slate-600 dark:text-slate-400">
                   {new Date(p.created_at || p.joinedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </td>
-                <td className="px-6 py-4">
+                <td>
                   <StatusBadge status={p.status || 'PENDING'} size="sm" />
                 </td>
-                <td className="px-6 py-4 text-right">
+                <td className="text-right">
                   <div className="flex justify-end gap-1.5">
                     {onView && (
                       <button
                         onClick={() => onView(p)}
-                        className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-lg transition-all duration-200 cursor-pointer relative"
+                        className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30 rounded-full transition-all duration-200 cursor-pointer relative"
                         title="View Profile"
                       >
                         <Eye className="w-4 h-4" />
@@ -249,7 +245,7 @@ function ParticipantList({
                     )}
                     <button
                       onClick={() => { setEditingParticipant(p); setEditStatus(p.status || 'PENDING') }}
-                      className="p-2 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-lg transition-all duration-200 cursor-pointer"
+                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-full transition-all duration-200 cursor-pointer"
                       title="Edit Status"
                     >
                       <Edit2 className="w-4 h-4" />
@@ -257,7 +253,7 @@ function ParticipantList({
                     {onDelete && (
                       <button
                         onClick={() => handleDelete(p.id, p.name)}
-                        className="p-2 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-lg transition-all duration-200 cursor-pointer"
+                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full transition-all duration-200 cursor-pointer"
                         title="Remove Participant"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -269,76 +265,6 @@ function ParticipantList({
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Mobile responsive cards */}
-      <div className="grid grid-cols-1 gap-4 md:hidden" role="list">
-        {paginatedItems.map((p) => (
-          <article 
-            key={p.id} 
-            className="bg-white dark:bg-zinc-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-zinc-800/60 shadow-sm hover:shadow-md transition-all duration-200 group flex flex-col justify-between"
-            role="listitem"
-          >
-            <div>
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-950/40 flex items-center justify-center text-sm font-bold group-hover:scale-105 transition-transform duration-200">
-                    {getInitials(p.name)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors duration-200">{p.name || '-'}</h3>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">{p.email}</p>
-                  </div>
-                </div>
-                <StatusBadge status={p.status || 'PENDING'} size="sm" />
-              </div>
-              
-              <dl className="text-xs text-slate-600 dark:text-slate-400 space-y-2 my-4 py-4 border-t border-b border-slate-100 dark:border-slate-850">
-                {p.phone && (
-                  <div className="flex items-center gap-2">
-                    <dt className="sr-only">Phone:</dt>
-                    <dd className="flex items-center gap-2">
-                      <Phone className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                      <span>{p.phone}</span>
-                    </dd>
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <dt className="sr-only">Joined Date:</dt>
-                  <dd className="flex items-center gap-2">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                    <span>Joined {new Date(p.created_at || p.joinedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
-            <div className="flex gap-2 mt-2">
-              {onView && (
-                <button
-                  onClick={() => onView(p)}
-                  className="flex-1 px-3 py-2 text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-all duration-200 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Eye className="w-3.5 h-3.5" /> View
-                </button>
-              )}
-              <button
-                onClick={() => { setEditingParticipant(p); setEditStatus(p.status || 'PENDING') }}
-                className="flex-1 px-3 py-2 text-violet-700 dark:text-violet-400 bg-violet-50/40 dark:bg-violet-950/20 hover:bg-violet-50 dark:hover:bg-violet-950/40 rounded-xl transition-all duration-200 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Edit2 className="w-3.5 h-3.5" /> Status
-              </button>
-              {onDelete && (
-                <button
-                  onClick={() => handleDelete(p.id, p.name)}
-                  className="px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl transition-all duration-200 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          </article>
-        ))}
       </div>
 
       {/* Pagination */}
