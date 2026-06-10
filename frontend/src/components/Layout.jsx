@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Award, Bell, BookOpen, BookPlus, ChevronRight, ClipboardList, Code, FileText, GraduationCap, Home, LayoutDashboard, LogOut, Menu, MessageSquare, Sparkles, Trophy, User, UserPlus, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import ProfileDropdown from './student/profile/ProfileDropdown'
+import ThemeToggle from './ui/ThemeToggle'
 
 const iconMap = {
   Dashboard: <LayoutDashboard size={18} />,
@@ -181,64 +182,7 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
             </p>
           </motion.div>
 
-          <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px' }}>
-            <motion.div 
-              whileHover={{ scale: 1.1 }}
-              className="sidebar-user-avatar"
-            >
-              {initials(user.name)}
-            </motion.div>
-            <div className="sidebar-user-info" style={{ flex: 1, minWidth: 0 }}>
-              <div className="sidebar-user-name" style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>{user.name}</div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: '2px' }}>
-                <span className={`badge ${colors.badge}`} style={{ fontSize: '9px', fontWeight: '700', padding: '2px 6px', textTransform: 'uppercase' }}>
-                  {user.role}
-                </span>
-              </div>
-            </div>
-            <motion.button 
-              whileHover={{ scale: 1.1, rotate: -15 }}
-              whileTap={{ scale: 0.9 }}
-              className="sidebar-logout-btn" 
-              onClick={onLogout} 
-              title="Sign Out"
-            >
-              <LogOut size={15} />
-            </motion.button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="main-content">
-        <header className="top-header">
-          <div className="top-header-left">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="sidebar-toggle"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu size={18} />
-            </motion.button>
-            <h2 className="top-header-title">
-              {items.find(i => i.key === activeTab)?.label || 'Dashboard'}
-            </h2>
-          </div>
-          <div className="top-header-right">
-            {headerSlot}
-            {!headerSlot && (
-              <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="header-btn" 
-                style={{ position: 'relative' }}
-                title="Notifications"
-              >
-                <Bell size={18} />
-                <span style={{ position: 'absolute', top: '-1px', right: '-1px', width: '10px', height: '10px', backgroundColor: '#ef4444', borderRadius: '50%', border: '2px solid #fff' }} />
-              </motion.button>
-            )}
+          <div className="sidebar-footer-user-section" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {isParticipant ? (
               <ProfileDropdown
                 user={user}
@@ -246,20 +190,73 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
                 onLogout={onLogout}
               />
             ) : (
-              <motion.button
-                whileHover={{ scale: 1.05, rotate: -10 }}
-                whileTap={{ scale: 0.95 }}
-                className="header-btn"
-                onClick={onLogout}
-                title="Sign Out"
-              >
-                <LogOut size={18} />
-              </motion.button>
+              <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '10px' }}>
+                <motion.div 
+                  whileHover={{ scale: 1.1 }}
+                  className="sidebar-user-avatar"
+                >
+                  {initials(user.name)}
+                </motion.div>
+                <div className="sidebar-user-info" style={{ flex: 1, minWidth: 0 }}>
+                  <div className="sidebar-user-name" style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>{user.name}</div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', marginTop: '2px' }}>
+                    <span className={`badge ${colors.badge}`} style={{ fontSize: '9px', fontWeight: '700', padding: '2px 6px', textTransform: 'uppercase' }}>
+                      {user.role}
+                    </span>
+                  </div>
+                </div>
+                <motion.button 
+                  whileHover={{ scale: 1.1, rotate: -15 }}
+                  whileTap={{ scale: 0.9 }}
+                  className="sidebar-logout-btn" 
+                  onClick={onLogout} 
+                  title="Sign Out"
+                >
+                  <LogOut size={15} />
+                </motion.button>
+              </div>
             )}
-          </div>
-        </header>
 
+            {/* Sub-row for Actions: Notifications (if Participant) & ThemeToggle */}
+            <div className="sidebar-footer-prefs" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px 0', borderTop: '1px solid var(--border-muted)', marginTop: '4px' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Preferences</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {headerSlot && (
+                  <div className="sidebar-notifications">
+                    {headerSlot}
+                  </div>
+                )}
+                <ThemeToggle />
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Floating Mobile Sidebar Toggle Button */}
+      {!sidebarOpen && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="mobile-sidebar-toggle"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open navigation menu"
+        >
+          <Menu size={20} />
+        </motion.button>
+      )}
+
+      {/* Main Content */}
+      <main className="main-content">
         <div className="page-content">
+          {/* Active Tab Page Title Header */}
+          <div className="page-content-header" style={{ marginBottom: '24px' }}>
+            <h1 className="page-title" style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>
+              {items.find(i => i.key === activeTab)?.label || 'Dashboard'}
+            </h1>
+          </div>
           {children}
         </div>
       </main>

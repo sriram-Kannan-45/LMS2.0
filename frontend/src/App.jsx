@@ -170,7 +170,7 @@ function DashboardWrapper({ component: Component, user, onLogout, activeTab, onT
         activeTab={activeTab}
         onTabChange={onTabChange}
         onLogout={onLogout}
-        headerSlot={user?.role === 'PARTICIPANT' ? <NotificationsPanel /> : null}
+        headerSlot={user?.role === 'PARTICIPANT' ? <NotificationsPanel placement="top" /> : null}
       >
         <motion.div
           initial="initial"

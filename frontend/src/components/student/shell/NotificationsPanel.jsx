@@ -27,7 +27,7 @@ const fmtAgo = (d) => {
  * NotificationsPanel — bell trigger + dropdown panel.
  * Lives in Layout.jsx's headerSlot for participant pages.
  */
-export default function NotificationsPanel() {
+export default function NotificationsPanel({ placement = 'bottom' }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const { notifications, unreadCount, loading, markRead, markAllRead, refetch } = useNotifications()
@@ -93,8 +93,7 @@ export default function NotificationsPanel() {
             aria-label="Notifications"
             style={{
               position: 'absolute',
-              top: 'calc(100% + 8px)',
-              right: 0,
+              ...(placement === 'top' ? { bottom: 'calc(100% + 8px)', left: 0 } : { top: 'calc(100% + 8px)', right: 0 }),
               width: 380,
               maxWidth: 'calc(100vw - 32px)',
               maxHeight: 'min(70vh, 560px)',
