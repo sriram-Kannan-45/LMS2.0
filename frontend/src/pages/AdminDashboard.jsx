@@ -12,7 +12,7 @@ import { Bar } from 'react-chartjs-2'
 import { motion, AnimatePresence } from 'framer-motion'
 import Skeleton, { SkeletonStats, SkeletonTable } from '../components/Skeleton'
 import { API, API_BASE } from '../api/api'
-import { BookOpen, Users, GraduationCap, ClipboardList, MessageSquare, Star, Trophy, Award } from 'lucide-react'
+import { BookOpen, Users, GraduationCap, ClipboardList, MessageSquare, Star, Trophy, Award, Loader2 } from 'lucide-react'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -435,9 +435,27 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   const topTrainer = getTopTrainer()
 
+  // Guard clause for missing/unauthorized user session
+  if (!user || !user.token) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f8fafc',
+        fontFamily: "'Manrope', 'Inter', sans-serif"
+      }}>
+        <Loader2 style={{ animation: 'spin 1s linear infinite', color: '#2563eb' }} size={36} />
+        <span style={{ marginTop: '12px', fontSize: '13px', color: '#64748b' }}>Verifying session...</span>
+      </div>
+    )
+  }
+
   return (
     <AnimatePresence>
-      <div className="dashboard">
+      <div className="dashboard" style={{ padding: 0 }}>
 
 
 
