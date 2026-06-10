@@ -1,30 +1,30 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams, useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { ToastProvider } from './components/Toast'
-import { AppThemeProvider } from './context/AppThemeContext'
-import Layout from './components/Layout'
-import ErrorBoundary from './components/ErrorBoundary'
-import Login from './pages/Login'
-import AdminLogin from './pages/AdminLogin'
-import TrainerLogin from './pages/TrainerLogin'
-import ParticipantLogin from './pages/ParticipantLogin'
-import Register from './pages/Register'
-import ForgotPassword from './pages/ForgotPassword'
-import AdminDashboard from './pages/AdminDashboard'
-import TrainerDashboard from './pages/TrainerDashboard'
-import ParticipantDashboard from './pages/ParticipantDashboard'
-import ParticipantQuizzes from './pages/ParticipantQuizzes'
-import PreExamReadiness from './pages/PreExamReadiness'
-import ExamPage from './pages/ExamPage'
-import ExamResultPage from './pages/ExamResultPage'
-import TrainerProctoringPage from './pages/TrainerProctoringPage'
-import NotificationsPanel from './components/student/shell/NotificationsPanel'
+import { motion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import AssessmentLobby from './components/coding-assessment/AssessmentLobby'
 import CodingAssessmentForm from './components/coding-assessment/CodingAssessmentForm'
 import CodingAssessmentResults from './components/coding-assessment/CodingAssessmentResults'
+import ErrorBoundary from './components/ErrorBoundary'
+import Layout from './components/Layout'
+import NotificationsPanel from './components/student/shell/NotificationsPanel'
+import { ToastProvider } from './components/Toast'
+import { AppThemeProvider } from './context/AppThemeContext'
+import AdminDashboard from './pages/AdminDashboard'
+import AdminLogin from './pages/AdminLogin'
+import ExamPage from './pages/ExamPage'
+import ExamResultPage from './pages/ExamResultPage'
+import ForgotPassword from './pages/ForgotPassword'
+import Login from './pages/Login'
+import ParticipantDashboard from './pages/ParticipantDashboard'
+import ParticipantLogin from './pages/ParticipantLogin'
+import ParticipantQuizzes from './pages/ParticipantQuizzes'
+import PreExamReadiness from './pages/PreExamReadiness'
+import Register from './pages/Register'
+import TrainerDashboard from './pages/TrainerDashboard'
+import TrainerLogin from './pages/TrainerLogin'
+import TrainerProctoringPage from './pages/TrainerProctoringPage'
 
-// Coding Assessment route wrappers (read :assessmentId from the URL)
+// ─── Coding Assessment route wrappers ────────────────────────────────────────
 function ParticipantCodingPage() {
   const { assessmentId } = useParams()
   const navigate = useNavigate()
@@ -118,7 +118,9 @@ function App() {
     <AppThemeProvider>
       <ToastProvider>
         <BrowserRouter>
-          <AppRoutes user={user} onLogin={handleLogin} onLogout={handleLogout} />
+          <ErrorBoundary>
+            <AppRoutes user={user} onLogin={handleLogin} onLogout={handleLogout} />
+          </ErrorBoundary>
         </BrowserRouter>
       </ToastProvider>
     </AppThemeProvider>
@@ -131,18 +133,35 @@ const pageVariants = {
   exit: { opacity: 0, y: -12 }
 }
 
-function DashboardWrapper({ component: Component, user, onLogout, defaultTab, activeTab, onTabChange }) {
+// ─── Valid tabs per role ──────────────────────────────────────────────────────
+const VALID_TABS = {
+  ADMIN: ['overview', 'programs', 'pending', 'trainings', 'trainers', 'participants', 'sessions', 'notes', 'feedback', 'surveys', 'createTrainer', 'createTraining'],
+  TRAINER: ['courses', 'trainings', 'notes', 'ai-quiz', 'coding', 'feedback', 'profile'],
+  PARTICIPANT: ['overview', 'available', 'myEnrollments', 'lessons', 'ai-quizzes', 'coding', 'feedback', 'myFeedbacks', 'leaderboard', 'achievements', 'profile'],
+}
+
+const DEFAULT_TABS = {
+  ADMIN: 'overview',
+  TRAINER: 'courses',
+  PARTICIPANT: 'overview',
+}
+
+// ─── DashboardWrapper ─────────────────────────────────────────────────────────
+// FIX: useEffect no longer calls onTabChange during render. Tab correction is
+// deferred so it never triggers a state update in the middle of a render pass,
+// which was corrupting React's hook dispatcher chain.
+function DashboardWrapper({ component: Component, user, onLogout, activeTab, onTabChange }) {
+  const defaultTab = DEFAULT_TABS[user?.role] || 'overview'
+  const validTabs = VALID_TABS[user?.role] || []
+  const correctedRef = useRef(false)
+
   useEffect(() => {
-    if (defaultTab && activeTab === 'overview' && user?.role !== 'ADMIN' && user?.role !== 'PARTICIPANT') {
-      onTabChange(defaultTab)
-    } else if (user?.role === 'PARTICIPANT' && !['overview', 'available', 'myEnrollments', 'lessons', 'ai-quizzes', 'coding', 'feedback', 'myFeedbacks', 'leaderboard', 'achievements', 'profile'].includes(activeTab)) {
-      onTabChange(defaultTab)
-    } else if (user?.role === 'TRAINER' && !['courses', 'trainings', 'notes', 'ai-quiz', 'coding', 'feedback', 'profile'].includes(activeTab)) {
-      onTabChange(defaultTab)
-    } else if (user?.role === 'ADMIN' && !['overview', 'programs', 'pending', 'trainings', 'trainers', 'participants', 'sessions', 'notes', 'feedback', 'surveys', 'createTrainer', 'createTraining'].includes(activeTab)) {
+    // Only correct the tab once per mount, and only if it's invalid
+    if (!correctedRef.current && activeTab && !validTabs.includes(activeTab)) {
+      correctedRef.current = true
       onTabChange(defaultTab)
     }
-  }, [user?.role, defaultTab, activeTab, onTabChange])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <ErrorBoundary>
@@ -160,108 +179,136 @@ function DashboardWrapper({ component: Component, user, onLogout, defaultTab, ac
           variants={pageVariants}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
         >
-          <Component user={user} onLogout={onLogout} activeTab={activeTab} onTabChange={onTabChange} />
+          <Component
+            user={user}
+            onLogout={onLogout}
+            activeTab={activeTab}
+            onTabChange={onTabChange}
+          />
         </motion.div>
       </Layout>
     </ErrorBoundary>
   )
 }
 
+// ─── AppRoutes ────────────────────────────────────────────────────────────────
+// FIX 1: AnimatePresence is removed from wrapping <Routes>. It was forcing
+//         full unmount/remount of DashboardWrapper on every location change,
+//         tearing down ParticipantDashboard mid-render and nulling the hook
+//         dispatcher. Page transitions are now handled inside DashboardWrapper.
+// FIX 2: activeTab state lives here and is passed down — no duplication.
 function AppRoutes({ user, onLogin, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview')
-  const location = useLocation()
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        <Route path="/login" element={<Login />} />
-        <Route path="/admin/login" element={<AdminLogin onLogin={onLogin} />} />
-        <Route path="/trainer/login" element={<TrainerLogin onLogin={onLogin} />} />
-        <Route path="/participant/login" element={<ParticipantLogin onLogin={onLogin} />} />
-        <Route path="/register" element={<Register onLogin={onLogin} />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/admin/login" element={<AdminLogin onLogin={onLogin} />} />
+      <Route path="/trainer/login" element={<TrainerLogin onLogin={onLogin} />} />
+      <Route path="/participant/login" element={<ParticipantLogin onLogin={onLogin} />} />
+      <Route path="/register" element={<Register onLogin={onLogin} />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
 
-        <Route
-          path="/admin"
-          element={
-            user?.role === 'ADMIN' ? (
-              <DashboardWrapper component={AdminDashboard} user={user} onLogout={onLogout} defaultTab="overview" activeTab={activeTab} onTabChange={setActiveTab} />
-            ) : (
-              <Navigate to="/admin/login" />
-            )
-          }
-        />
+      <Route
+        path="/admin"
+        element={
+          user?.role === 'ADMIN' ? (
+            <DashboardWrapper
+              component={AdminDashboard}
+              user={user}
+              onLogout={onLogout}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+            />
+          ) : (
+            <Navigate to="/admin/login" />
+          )
+        }
+      />
 
-        <Route
-          path="/trainer"
-          element={
-            user?.role === 'TRAINER' ? (
-              <DashboardWrapper component={TrainerDashboard} user={user} onLogout={onLogout} defaultTab="courses" activeTab={activeTab} onTabChange={setActiveTab} />
-            ) : (
-              <Navigate to="/trainer/login" />
-            )
-          }
-        />
+      <Route
+        path="/trainer"
+        element={
+          user?.role === 'TRAINER' ? (
+            <DashboardWrapper
+              component={TrainerDashboard}
+              user={user}
+              onLogout={onLogout}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+            />
+          ) : (
+            <Navigate to="/trainer/login" />
+          )
+        }
+      />
 
-        <Route
-          path="/participant"
-          element={
-            user?.role === 'PARTICIPANT' ? (
-              <DashboardWrapper component={ParticipantDashboard} user={user} onLogout={onLogout} defaultTab="overview" activeTab={activeTab} onTabChange={setActiveTab} />
-            ) : (
-              <Navigate to="/participant/login" />
-            )
-          }
-        />
+      <Route
+        path="/participant"
+        element={
+          user?.role === 'PARTICIPANT' ? (
+            <DashboardWrapper
+              component={ParticipantDashboard}
+              user={user}
+              onLogout={onLogout}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+            />
+          ) : (
+            <Navigate to="/participant/login" />
+          )
+        }
+      />
 
-        <Route
-          path="/participant/quizzes"
-          element={
-            user?.role === 'PARTICIPANT' ? (
-              <Layout user={user} onLogout={onLogout}>
-                <ParticipantQuizzes user={user} />
-              </Layout>
-            ) : (
-              <Navigate to="/participant/login" />
-            )
-          }
-        />
+      <Route
+        path="/participant/quizzes"
+        element={
+          user?.role === 'PARTICIPANT' ? (
+            <Layout user={user} onLogout={onLogout}>
+              <ParticipantQuizzes user={user} />
+            </Layout>
+          ) : (
+            <Navigate to="/participant/login" />
+          )
+        }
+      />
 
-        {/* Pre-exam readiness page (gate). Auth-guarded inside the component. */}
-        <Route
-          path="/participant/exam/:quizId"
-          element={
-            user?.role === 'PARTICIPANT'
-              ? <PreExamReadiness />
-              : <Navigate to="/participant/login" />
-          }
-        />
+      <Route
+        path="/participant/exam/:quizId"
+        element={
+          user?.role === 'PARTICIPANT'
+            ? <PreExamReadiness />
+            : <Navigate to="/participant/login" />
+        }
+      />
 
-        {/* Classical exam page (active session). Auth handled inside the page. */}
-        <Route path="/exam/:sessionId" element={<ExamPage />} />
-        <Route path="/exam/:sessionId/result" element={<ExamResultPage />} />
+      <Route path="/exam/:sessionId" element={<ExamPage />} />
+      <Route path="/exam/:sessionId/result" element={<ExamResultPage />} />
 
-        {/* Trainer live proctoring dashboard */}
-        <Route
-          path="/trainer/proctor/:quizId"
-          element={
-            (user?.role === 'TRAINER' || user?.role === 'ADMIN')
-              ? <TrainerProctoringPage />
-              : <Navigate to="/trainer/login" />
-          }
-        />
+      <Route
+        path="/trainer/proctor/:quizId"
+        element={
+          (user?.role === 'TRAINER' || user?.role === 'ADMIN')
+            ? <TrainerProctoringPage />
+            : <Navigate to="/trainer/login" />
+        }
+      />
 
-        {/* Coding Assessment module */}
-        <Route path="/participant/coding/:assessmentId"
-          element={user?.role === 'PARTICIPANT' ? <ParticipantCodingPage /> : <Navigate to="/participant/login" />} />
-        <Route path="/trainer/coding"
-          element={user?.role === 'TRAINER' ? <TrainerCodingFormPage /> : <Navigate to="/trainer/login" />} />
-        <Route path="/trainer/coding/:assessmentId/results"
-          element={(user?.role === 'TRAINER' || user?.role === 'ADMIN') ? <TrainerCodingResultsPage /> : <Navigate to="/trainer/login" />} />
+      <Route
+        path="/participant/coding/:assessmentId"
+        element={user?.role === 'PARTICIPANT' ? <ParticipantCodingPage /> : <Navigate to="/participant/login" />}
+      />
+      <Route
+        path="/trainer/coding"
+        element={user?.role === 'TRAINER' ? <TrainerCodingFormPage /> : <Navigate to="/trainer/login" />}
+      />
+      <Route
+        path="/trainer/coding/:assessmentId/results"
+        element={(user?.role === 'TRAINER' || user?.role === 'ADMIN') ? <TrainerCodingResultsPage /> : <Navigate to="/trainer/login" />}
+      />
 
-        <Route path="*" element={<Navigate to="/login" />} />
-      </Routes>
-    </AnimatePresence>
+      <Route path="*" element={<Navigate to="/login" />} />
+    </Routes>
   )
 }
 

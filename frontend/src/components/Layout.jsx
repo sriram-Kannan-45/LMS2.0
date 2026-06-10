@@ -1,6 +1,6 @@
+import { AnimatePresence, motion } from 'framer-motion'
+import { Award, Bell, BookOpen, BookPlus, ChevronRight, ClipboardList, Code, FileText, GraduationCap, Home, LayoutDashboard, LogOut, Menu, MessageSquare, Sparkles, Trophy, User, UserPlus, Users, X } from 'lucide-react'
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { LayoutDashboard, GraduationCap, Users, MessageSquare, ClipboardList, UserPlus, BookPlus, BookOpen, User, LogOut, Menu, Bell, X, ChevronRight, Sparkles, Trophy, Award, FileText, Home, Code } from 'lucide-react'
 import ProfileDropdown from './student/profile/ProfileDropdown'
 
 const iconMap = {
