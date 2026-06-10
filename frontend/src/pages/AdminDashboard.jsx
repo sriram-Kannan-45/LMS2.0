@@ -55,6 +55,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [trainerForm, setTrainerForm] = useState({ name: '', email: '', password: '' })
   const [trainingForm, setTrainingForm] = useState({ title: '', description: '', trainerId: '', startDate: '', endDate: '', capacity: '' })
   const [questionForm, setQuestionForm] = useState({ trainingId: '', questionText: '', questionType: 'TEXT', options: '' })
+  const [addParticipantModal, setAddParticipantModal] = useState(false)
+  const [participantForm, setParticipantForm] = useState({ name: '', email: '', phone: '', password: '' })
 
   // Loading state for initial data fetch
   const [initialLoading, setInitialLoading] = useState(true)
@@ -293,6 +295,24 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       setQuestionForm({ trainingId: '', questionText: '', questionType: 'TEXT', options: '' })
       fetchQuestions()
       success('Survey question created.')
+    } catch (e) { showError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const handleCreateParticipant = async (e) => {
+    e.preventDefault(); setLoading(true)
+    try {
+      const r = await fetch(API.REGISTER, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(participantForm)
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error)
+      setParticipantForm({ name: '', email: '', phone: '', password: '' })
+      setAddParticipantModal(false)
+      fetchParticipants(); fetchStats()
+      success('Participant account created successfully.')
     } catch (e) { showError(e.message) }
     finally { setLoading(false) }
   }
@@ -692,34 +712,70 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="card">
-                <div className="card-header">
-                  <h3>Registered Participants ({participants.length})</h3>
-                  <button 
-                    className="btn btn-sm" 
-                    onClick={() => fetchParticipants()}
-                    style={{ marginLeft: 'auto' }}
-                  >
-                    Refresh
-                  </button>
-                </div>
-                {initialLoading ? (
-                  <div style={{ padding: 20 }}>
-                    <div className="empty-state">
-                      <div className="empty-icon">⏳</div>
-                      <p>Loading participants...</p>
-                    </div>
+              {/* Gradient Page Header */}
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 p-6 sm:p-8 text-white shadow-lg mb-8 group">
+                <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl group-hover:scale-110 transition-transform duration-500" />
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 relative z-10">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-violet-200">Management Console</span>
+                    <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">Registered Participants</h3>
+                    <p className="text-sm text-violet-100 mt-2 font-medium">
+                      Total registered: <span className="bg-white/20 px-2 py-0.5 rounded-full text-white font-bold">{participants.length}</span>
+                    </p>
                   </div>
-                ) : (
-                  <ParticipantList 
-                    participants={participants}
-                    loading={false}
-                    onDelete={handleDeleteParticipant}
-                    onRefresh={() => fetchParticipants()}
-                    onView={(p) => setViewingParticipant(p)}
-                  />
-                )}
+                  <div className="flex gap-3">
+                    <button 
+                      className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer" 
+                      onClick={() => fetchParticipants()}
+                    >
+                      Refresh List
+                    </button>
+                    <button 
+                      className="px-4 py-2 bg-white hover:bg-violet-50 text-violet-600 rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer" 
+                      onClick={() => setAddParticipantModal(true)}
+                    >
+                      + Add Participant
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {initialLoading ? (
+                <div className="card p-8">
+                  <div className="empty-state">
+                    <div className="empty-icon">⏳</div>
+                    <p>Loading participants...</p>
+                  </div>
+                </div>
+              ) : (
+                <ParticipantList 
+                  participants={participants}
+                  loading={false}
+                  onDelete={handleDeleteParticipant}
+                  onRefresh={() => fetchParticipants()}
+                  onView={(p) => setViewingParticipant(p)}
+                  onApprove={async (id) => {
+                    const r = await fetch(`${API_BASE}/admin/approve-participant/${id}`, { method: 'POST', headers: auth() })
+                    if (r.ok) {
+                      success('Participant approved successfully')
+                      fetchParticipants()
+                    } else {
+                      const d = await r.json()
+                      showError(d.error || 'Failed to approve participant')
+                    }
+                  }}
+                  onReject={async (id) => {
+                    const r = await fetch(`${API_BASE}/admin/reject-participant/${id}`, { method: 'POST', headers: auth() })
+                    if (r.ok) {
+                      success('Participant rejected successfully')
+                      fetchParticipants()
+                    } else {
+                      const d = await r.json()
+                      showError(d.error || 'Failed to reject participant')
+                    }
+                  }}
+                />
+              )}
             </motion.div>
           )}
 
@@ -1256,6 +1312,83 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
           </motion.div>
         )}
       </div>
+
+      {addParticipantModal && (
+        <motion.div
+          className="modal-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="modal"
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ duration: 0.2 }}
+            style={{ maxWidth: '480px' }}
+          >
+            <div className="modal-header">
+              <h3>Add New Participant</h3>
+              <button className="modal-close" onClick={() => setAddParticipantModal(false)}>&#10005;</button>
+            </div>
+            <form onSubmit={handleCreateParticipant}>
+              <div className="form-group">
+                <label className="form-label">Full Name</label>
+                <input 
+                  className="form-control" 
+                  type="text" 
+                  value={participantForm.name}
+                  onChange={e => setParticipantForm(p => ({ ...p, name: e.target.value }))} 
+                  required 
+                  placeholder="e.g. John Doe"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Email Address</label>
+                <input 
+                  className="form-control" 
+                  type="email" 
+                  value={participantForm.email}
+                  onChange={e => setParticipantForm(p => ({ ...p, email: e.target.value }))} 
+                  required 
+                  placeholder="e.g. john@example.com"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Phone Number</label>
+                <input 
+                  className="form-control" 
+                  type="tel" 
+                  value={participantForm.phone}
+                  onChange={e => setParticipantForm(p => ({ ...p, phone: e.target.value }))} 
+                  required 
+                  placeholder="e.g. +91 9876543210"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Password</label>
+                <input 
+                  className="form-control" 
+                  type="password" 
+                  value={participantForm.password}
+                  onChange={e => setParticipantForm(p => ({ ...p, password: e.target.value }))} 
+                  required 
+                  placeholder="Min 6 characters"
+                  minLength="6"
+                />
+              </div>
+              <div className="modal-footer mt-6">
+                <button type="button" className="btn cursor-pointer" onClick={() => setAddParticipantModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary cursor-pointer" disabled={loading}>
+                  {loading ? 'Creating...' : 'Create Participant'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+
       <ParticipantProfileView
         open={!!viewingParticipant}
         userId={viewingParticipant?.id}
