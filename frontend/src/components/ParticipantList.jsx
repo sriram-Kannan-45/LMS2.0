@@ -123,13 +123,13 @@ function ParticipantList({
 
   if (!participants || participants.length === 0) {
     return (
-      <div className="text-center py-10" role="status" aria-live="polite">
-        <h3 className="text-sm font-semibold text-slate-800 mb-1">No Participants Yet</h3>
-        <p className="text-sm text-slate-500 mb-4">Participants will appear here once they register.</p>
+      <div className="empty-state" role="status" aria-live="polite">
+        <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>No Participants Yet</h3>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 16 }}>Participants will appear here once they register.</p>
         {onRefresh && (
           <button 
             onClick={onRefresh}
-            className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition cursor-pointer text-sm font-semibold"
+            className="btn btn-primary btn-sm"
             aria-label="Refresh participant list"
           >
             Refresh List
@@ -148,20 +148,28 @@ function ParticipantList({
         {/* Search */}
         <div className="relative flex-1 max-w-md">
           <label htmlFor="participant-search" className="sr-only">Search participants</label>
-          <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+          <Search className="absolute left-3.5 top-3.5 w-4 h-4" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
           <input
             id="participant-search"
             type="text"
             placeholder="Search by name, email, or phone..."
             value={searchTerm}
             onChange={handleSearchChange}
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all duration-200 text-sm"
+            style={{
+              width: '100%', padding: '8px 14px 8px 36px', fontSize: 13, height: 38,
+              fontFamily: 'inherit', background: 'var(--bg-surface)',
+              border: '1.5px solid var(--border-default)', borderRadius: 10,
+              color: 'var(--text-primary)', outline: 'none',
+              transition: 'border-color 200ms ease, box-shadow 200ms ease'
+            }}
+            onFocus={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.12)' }}
+            onBlur={e => { e.target.style.borderColor = 'var(--border-default)'; e.target.style.boxShadow = 'none' }}
             aria-label="Search participants by name, email, or phone"
           />
         </div>
 
         {/* Segmented Filter Pills */}
-        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+        <div className="flex items-center gap-1" style={{ background: 'var(--bg-subtle)', borderRadius: 10, padding: 3 }}>
           {[
             { key: 'all', label: 'All', count: counts.all },
             { key: 'APPROVED', label: 'Approved', count: counts.APPROVED },
@@ -172,11 +180,14 @@ function ParticipantList({
               key={chip.key}
               type="button"
               onClick={() => { setStatusFilter(chip.key); setCurrentPage(1) }}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                statusFilter === chip.key
-                  ? 'bg-white text-slate-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
+              style={{
+                padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit', border: 'none',
+                transition: 'all 180ms ease',
+                background: statusFilter === chip.key ? 'var(--bg-surface)' : 'transparent',
+                color: statusFilter === chip.key ? 'var(--text-primary)' : 'var(--text-secondary)',
+                boxShadow: statusFilter === chip.key ? 'var(--shadow-sm)' : 'none'
+              }}
             >
               {chip.label} ({chip.count})
             </button>
@@ -184,13 +195,7 @@ function ParticipantList({
         </div>
       </div>
 
-      <div 
-        id="search-results" 
-        className="text-xs text-slate-500 dark:text-slate-400 font-semibold pl-1 pb-1"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }} role="status" aria-live="polite" aria-atomic="true">
         {resultsMessage}
       </div>
 
@@ -212,11 +217,17 @@ function ParticipantList({
             {paginatedItems.map((p) => (
               <tr key={p.id}>
                 <td>
-                  <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-medium flex-shrink-0">
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 9999,
+                    background: 'var(--accent-light)', color: 'var(--accent-hover)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, fontWeight: 700, fontFamily: "'Outfit', sans-serif",
+                    flexShrink: 0
+                  }}>
                     {getInitials(p.name)}
                   </div>
                 </td>
-                <td className="font-medium text-slate-800">{p.name || '-'}</td>
+                <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.name || '-'}</td>
                 <td style={{ color: 'var(--text-secondary)' }}>{p.email}</td>
                 <td style={{ color: 'var(--text-secondary)' }}>{p.phone || '-'}</td>
                 <td style={{ color: 'var(--text-secondary)' }}>
@@ -225,12 +236,12 @@ function ParticipantList({
                 <td>
                   <StatusBadge status={p.status || 'PENDING'} size="sm" />
                 </td>
-                <td className="text-right">
-                  <div className="flex justify-end gap-1">
+                <td style={{ textAlign: 'right' }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
                     {onView && (
                       <button
                         onClick={() => onView(p)}
-                        className="p-1.5 text-slate-400 hover:text-violet-600 rounded transition-all cursor-pointer"
+                        className="btn-icon btn-sm"
                         title="View Profile"
                       >
                         <Eye className="w-3.5 h-3.5" />
@@ -238,7 +249,7 @@ function ParticipantList({
                     )}
                     <button
                       onClick={() => { setEditingParticipant(p); setEditStatus(p.status || 'PENDING') }}
-                      className="p-1.5 text-slate-400 hover:text-amber-600 rounded transition-all cursor-pointer"
+                      className="btn-icon btn-sm"
                       title="Edit Status"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
@@ -246,7 +257,7 @@ function ParticipantList({
                     {onDelete && (
                       <button
                         onClick={() => handleDelete(p.id, p.name)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 rounded transition-all cursor-pointer"
+                        className="btn-icon btn-sm"
                         title="Remove Participant"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -262,24 +273,24 @@ function ParticipantList({
 
       {/* Pagination */}
         {totalPages > 1 && (
-        <nav className="flex justify-center items-center gap-2 mt-6" aria-label="Pagination">
+        <nav style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24 }} aria-label="Pagination">
           <button
             onClick={handlePreviousPage}
             disabled={currentPage === 1}
-            className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-50 hover:bg-slate-50 transition cursor-pointer font-medium text-slate-600"
+            className="btn btn-sm"
             aria-label="Previous page"
           >
             Previous
           </button>
           
-          <div className="text-xs text-slate-500 font-medium px-2" role="status">
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, padding: '0 8px' }} role="status">
             Page {currentPage} of {totalPages}
           </div>
           
           <button
             onClick={handleNextPage}
             disabled={currentPage === totalPages}
-            className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg disabled:opacity-50 hover:bg-slate-50 transition cursor-pointer font-medium text-slate-600"
+            className="btn btn-sm"
             aria-label="Next page"
           >
             Next
@@ -295,46 +306,57 @@ function ParticipantList({
               <h3>Manage Participant Status</h3>
               <button className="modal-close" onClick={() => setEditingParticipant(null)}>×</button>
             </div>
-            <div className="modal-body space-y-4">
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="w-9 h-9 rounded-lg bg-slate-200 text-slate-600 flex items-center justify-center font-semibold text-sm">
+            <div className="modal-body">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'var(--bg-subtle)', borderRadius: 10, border: '1px solid var(--border-default)' }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: 'var(--accent-light)', color: 'var(--accent-hover)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 700, fontSize: 13, fontFamily: "'Outfit', sans-serif"
+                }}>
                   {getInitials(editingParticipant.name)}
                 </div>
                 <div>
-                  <h4 className="font-semibold text-slate-800 text-sm">{editingParticipant.name}</h4>
-                  <p className="text-xs text-slate-400">{editingParticipant.email}</p>
+                  <h4 style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{editingParticipant.name}</h4>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{editingParticipant.email}</p>
                 </div>
               </div>
 
-              <div className="form-group mt-4">
+              <div className="form-group" style={{ marginTop: 16 }}>
                 <label className="form-label">Account Status</label>
-                <div className="flex gap-2 mt-2">
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button
                     type="button"
                     onClick={() => setEditStatus('APPROVED')}
-                    className={`flex-1 py-2.5 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
-                      editStatus === 'APPROVED'
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
+                    style={{
+                      flex: 1, padding: '10px 16px', borderRadius: 10, border: '1px solid',
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      transition: 'all 180ms ease',
+                      background: editStatus === 'APPROVED' ? 'rgba(16,185,129,0.08)' : 'transparent',
+                      color: editStatus === 'APPROVED' ? '#059669' : 'var(--text-secondary)',
+                      borderColor: editStatus === 'APPROVED' ? 'rgba(16,185,129,0.3)' : 'var(--border-default)'
+                    }}
                   >
-                    <Check className="w-3.5 h-3.5 inline mr-1" /> Approved
+                    <Check className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} /> Approved
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditStatus('REJECTED')}
-                    className={`flex-1 py-2.5 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
-                      editStatus === 'REJECTED'
-                        ? 'bg-red-50 border-red-500 text-red-700'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
+                    style={{
+                      flex: 1, padding: '10px 16px', borderRadius: 10, border: '1px solid',
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      transition: 'all 180ms ease',
+                      background: editStatus === 'REJECTED' ? 'rgba(239,68,68,0.08)' : 'transparent',
+                      color: editStatus === 'REJECTED' ? '#dc2626' : 'var(--text-secondary)',
+                      borderColor: editStatus === 'REJECTED' ? 'rgba(239,68,68,0.3)' : 'var(--border-default)'
+                    }}
                   >
-                    <X className="w-3.5 h-3.5 inline mr-1" /> Rejected
+                    <X className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} /> Rejected
                   </button>
                 </div>
               </div>
 
-              <div className="flex gap-2 justify-end mt-4">
+              <div className="modal-footer">
                 <button type="button" className="btn btn-sm" onClick={() => setEditingParticipant(null)}>Cancel</button>
                 <button type="button" className="btn btn-sm btn-primary" onClick={handleSaveStatus}>Save Status</button>
               </div>

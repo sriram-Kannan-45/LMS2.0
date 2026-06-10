@@ -512,7 +512,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'overview' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Dashboard Overview</h2>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Dashboard Overview</h2>
           </div>
           {initialLoading ? (
             <SkeletonStats />
@@ -553,7 +553,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                 </div>
               </div>
               <div className="card p-5 mt-4">
-                <h3 className="text-sm font-semibold text-slate-800 mb-4">Feedback Trends</h3>
+                <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>Feedback Trends</h3>
                 {feedbacks.length > 0 ? (
                   <div style={{ height: 260 }}>
                     <Bar data={getChartData()} options={{ maintainAspectRatio: false }} />
@@ -573,7 +573,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'pending' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Pending Approval</h2>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Pending Approval</h2>
           </div>
           <div className="card p-0">
             {initialLoading ? (
@@ -611,7 +611,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'trainings' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Training Sessions <span className="text-slate-400 font-normal text-sm ml-1">({trainings.length})</span></h2>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Training Sessions <span className="text-slate-400 font-normal text-sm ml-1">({trainings.length})</span></h2>
             <button className="btn btn-primary btn-sm" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
           </div>
           <div className="card p-0">
@@ -658,7 +658,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'trainers' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Trainers <span className="text-slate-400 font-normal text-sm ml-1">({trainers.length})</span></h2>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Trainers <span className="text-slate-400 font-normal text-sm ml-1">({trainers.length})</span></h2>
             <button className="btn btn-primary btn-sm" onClick={() => handleTabChange('createTrainer')}>+ Add Trainer</button>
           </div>
           <div className="card">
@@ -676,7 +676,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'participants' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Participants</h2>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Participants</h2>
             <button className="btn btn-primary btn-sm" onClick={() => setAddParticipantModal(true)}>+ Add Participant</button>
           </div>
           <div className="card">
@@ -724,7 +724,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'surveys' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Survey Questions</h2>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Survey Questions</h2>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
             <div className="card">
@@ -804,7 +804,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'notes' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Notes Management</h2>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Notes Management</h2>
             <div className="flex gap-2">
               {[
                 { key: '', label: 'All', count: notes.length },
@@ -814,11 +814,16 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                 <button
                   key={btn.key}
                   onClick={() => { setNoteFilter(btn.key); fetchNotes(btn.key) }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                    noteFilter === btn.key
-                      ? 'bg-violet-600 text-white border-violet-600'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '4px 12px', fontSize: 12, fontWeight: 600,
+                    borderRadius: 9999, border: '1px solid var(--border-default)',
+                    cursor: 'pointer', fontFamily: 'inherit',
+                    transition: 'all 180ms ease',
+                    background: noteFilter === btn.key ? 'var(--accent)' : 'transparent',
+                    color: noteFilter === btn.key ? '#fff' : 'var(--text-secondary)',
+                    borderColor: noteFilter === btn.key ? 'var(--accent)' : 'var(--border-default)'
+                  }}
                 >
                   {btn.label} ({btn.count})
                 </button>
@@ -843,16 +848,19 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            isApproved ? 'bg-emerald-50 text-emerald-700' :
-                            isPending ? 'bg-amber-50 text-amber-700' :
-                            'bg-red-50 text-red-700'
-                          }`}>{note.status}</span>
-                          <span className="text-xs text-slate-400">{fmtDate(note.created_at)}</span>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            padding: '3px 10px', fontSize: 11, fontWeight: 600,
+                            borderRadius: 9999, border: '1px solid',
+                            background: isApproved ? 'rgba(16,185,129,0.08)' : isPending ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)',
+                            color: isApproved ? '#059669' : isPending ? '#d97706' : '#dc2626',
+                            borderColor: isApproved ? 'rgba(16,185,129,0.15)' : isPending ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)'
+                          }}>{note.status}</span>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(note.created_at)}</span>
                         </div>
-                        <h4 className="font-semibold text-sm text-slate-800">{note.title}</h4>
-                        <p className="text-xs text-slate-500 mt-0.5">{note.trainer?.name || 'Unknown'}</p>
-                        <p className="text-sm text-slate-600 mt-2 line-clamp-2">{note.content}</p>
+                        <h4 style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>{note.title}</h4>
+                        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{note.trainer?.name || 'Unknown'}</p>
+                        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.5 }}>{note.content}</p>
                       </div>
                       {isPending && (
                         <div className="flex gap-2 flex-shrink-0">
@@ -873,7 +881,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'feedback' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Feedback Reports</h2>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Feedback Reports</h2>
           </div>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div className="card p-5">
@@ -1051,7 +1059,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'programs' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Programs & Courses</h2>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Programs & Courses</h2>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24, marginBottom: 24 }}>
             <div className="card">
@@ -1153,7 +1161,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                           <td className="font-medium">{c.title}</td>
                           <td style={{ color: 'var(--text-secondary)' }}>{c.programTitle || '-'}</td>
                           <td style={{ color: 'var(--text-secondary)' }}>{c.trainerName || 'Unassigned'}</td>
-                          <td><span className={`badge ${c.status === 'ACTIVE' ? 'badge-green' : 'badge-gray'}`}>{c.status || 'ACTIVE'}</span></td>
+                          <td><span className={`badge ${c.status === 'ACTIVE' ? 'badge-green' : 'badge-gray'}`} style={{ fontWeight: 600 }}>{c.status || 'ACTIVE'}</span></td>
                           <td><button className="btn btn-sm btn-danger" onClick={() => handleDeleteCourse(c.id, c.title)}>Delete</button></td>
                         </tr>
                       ))}
