@@ -12,6 +12,7 @@ import { Bar } from 'react-chartjs-2'
 import { motion, AnimatePresence } from 'framer-motion'
 import Skeleton, { SkeletonStats, SkeletonTable } from '../components/Skeleton'
 import { API, API_BASE } from '../api/api'
+import { BookOpen, Users, GraduationCap, ClipboardList, MessageSquare, Star, Trophy, Award } from 'lucide-react'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -430,43 +431,115 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               {initialLoading ? (
                 <SkeletonStats />
               ) : (
-                <div className="stats-grid">
-                  <div className="stat-card">
-                    <div className="stat-label">Total Trainings</div>
-                    <div className="stat-value">{stats.totalTrainings ?? 0}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                  {/* Card 1: Total Trainings */}
+                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-blue-500">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Trainings</span>
+                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.totalTrainings ?? 0}</h4>
+                      </div>
+                      <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 flex items-center justify-center border border-blue-100/30 dark:border-blue-900/20 transition-transform duration-300 group-hover:scale-110">
+                        <BookOpen className="w-6 h-6" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="stat-card purple">
-                    <div className="stat-label">Trainers</div>
-                    <div className="stat-value">{stats.totalTrainers ?? 0}</div>
+
+                  {/* Card 2: Trainers */}
+                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-violet-500">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Trainers</span>
+                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.totalTrainers ?? 0}</h4>
+                      </div>
+                      <div className="w-12 h-12 rounded-xl bg-violet-50 dark:bg-violet-950/20 text-violet-600 dark:text-violet-400 flex items-center justify-center border border-violet-100/30 dark:border-violet-900/20 transition-transform duration-300 group-hover:scale-110">
+                        <Users className="w-6 h-6" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="stat-card green">
-                    <div className="stat-label">Participants</div>
-                    <div className="stat-value">{stats.totalParticipants ?? 0}</div>
+
+                  {/* Card 3: Participants */}
+                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-emerald-500">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Participants</span>
+                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.totalParticipants ?? 0}</h4>
+                      </div>
+                      <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-100/30 dark:border-emerald-900/20 transition-transform duration-300 group-hover:scale-110">
+                        <GraduationCap className="w-6 h-6" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="stat-card orange">
-                    <div className="stat-label">Active Enrollments</div>
-                    <div className="stat-value">{stats.totalEnrollments ?? 0}</div>
+
+                  {/* Card 4: Active Enrollments */}
+                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-amber-500">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Active Enrollments</span>
+                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.totalEnrollments ?? 0}</h4>
+                      </div>
+                      <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-100/30 dark:border-amber-900/20 transition-transform duration-300 group-hover:scale-110">
+                        <ClipboardList className="w-6 h-6" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="stat-card red">
-                    <div className="stat-label">Feedback Responses</div>
-                    <div className="stat-value">{stats.totalFeedbacks ?? 0}</div>
+
+                  {/* Card 5: Feedback Responses */}
+                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-rose-500">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Feedback Responses</span>
+                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.totalFeedbacks ?? 0}</h4>
+                      </div>
+                      <div className="w-12 h-12 rounded-xl bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 flex items-center justify-center border border-rose-100/30 dark:border-rose-900/20 transition-transform duration-300 group-hover:scale-110">
+                        <MessageSquare className="w-6 h-6" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="stat-card">
-                    <div className="stat-label">Avg Trainer Rating</div>
-                    <div className="stat-value">{stats.avgTrainerRating ?? '0.0'}</div>
+
+                  {/* Card 6: Avg Trainer Rating */}
+                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-yellow-500">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Avg Trainer Rating</span>
+                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.avgTrainerRating ?? '0.0'} <span className="text-xs text-slate-400 font-semibold">/ 5</span></h4>
+                      </div>
+                      <div className="w-12 h-12 rounded-xl bg-yellow-50 dark:bg-yellow-950/20 text-yellow-600 dark:text-yellow-400 flex items-center justify-center border border-yellow-100/30 dark:border-yellow-900/20 transition-transform duration-300 group-hover:scale-110">
+                        <Star className="w-6 h-6" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="stat-card purple">
-                    <div className="stat-label">Top Trainer</div>
-                    <div className="stat-value" style={{ fontSize: 18 }}>{topTrainer.name} <span style={{ fontSize: 14 }}>({topTrainer.avg > 0 ? topTrainer.avg.toFixed(1) : '-'})</span></div>
+
+                  {/* Card 7: Top Trainer */}
+                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-indigo-500">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1 pr-2">
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Top Trainer</span>
+                        <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 mt-2 truncate">{topTrainer.name}</h4>
+                        <span className="text-xs text-slate-500 font-semibold">Avg: {topTrainer.avg > 0 ? topTrainer.avg.toFixed(1) : '-'}</span>
+                      </div>
+                      <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-100/30 dark:border-indigo-900/20 transition-transform duration-300 group-hover:scale-110 flex-shrink-0">
+                        <Trophy className="w-6 h-6" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="stat-card green">
-                    <div className="stat-label">Overall Satisfaction</div>
-                    <div className="stat-value">{stats.satisfactionScore ?? '0.0'} <span style={{ fontSize: 14 }}>/ 5.0</span></div>
+
+                  {/* Card 8: Overall Satisfaction */}
+                  <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group border-t-4 border-t-teal-500">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Satisfaction</span>
+                        <h4 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100 mt-2">{stats.satisfactionScore ?? '0.0'} <span className="text-xs text-slate-400 font-semibold">/ 5</span></h4>
+                      </div>
+                      <div className="w-12 h-12 rounded-xl bg-teal-50 dark:bg-teal-950/20 text-teal-600 dark:text-teal-400 flex items-center justify-center border border-teal-100/30 dark:border-teal-900/20 transition-transform duration-300 group-hover:scale-110">
+                        <Award className="w-6 h-6" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
-              <div className="card" style={{ marginTop: 20 }}>
-                <h3 style={{ marginBottom: 16 }}>Feedback Trends Overview</h3>
+              <div className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm mt-6">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Feedback Trends Overview</h3>
                 {initialLoading ? (
                   <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Skeleton style={{ width: '100%', height: 250, borderRadius: 12 }} />
@@ -538,9 +611,9 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               transition={{ duration: 0.3 }}
             >
               <div className="card">
-                <div className="card-header">
-                  <h3>All Training Sessions ({trainings.length})</h3>
-                  <button className="btn btn-primary btn-sm" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">All Training Sessions ({trainings.length})</h3>
+                  <button className="btn btn-primary btn-sm rounded-xl cursor-pointer" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
                 </div>
                 {initialLoading ? (
                   <SkeletonTable rows={5} />
@@ -593,12 +666,11 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               transition={{ duration: 0.3 }}
             >
               <div className="card">
-                <div className="card-header">
-                  <h3>Trainers / Instructors ({trainers.length})</h3>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Trainers / Instructors ({trainers.length})</h3>
                   <button 
-                    className="btn btn-sm btn-primary"
+                    className="btn btn-sm btn-primary rounded-xl cursor-pointer"
                     onClick={() => handleTabChange('createTrainer')}
-                    style={{ marginLeft: 'auto' }}
                   >
                     + Add Trainer
                   </button>

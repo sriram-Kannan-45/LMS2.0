@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useCallback, memo } from 'react'
-import { Search, ChevronUp, ChevronDown, Trash2, Eye } from 'lucide-react'
+import { Search, ChevronUp, ChevronDown, Trash2, Eye, Phone, Calendar } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import SkeletonCard from './SkeletonCard'
 
@@ -135,20 +134,20 @@ function ParticipantList({ participants = [], loading = false, onDelete = null, 
   const resultsMessage = `Showing ${paginatedItems.length} of ${filteredAndSorted.length} participants`
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-2 mb-4">
-        <h2 className="text-xl font-bold text-gray-900 sr-only">Participant Management</h2>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2 mb-2">
+        <h2 className="text-xl font-bold text-slate-900 sr-only">Participant Management</h2>
         <div className="flex flex-col md:flex-row gap-3">
           <div className="flex-1 relative">
             <label htmlFor="participant-search" className="sr-only">Search participants</label>
-            <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" aria-hidden="true" />
+            <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400 dark:text-slate-500" aria-hidden="true" />
             <input
               id="participant-search"
               type="text"
               placeholder="Search by name, email, or phone..."
               value={searchTerm}
               onChange={handleSearchChange}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all duration-200 text-sm shadow-sm"
               aria-label="Search participants by name, email, or phone"
               aria-describedby="search-results"
             />
@@ -159,19 +158,19 @@ function ParticipantList({ participants = [], loading = false, onDelete = null, 
             id="status-filter"
             value={statusFilter}
             onChange={handleStatusFilterChange}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="px-4 py-2.5 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-xl text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all duration-200 text-sm shadow-sm cursor-pointer"
             aria-label="Filter participants by status"
           >
-            <option value="all">All Status</option>
-            <option value="APPROVED">✓ Approved</option>
-            <option value="PENDING">⏳ Pending</option>
-            <option value="REJECTED">✕ Rejected</option>
+            <option value="all">All Statuses</option>
+            <option value="APPROVED">Approved</option>
+            <option value="PENDING">Pending</option>
+            <option value="REJECTED">Rejected</option>
           </select>
         </div>
         
         <div 
           id="search-results" 
-          className="text-sm text-gray-600"
+          className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-1 mt-1"
           role="status"
           aria-live="polite"
           aria-atomic="true"
@@ -180,60 +179,68 @@ function ParticipantList({ participants = [], loading = false, onDelete = null, 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" role="list">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" role="list">
         {paginatedItems.map((p, i) => (
           <article 
             key={p.id} 
-            className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition focus-within:ring-2 focus-within:ring-blue-500"
+            className="bg-white dark:bg-slate-900/30 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/40 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between"
             role="listitem"
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3 flex-1">
-                <div 
-                  className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-sm font-bold"
-                  aria-label={`Avatar for ${p.name || 'Unknown participant'}`}
-                >
-                  {getInitials(p.name)}
+            <div>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div 
+                    className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-950/40 flex items-center justify-center text-sm font-bold transition-transform duration-300 group-hover:scale-105"
+                    aria-label={`Avatar for ${p.name || 'Unknown participant'}`}
+                  >
+                    {getInitials(p.name)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm truncate group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors duration-200">{p.name || '-'}</h3>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">{p.email}</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-800 truncate">{p.name || '-'}</h3>
-                  <p className="text-xs text-gray-500 truncate">{p.email}</p>
-                </div>
+                <StatusBadge status={p.status || 'PENDING'} size="sm" />
               </div>
-              <StatusBadge status={p.status || 'PENDING'} size="sm" />
+              
+              <dl className="text-xs text-slate-600 dark:text-slate-400 space-y-2 my-4 py-4 border-t border-b border-slate-100 dark:border-slate-800/60">
+                {p.phone && (
+                  <div className="flex items-center gap-2">
+                    <dt className="sr-only">Phone:</dt>
+                    <dd className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+                      <span>{p.phone}</span>
+                    </dd>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <dt className="sr-only">Joined Date:</dt>
+                  <dd className="flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" aria-hidden="true" />
+                    <span>Joined {new Date(p.created_at || p.joinedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                  </dd>
+                </div>
+              </dl>
             </div>
-            
-            <dl className="text-sm text-gray-600 space-y-1 mb-3 pb-3 border-b">
-              {p.phone && (
-                <div>
-                  <dt className="sr-only">Phone:</dt>
-                  <dd><span className="font-medium" aria-hidden="true">📞</span> {p.phone}</dd>
-                </div>
-              )}
-              <div>
-                <dt className="sr-only">Joined Date:</dt>
-                <dd><span className="font-medium" aria-hidden="true">📅</span> {new Date(p.created_at || p.joinedAt).toLocaleDateString('en-IN')}</dd>
-              </div>
-            </dl>
 
             {(onView || onDelete) && (
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="flex gap-2 mt-2 pt-1">
                 {onView && (
                   <button
                     onClick={() => onView(p)}
-                    className="flex-1 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition text-sm font-medium flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    className="flex-1 px-3 py-2 text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-all duration-200 text-xs font-semibold flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-1 cursor-pointer"
                     aria-label={`View profile for ${p.name}`}
                   >
-                    <Eye className="w-4 h-4" aria-hidden="true" /> View profile
+                    <Eye className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 group-hover:text-slate-600" aria-hidden="true" /> View profile
                   </button>
                 )}
                 {onDelete && (
                   <button
                     onClick={() => handleDelete(p.id, p.name)}
-                    className="flex-1 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition text-sm font-medium flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                    className="px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl transition-all duration-200 text-xs font-semibold flex items-center justify-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-1 cursor-pointer"
                     aria-label={`Remove participant ${p.name}`}
                   >
-                    <Trash2 className="w-4 h-4" aria-hidden="true" /> Remove
+                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" /> Remove
                   </button>
                 )}
               </div>
@@ -243,25 +250,25 @@ function ParticipantList({ participants = [], loading = false, onDelete = null, 
       </div>
 
       {totalPages > 1 && (
-        <nav className="flex justify-center items-center gap-2 mt-6" aria-label="Pagination">
+        <nav className="flex justify-center items-center gap-2 mt-8" aria-label="Pagination">
           <button
             onClick={handlePreviousPage}
             disabled={currentPage === 1}
-            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="px-4 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-xl disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition duration-200 cursor-pointer"
             aria-label="Previous page"
             aria-disabled={currentPage === 1}
           >
             Previous
           </button>
           
-          <div className="text-sm text-gray-600" role="status" aria-live="polite">
+          <div className="text-xs text-slate-500 dark:text-slate-400 font-semibold px-3" role="status" aria-live="polite">
             Page <span aria-current={currentPage === 1 ? 'page' : undefined}>{currentPage}</span> of {totalPages}
           </div>
           
           <button
             onClick={handleNextPage}
             disabled={currentPage === totalPages}
-            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="px-4 py-2 text-sm border border-slate-200 dark:border-slate-800 rounded-xl disabled:opacity-50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition duration-200 cursor-pointer"
             aria-label="Next page"
             aria-disabled={currentPage === totalPages}
           >

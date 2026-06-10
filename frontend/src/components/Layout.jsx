@@ -142,19 +142,19 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.04 }}
-              className={`sidebar-nav-item ${activeTab === item.key ? 'active' : ''}`}
+              className={`sidebar-nav-item relative ${activeTab === item.key ? 'active font-semibold text-violet-600 dark:text-violet-400 bg-violet-50/50 dark:bg-violet-950/20' : ''}`}
               onClick={() => { onTabChange(item.key); closeSidebar() }}
             >
-              <span className="nav-icon">{iconMap[item.icon]}</span>
-              <span>{item.label}</span>
+              <span className={`nav-icon transition-colors duration-200 ${activeTab === item.key ? 'text-violet-600 dark:text-violet-400 opacity-100 scale-105' : 'text-slate-400 dark:text-slate-500'}`}>
+                {iconMap[item.icon]}
+              </span>
+              <span className="pl-1.5">{item.label}</span>
               {activeTab === item.key && (
                 <motion.div
                   layoutId="activeNavIndicator"
-                  style={{ marginLeft: 'auto' }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                >
-                  <ChevronRight size={14} className="text-indigo-500" style={{ color: '#6366f1', opacity: 0.6 }} />
-                </motion.div>
+                  className="absolute left-0 top-[20%] bottom-[20%] w-[3px] rounded-r-full bg-gradient-to-b from-violet-500 to-indigo-600"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                />
               )}
             </motion.button>
           ))}
