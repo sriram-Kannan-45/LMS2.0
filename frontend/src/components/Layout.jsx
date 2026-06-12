@@ -87,7 +87,7 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
   const closeSidebar = () => setSidebarOpen(false)
 
   return (
-    <div className={`app-layout${isParticipant ? ' theme-academic' : ''}`}>
+    <div className={`app-layout${user.role === 'PARTICIPANT' || user.role === 'ADMIN' ? ' theme-academic' : ''}`}>
       {/* Sidebar Overlay (mobile) */}
       <AnimatePresence>
         {sidebarOpen && (

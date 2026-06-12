@@ -5,12 +5,12 @@ function LoginRedirect() {
   const lastRole = localStorage.getItem('lastRole')
 
   if (lastRole === 'ADMIN') {
-    return <Navigate to="/admin/login" state={location.state} replace />
+    return <Navigate to="/admin" state={location.state} replace />
   }
   if (lastRole === 'TRAINER') {
-    return <Navigate to="/trainer/login" state={location.state} replace />
+    return <Navigate to="/trainer" state={location.state} replace />
   }
-  return <Navigate to="/participant/login" state={location.state} replace />
+  return <Navigate to="/participant" state={location.state} replace />
 }
 
 export default LoginRedirect

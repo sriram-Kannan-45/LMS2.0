@@ -6,15 +6,10 @@ import ParticipantProfileView from '../components/shared/ParticipantProfileView'
 import AssessmentSessionsPanel from '../components/admin/AssessmentSessionsPanel'
 import AnimatedDropdown from '../components/AnimatedDropdown'
 import { useToast } from '../components/Toast'
-import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend
-} from 'chart.js'
-import { Bar } from 'react-chartjs-2'
-import Skeleton, { SkeletonStats, SkeletonTable } from '../components/Skeleton'
+import Skeleton, { SkeletonTable } from '../components/Skeleton'
 import { API, API_BASE } from '../api/api'
-import { Loader2, TrendingUp, Users, BookOpen, MessageSquare, Star, Award, UserCheck, Activity } from 'lucide-react'
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
+import { Loader2, TrendingUp, MessageSquare, Star } from 'lucide-react'
+import AdminOverviewTab from '../components/admin/tabs/AdminOverviewTab'
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
@@ -36,64 +31,6 @@ const containerVariants = {
 const itemVariants = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } }
-}
-
-const statCardVariants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: (i) => ({
-    opacity: 1, y: 0,
-    transition: { delay: i * 0.04, duration: 0.35, ease: [0.16, 1, 0.3, 1] }
-  })
-}
-
-const statIcons = {
-  trainings: <BookOpen size={20} />,
-  trainers: <Users size={20} />,
-  participants: <UserCheck size={20} />,
-  enrollments: <Activity size={20} />,
-  feedbacks: <MessageSquare size={20} />,
-  rating: <Star size={20} />,
-  topTrainer: <Award size={20} />,
-  satisfaction: <TrendingUp size={20} />,
-}
-
-const statColors = {
-  trainings: { bg: 'rgba(124,58,237,0.10)', text: '#7C3AED' },
-  trainers: { bg: 'rgba(6,182,212,0.10)', text: '#0891B2' },
-  participants: { bg: 'rgba(16,185,129,0.10)', text: '#059669' },
-  enrollments: { bg: 'rgba(245,158,11,0.10)', text: '#D97706' },
-  feedbacks: { bg: 'rgba(139,92,246,0.10)', text: '#8B5CF6' },
-  rating: { bg: 'rgba(236,72,153,0.10)', text: '#DB2777' },
-  topTrainer: { bg: 'rgba(251,146,60,0.10)', text: '#EA580C' },
-  satisfaction: { bg: 'rgba(34,211,238,0.10)', text: '#0891B2' },
-}
-
-function StatCard({ label, value, icon, color, index = 0 }) {
-  return (
-    <motion.div
-      className="stat-card"
-      variants={statCardVariants}
-      initial="hidden"
-      animate="visible"
-      custom={index}
-      whileHover={{ scale: 1.02, y: -2 }}
-      style={{ minHeight: 140, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
-        <span className="stat-label">{label}</span>
-        <div style={{
-          width: 38, height: 38, borderRadius: 10,
-          background: color?.bg || 'rgba(124,58,237,0.10)',
-          color: color?.text || '#7C3AED',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0
-        }}>
-          {icon}
-        </div>
-      </div>
-      <div className="stat-value">{value}</div>
-    </motion.div>
-  )
 }
 
 function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
@@ -524,56 +461,16 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
     { key: 'surveys', label: 'Survey Config' },
   ]
 
-  const getChartData = () => {
-    const trainingGroups = {}
-    feedbacks.forEach(f => {
-      if (!trainingGroups[f.trainingTitle]) {
-        trainingGroups[f.trainingTitle] = { tr: 0, sr: 0, count: 0 }
-      }
-      trainingGroups[f.trainingTitle].tr += f.trainerRating
-      trainingGroups[f.trainingTitle].sr += f.subjectRating
-      trainingGroups[f.trainingTitle].count++
-    })
-    const labels = Object.keys(trainingGroups)
-    const trData = labels.map(l => (trainingGroups[l].tr / trainingGroups[l].count).toFixed(1))
-    const srData = labels.map(l => (trainingGroups[l].sr / trainingGroups[l].count).toFixed(1))
-    return {
-      labels,
-      datasets: [
-        { label: 'Avg Trainer Rating', data: trData, backgroundColor: 'rgba(99, 102, 241, 0.6)' },
-        { label: 'Avg Subject Rating', data: srData, backgroundColor: 'rgba(139, 92, 246, 0.5)' }
-      ]
-    }
-  }
-
-  const getTopTrainer = () => {
-    const trStats = {}
-    feedbacks.forEach(f => {
-      if (!f.trainerName) return
-      if (!trStats[f.trainerName]) trStats[f.trainerName] = { score: 0, count: 0 }
-      trStats[f.trainerName].score += f.trainerRating
-      trStats[f.trainerName].count++
-    })
-    let top = { name: '-', avg: 0 }
-    Object.entries(trStats).forEach(([name, data]) => {
-      const avg = data.score / data.count
-      if (avg > top.avg) { top = { name, avg } }
-    })
-    return top
-  }
-
-  const topTrainer = getTopTrainer()
-
   if (!user || !user.token) {
     return (
       <div style={{
         minHeight: '100vh',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        background: '#F8F9FC'
+        background: 'var(--academic-bg)'
       }}>
-        <Loader2 style={{ animation: 'spin 1s linear infinite', color: '#7C3AED' }} size={24} />
-        <span style={{ marginTop: '12px', fontSize: '13px', color: '#6B7280' }}>Verifying session...</span>
+        <Loader2 style={{ animation: 'spin 1s linear infinite', color: 'var(--academic-primary)' }} size={24} />
+        <span style={{ marginTop: '12px', fontSize: '13px', color: 'var(--academic-text-muted)' }}>Verifying session...</span>
       </div>
     )
   }
@@ -584,7 +481,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       fontSize: 34,
       fontWeight: 700,
       letterSpacing: '-0.03em',
-      color: '#111827',
+      color: 'var(--academic-text)',
       lineHeight: 1.2,
       margin: 0
     }}>{title}</h1>
@@ -604,106 +501,27 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
       {/* ── OVERVIEW ── */}
       {tab === 'overview' && (
-        <motion.div variants={itemVariants}>
-          {initialLoading ? (
-            <SkeletonStats />
-          ) : (
-            <motion.div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-                gap: 24,
-                marginBottom: 32
-              }}
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-            >
-              <StatCard
-                label="Total Trainings"
-                value={stats.totalTrainings ?? 0}
-                icon={statIcons.trainings}
-                color={statColors.trainings}
-                index={0}
-              />
-              <StatCard
-                label="Trainers"
-                value={stats.totalTrainers ?? 0}
-                icon={statIcons.trainers}
-                color={statColors.trainers}
-                index={1}
-              />
-              <StatCard
-                label="Participants"
-                value={stats.totalParticipants ?? 0}
-                icon={statIcons.participants}
-                color={statColors.participants}
-                index={2}
-              />
-              <StatCard
-                label="Active Enrollments"
-                value={stats.totalEnrollments ?? 0}
-                icon={statIcons.enrollments}
-                color={statColors.enrollments}
-                index={3}
-              />
-              <StatCard
-                label="Feedback Responses"
-                value={stats.totalFeedbacks ?? 0}
-                icon={statIcons.feedbacks}
-                color={statColors.feedbacks}
-                index={4}
-              />
-              <StatCard
-                label="Avg Trainer Rating"
-                value={`${stats.avgTrainerRating ?? '0.0'}`}
-                icon={statIcons.rating}
-                color={statColors.rating}
-                index={5}
-              />
-              <StatCard
-                label="Top Trainer"
-                value={topTrainer.name}
-                icon={statIcons.topTrainer}
-                color={statColors.topTrainer}
-                index={6}
-              />
-              <StatCard
-                label="Satisfaction Score"
-                value={`${stats.satisfactionScore ?? '0.0'}`}
-                icon={statIcons.satisfaction}
-                color={statColors.satisfaction}
-                index={7}
-              />
-            </motion.div>
-          )}
-          <motion.div variants={itemVariants} className="card" style={{ padding: 28 }}>
-            <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 600, color: '#111827', marginBottom: 20, letterSpacing: '-0.02em' }}>Feedback Trends</h3>
-            {feedbacks.length > 0 ? (
-              <div style={{ height: 280 }}>
-                <Bar data={getChartData()} options={{ maintainAspectRatio: false }} />
-              </div>
-            ) : (
-              <div className="empty-state">
-                <p style={{ color: 'var(--text-secondary)' }}>Feedback trends will appear once participants start submitting feedback.</p>
-              </div>
-            )}
-          </motion.div>
-        </motion.div>
+        <AdminOverviewTab
+          user={user}
+          stats={stats}
+          feedbacks={feedbacks}
+          initialLoading={initialLoading}
+          loading={loading}
+        />
       )}
 
       {/* ── PENDING APPROVAL ── */}
       {tab === 'pending' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Pending Approval')}
           </div>
-          <div className="card" style={{ padding: 0 }}>
+          <div className="ac-card" style={{ padding: 0 }}>
             {initialLoading ? (
               <SkeletonTable rows={3} />
             ) : pendingParticipants.length === 0 ? (
-              <div className="empty-state">
-                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No participants are currently waiting for approval.</p>
+              <div className="ac-empty">
+                <p style={{ color: 'var(--academic-text-muted)' }}>No participants are currently waiting for approval.</p>
               </div>
             ) : (
               <div className="table-wrapper" style={{ border: 'none' }}>
@@ -712,13 +530,13 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   <tbody>
                     {pendingParticipants.map((p, i) => (
                       <tr key={p.id}>
-                        <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
+                        <td style={{ color: 'var(--academic-text-muted)' }}>{i + 1}</td>
                         <td className="font-medium">{p.name}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{p.email}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{p.phone || '-'}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(p.created_at)}</td>
+                        <td style={{ color: 'var(--academic-text-secondary)' }}>{p.email}</td>
+                        <td style={{ color: 'var(--academic-text-secondary)' }}>{p.phone || '-'}</td>
+                        <td style={{ color: 'var(--academic-text-secondary)' }}>{fmtDate(p.created_at)}</td>
                         <td>
-                          <button className="btn btn-sm btn-primary" onClick={() => handleApproveParticipant(p.id)} disabled={loading}>Approve</button>
+                          <button className="ac-btn ac-btn-sm ac-btn-primary" onClick={() => handleApproveParticipant(p.id)} disabled={loading}>Approve</button>
                         </td>
                       </tr>
                     ))}
@@ -733,17 +551,17 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── TRAININGS (list) ── */}
       {tab === 'trainings' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Training Sessions')}
-            <button className="btn btn-primary" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
+            <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
           </div>
-          <div className="card" style={{ padding: 0 }}>
+          <div className="ac-card" style={{ padding: 0 }}>
             {initialLoading ? (
               <SkeletonTable rows={5} />
             ) : trainings.length === 0 ? (
-              <div className="empty-state">
-                <p style={{ color: 'var(--text-secondary)' }}>No training sessions created yet.</p>
-                <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => handleTabChange('createTraining')}>+ Create Training</button>
+              <div className="ac-empty">
+                <p style={{ color: 'var(--academic-text-muted)' }}>No training sessions created yet.</p>
+                <button className="ac-btn ac-btn-primary" style={{ marginTop: 16 }} onClick={() => handleTabChange('createTraining')}>+ Create Training</button>
               </div>
             ) : (
               <div className="table-wrapper" style={{ border: 'none' }}>
@@ -754,17 +572,17 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   <tbody>
                     {trainings.map((t, i) => (
                       <tr key={t.id}>
-                        <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
+                        <td style={{ color: 'var(--academic-text-muted)' }}>{i + 1}</td>
                         <td className="font-medium">{t.title}</td>
-                        <td>{t.trainerName ? <span className="badge badge-blue">{t.trainerName}</span> : <span className="badge badge-gray">Unassigned</span>}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.startDate)}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.endDate)}</td>
-                        <td>{t.capacity ? t.capacity : <span className="badge badge-gray">∞</span>}</td>
+                        <td>{t.trainerName ? <span className="ac-chip ac-chip-primary">{t.trainerName}</span> : <span className="ac-chip">Unassigned</span>}</td>
+                        <td style={{ color: 'var(--academic-text-secondary)' }}>{fmtDate(t.startDate)}</td>
+                        <td style={{ color: 'var(--academic-text-secondary)' }}>{fmtDate(t.endDate)}</td>
+                        <td>{t.capacity ? t.capacity : <span className="ac-chip">∞</span>}</td>
                         <td>{t.enrolledCount ?? 0}</td>
                         <td>
                           <div className="flex gap-1.5 justify-end">
-                            <button className="btn btn-sm" onClick={() => openEdit(t)}>Edit</button>
-                            <button className="btn btn-sm btn-danger" onClick={() => handleDeleteTraining(t.id, t.title)}>Delete</button>
+                            <button className="ac-btn ac-btn-sm ac-btn-secondary" onClick={() => openEdit(t)}>Edit</button>
+                            <button className="ac-btn ac-btn-sm ac-btn-danger" onClick={() => handleDeleteTraining(t.id, t.title)}>Delete</button>
                           </div>
                         </td>
                       </tr>
@@ -780,11 +598,11 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── TRAINERS (list) ── */}
       {tab === 'trainers' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Trainers')}
-            <button className="btn btn-primary" onClick={() => handleTabChange('createTrainer')}>+ Add Trainer</button>
+            <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTrainer')}>+ Add Trainer</button>
           </div>
-          <div className="card">
+          <div className="ac-card">
             <TrainerList 
               trainers={trainers}
               token={user.token}
@@ -798,13 +616,13 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── PARTICIPANTS ── */}
       {tab === 'participants' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Participants')}
-            <button className="btn btn-primary" onClick={() => setAddParticipantModal(true)}>+ Add Participant</button>
+            <button className="ac-btn ac-btn-primary" onClick={() => setAddParticipantModal(true)}>+ Add Participant</button>
           </div>
-          <div className="card">
+          <div className="ac-card">
             {initialLoading ? (
-              <div className="text-center py-8" style={{ color: 'var(--text-secondary)' }}>Loading participants...</div>
+              <div className="text-center py-8" style={{ color: 'var(--academic-text-muted)' }}>Loading participants...</div>
             ) : (
               <ParticipantList 
                 participants={participants}
@@ -848,12 +666,12 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── SURVEYS ── */}
       {tab === 'surveys' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Survey Questions')}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
-            <div className="card">
-              <div className="card-header"><h3>Add Question</h3></div>
+          <div className="ac-grid-2">
+            <div className="ac-card">
+              <h3 className="ac-section-title" style={{ fontSize: 17, marginBottom: 16 }}>Add Question</h3>
               <form onSubmit={handleCreateQuestion}>
                 <div className="form-group">
                   <AnimatedDropdown
@@ -888,16 +706,16 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                     <input className="form-control" type="text" value={questionForm.options} placeholder="Option A, Option B, Option C" required onChange={e => setQuestionForm(p => ({ ...p, options: e.target.value }))} />
                   </div>
                 )}
-                <button type="submit" className="btn btn-primary" style={{ marginTop: 8 }} disabled={loading}>Add Question</button>
+                <button type="submit" className="ac-btn ac-btn-primary" style={{ marginTop: 8 }} disabled={loading}>Add Question</button>
               </form>
             </div>
-            <div className="card" style={{ padding: 0 }}>
-              <div className="card-header" style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
-                <h3>Questions ({questions.length})</h3>
+            <div className="ac-card" style={{ padding: 0 }}>
+              <div style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
+                <h3 className="ac-section-title" style={{ fontSize: 17 }}>Questions ({questions.length})</h3>
               </div>
               {questions.length === 0 ? (
-                <div className="empty-state">
-                  <p style={{ color: 'var(--text-secondary)' }}>No custom questions added.</p>
+                <div className="ac-empty">
+                  <p style={{ color: 'var(--academic-text-muted)' }}>No custom questions added.</p>
                 </div>
               ) : (
                 <div className="table-wrapper" style={{ border: 'none' }}>
@@ -908,11 +726,11 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                         const trg = q.trainingId ? trainings.find(t => t.id === q.trainingId)?.title || 'Specific' : 'Global'
                         return (
                           <tr key={q.id}>
-                            <td><span className={q.trainingId ? "badge badge-blue" : "badge badge-gray"}>{trg}</span></td>
+                            <td><span className={q.trainingId ? "ac-chip ac-chip-primary" : "ac-chip"}>{trg}</span></td>
                             <td>{q.questionText}</td>
-                            <td style={{ color: 'var(--text-secondary)' }}>{q.questionType}</td>
-                            <td style={{ color: 'var(--text-secondary)' }}>{q.options ? q.options.join(', ') : '-'}</td>
-                            <td><button className="btn btn-sm btn-danger" onClick={() => handleDeleteQuestion(q.id)}>Delete</button></td>
+                            <td style={{ color: 'var(--academic-text-secondary)' }}>{q.questionType}</td>
+                            <td style={{ color: 'var(--academic-text-secondary)' }}>{q.options ? q.options.join(', ') : '-'}</td>
+                            <td><button className="ac-btn ac-btn-sm ac-btn-danger" onClick={() => handleDeleteQuestion(q.id)}>Delete</button></td>
                           </tr>
                         )
                       })}
@@ -928,7 +746,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── NOTES MANAGEMENT ── */}
       {tab === 'notes' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Notes Management')}
             <div className="flex gap-2">
               {[
@@ -939,16 +757,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                 <button
                   key={btn.key}
                   onClick={() => { setNoteFilter(btn.key); fetchNotes(btn.key) }}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '6px 16px', fontSize: 13, fontWeight: 600,
-                    borderRadius: 9999, border: '1px solid var(--border-default)',
-                    cursor: 'pointer', fontFamily: 'inherit',
-                    transition: 'all 180ms ease',
-                    background: noteFilter === btn.key ? 'var(--accent)' : 'transparent',
-                    color: noteFilter === btn.key ? '#fff' : 'var(--text-secondary)',
-                    borderColor: noteFilter === btn.key ? 'var(--accent)' : 'var(--border-default)'
-                  }}
+                  className={`ac-chip${noteFilter === btn.key ? ' ac-chip-primary' : ''}`}
+                  style={{ cursor: 'pointer', fontFamily: 'inherit' }}
                 >
                   {btn.label} ({btn.count})
                 </button>
@@ -956,41 +766,34 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
             </div>
           </div>
           {notes.length === 0 ? (
-            <div className="card" style={{ textAlign: 'center', padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 180 }}>
-              <p style={{ color: 'var(--text-secondary)' }}>
+            <div className="ac-card ac-empty">
+              <p style={{ color: 'var(--academic-text-muted)' }}>
                 {noteFilter === 'pending' ? 'All pending notes have been reviewed.' : 
                  noteFilter === 'approved' ? 'No approved notes yet.' : 
                  'Notes will appear here when trainers upload them.'}
               </p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="ac-stack-sm">
               {notes.map((note, idx) => {
                 const isPending = note.status?.toUpperCase() === 'PENDING'
                 const isApproved = note.status?.toUpperCase() === 'APPROVED'
                 return (
-                  <div key={note.id || idx} className="card">
+                  <div key={note.id || idx} className="ac-card">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5">
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            padding: '3px 10px', fontSize: 11, fontWeight: 600,
-                            borderRadius: 9999, border: '1px solid',
-                            background: isApproved ? 'rgba(16,185,129,0.08)' : isPending ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)',
-                            color: isApproved ? '#059669' : isPending ? '#d97706' : '#dc2626',
-                            borderColor: isApproved ? 'rgba(16,185,129,0.15)' : isPending ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)'
-                          }}>{note.status}</span>
-                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(note.created_at)}</span>
+                          <span className={`ac-chip ${isApproved ? 'ac-chip-success' : isPending ? 'ac-chip-warning' : 'ac-chip-danger'}`}>{note.status}</span>
+                          <span style={{ fontSize: 12, color: 'var(--academic-text-muted)' }}>{fmtDate(note.created_at)}</span>
                         </div>
-                        <h4 style={{ fontWeight: 600, fontSize: 15, color: '#111827', fontFamily: "'Outfit', sans-serif" }}>{note.title}</h4>
-                        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>{note.trainer?.name || 'Unknown'}</p>
-                        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.6 }}>{note.content}</p>
+                        <h4 style={{ fontWeight: 600, fontSize: 15, color: 'var(--academic-text)', fontFamily: "'Outfit', sans-serif" }}>{note.title}</h4>
+                        <p style={{ fontSize: 13, color: 'var(--academic-text-muted)', marginTop: 2 }}>{note.trainer?.name || 'Unknown'}</p>
+                        <p style={{ fontSize: 14, color: 'var(--academic-text-secondary)', marginTop: 8, lineHeight: 1.6 }}>{note.content}</p>
                       </div>
                       {isPending && (
                         <div className="flex gap-2 flex-shrink-0">
-                          <button className="btn btn-sm btn-danger" onClick={() => handleRejectNote(note.id)} disabled={loading}>Reject</button>
-                          <button className="btn btn-sm btn-primary" onClick={() => handleApproveNote(note.id)} disabled={loading}>Approve</button>
+                          <button className="ac-btn ac-btn-sm ac-btn-danger" onClick={() => handleRejectNote(note.id)} disabled={loading}>Reject</button>
+                          <button className="ac-btn ac-btn-sm ac-btn-primary" onClick={() => handleApproveNote(note.id)} disabled={loading}>Approve</button>
                         </div>
                       )}
                     </div>
@@ -1005,38 +808,62 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── FEEDBACK REPORTS ── */}
       {tab === 'feedback' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Feedback Reports')}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 24, marginBottom: 24 }}>
-            <StatCard
-              label="Total Responses"
-              value={feedbacks.length}
-              icon={statIcons.feedbacks}
-              color={statColors.feedbacks}
-              index={0}
-            />
-            <StatCard
-              label="Avg Trainer Rating"
-              value={`${stats.avgTrainerRating ?? '0.0'}`}
-              icon={statIcons.rating}
-              color={statColors.rating}
-              index={1}
-            />
-            <StatCard
-              label="Avg Subject Rating"
-              value={`${stats.avgSubjectRating ?? '0.0'}`}
-              icon={statIcons.satisfaction}
-              color={statColors.satisfaction}
-              index={2}
-            />
+          <div className="ov-stat-grid" style={{ marginBottom: 24 }}>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={{ y: -3 }}
+              className="ov-stat"
+            >
+              <div className="ov-stat__head">
+                <span className="ov-stat__label">Total Responses</span>
+                <span className="ov-stat__icon" aria-hidden style={{ background: 'var(--academic-primary-50)', color: 'var(--academic-primary-600)' }}>
+                  <MessageSquare size={14} strokeWidth={2} />
+                </span>
+              </div>
+              <div className="ov-stat__value mono">{feedbacks.length}</div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={{ y: -3 }}
+              className="ov-stat"
+            >
+              <div className="ov-stat__head">
+                <span className="ov-stat__label">Avg Trainer Rating</span>
+                <span className="ov-stat__icon" aria-hidden style={{ background: 'var(--academic-accent-50)', color: 'var(--academic-accent-500)' }}>
+                  <Star size={14} strokeWidth={2} />
+                </span>
+              </div>
+              <div className="ov-stat__value mono">{stats.avgTrainerRating ?? '0.0'}</div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={{ y: -3 }}
+              className="ov-stat"
+            >
+              <div className="ov-stat__head">
+                <span className="ov-stat__label">Avg Subject Rating</span>
+                <span className="ov-stat__icon" aria-hidden style={{ background: 'rgba(16,185,129,0.08)', color: '#059669' }}>
+                  <TrendingUp size={14} strokeWidth={2} />
+                </span>
+              </div>
+              <div className="ov-stat__value mono">{stats.avgSubjectRating ?? '0.0'}</div>
+            </motion.div>
           </div>
-          <div className="card" style={{ padding: 0 }}>
+          <div className="ac-card" style={{ padding: 0 }}>
             {initialLoading ? (
               <SkeletonTable rows={5} />
             ) : feedbacks.length === 0 ? (
-              <div className="empty-state">
-                <p style={{ color: 'var(--text-secondary)' }}>No feedback submitted yet.</p>
+              <div className="ac-empty">
+                <p style={{ color: 'var(--academic-text-muted)' }}>No feedback submitted yet.</p>
               </div>
             ) : (
               <div className="table-wrapper" style={{ border: 'none' }}>
@@ -1047,14 +874,14 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   <tbody>
                     {feedbacks.map((f, i) => (
                       <tr key={f.id}>
-                        <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
+                        <td style={{ color: 'var(--academic-text-muted)' }}>{i + 1}</td>
                         <td className="font-medium">{f.trainingTitle}</td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{f.trainerName}</td>
-                        <td>{f.anonymous ? <span className="badge badge-gray">Anonymous</span> : f.participantName}</td>
-                        <td><Stars v={f.trainerRating} /> <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 4 }}>{f.trainerRating}/5</span></td>
-                        <td><Stars v={f.subjectRating} /> <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: 4 }}>{f.subjectRating}/5</span></td>
-                        <td style={{ maxWidth: 150, color: 'var(--text-secondary)', fontSize: 13 }}>{f.comments || '-'}</td>
-                        <td style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{fmtDate(f.submittedAt)}</td>
+                        <td style={{ color: 'var(--academic-text-secondary)' }}>{f.trainerName}</td>
+                        <td>{f.anonymous ? <span className="ac-chip">Anonymous</span> : f.participantName}</td>
+                        <td><Stars v={f.trainerRating} /> <span className="text-xs" style={{ color: 'var(--academic-text-muted)', marginLeft: 4 }}>{f.trainerRating}/5</span></td>
+                        <td><Stars v={f.subjectRating} /> <span className="text-xs" style={{ color: 'var(--academic-text-muted)', marginLeft: 4 }}>{f.subjectRating}/5</span></td>
+                        <td style={{ maxWidth: 150, color: 'var(--academic-text-secondary)', fontSize: 13 }}>{f.comments || '-'}</td>
+                        <td style={{ whiteSpace: 'nowrap', color: 'var(--academic-text-secondary)' }}>{fmtDate(f.submittedAt)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1068,12 +895,12 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── CREATE TRAINER (two-column layout) ── */}
       {tab === 'createTrainer' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Create Trainer')}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
-            <div className="card">
-              <div className="card-header"><h3>Create Trainer Account</h3></div>
+          <div className="ac-grid-2">
+            <div className="ac-card">
+              <h3 className="ac-section-title" style={{ fontSize: 17, marginBottom: 16 }}>Create Trainer Account</h3>
               <form onSubmit={handleCreateTrainer}>
                 <div className="form-group">
                   <label className="form-label">Full Name</label>
@@ -1090,13 +917,13 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   <input className="form-control" type="password" value={trainerForm.password}
                     onChange={e => setTrainerForm(p => ({ ...p, password: e.target.value }))} required placeholder="Set password for trainer" />
                 </div>
-                <button type="submit" className="btn btn-primary" disabled={loading}>
+                <button type="submit" className="ac-btn ac-btn-primary" disabled={loading}>
                   {loading ? 'Creating...' : 'Create Trainer'}
                 </button>
               </form>
             </div>
-            <div className="card">
-              <div className="card-header"><h3>Trainers ({trainers.length})</h3></div>
+            <div className="ac-card">
+              <h3 className="ac-section-title" style={{ fontSize: 17, marginBottom: 16 }}>Trainers ({trainers.length})</h3>
               <TrainerList
                 trainers={trainers}
                 token={user.token}
@@ -1111,12 +938,12 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── CREATE TRAINING (two-column layout) ── */}
       {tab === 'createTraining' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Create Training')}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
-            <div className="card">
-              <div className="card-header"><h3>Create Training Session</h3></div>
+          <div className="ac-grid-2">
+            <div className="ac-card">
+              <h3 className="ac-section-title" style={{ fontSize: 17, marginBottom: 16 }}>Create Training Session</h3>
               <form onSubmit={handleCreateTraining}>
                 <div className="form-group">
                   <label className="form-label">Training Title</label>
@@ -1156,18 +983,18 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   <input className="form-control" type="number" value={trainingForm.capacity}
                     onChange={e => setTrainingForm(p => ({ ...p, capacity: e.target.value }))} placeholder="e.g. 30" min="1" />
                 </div>
-                <button type="submit" className="btn btn-primary" disabled={loading}>
+                <button type="submit" className="ac-btn ac-btn-primary" disabled={loading}>
                   {loading ? 'Creating...' : 'Create Training Session'}
                 </button>
               </form>
             </div>
-            <div className="card" style={{ padding: 0 }}>
-              <div className="card-header" style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
-                <h3>Recent Trainings</h3>
+            <div className="ac-card" style={{ padding: 0 }}>
+              <div style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
+                <h3 className="ac-section-title" style={{ fontSize: 17 }}>Recent Trainings</h3>
               </div>
               {trainings.length === 0 ? (
-                <div className="empty-state">
-                  <p style={{ color: 'var(--text-secondary)' }}>No training sessions created yet.</p>
+                <div className="ac-empty">
+                  <p style={{ color: 'var(--academic-text-muted)' }}>No training sessions created yet.</p>
                 </div>
               ) : (
                 <div className="table-wrapper" style={{ border: 'none' }}>
@@ -1179,13 +1006,13 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                       {trainings.slice(0, 10).map(t => (
                         <tr key={t.id}>
                           <td className="font-medium">{t.title}</td>
-                          <td>{t.trainerName ? <span className="badge badge-blue">{t.trainerName}</span> : <span className="badge badge-gray">Unassigned</span>}</td>
-                          <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.startDate)}</td>
-                          <td style={{ color: 'var(--text-secondary)' }}>{fmtDate(t.endDate)}</td>
+                          <td>{t.trainerName ? <span className="ac-chip ac-chip-primary">{t.trainerName}</span> : <span className="ac-chip">Unassigned</span>}</td>
+                          <td style={{ color: 'var(--academic-text-secondary)' }}>{fmtDate(t.startDate)}</td>
+                          <td style={{ color: 'var(--academic-text-secondary)' }}>{fmtDate(t.endDate)}</td>
                           <td>
                             <div className="flex gap-1.5 justify-end">
-                              <button className="btn btn-sm" onClick={() => openEdit(t)}>Edit</button>
-                              <button className="btn btn-sm btn-danger" onClick={() => handleDeleteTraining(t.id, t.title)}>Delete</button>
+                              <button className="ac-btn ac-btn-sm ac-btn-secondary" onClick={() => openEdit(t)}>Edit</button>
+                              <button className="ac-btn ac-btn-sm ac-btn-danger" onClick={() => handleDeleteTraining(t.id, t.title)}>Delete</button>
                             </div>
                           </td>
                         </tr>
@@ -1202,12 +1029,12 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       {/* ── PROGRAMS & COURSES (two-column layout) ── */}
       {tab === 'programs' && (
         <motion.div variants={itemVariants}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Programs & Courses')}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24, marginBottom: 24 }}>
-            <div className="card">
-              <div className="card-header"><h3>Create Program</h3></div>
+          <div className="ac-grid-2" style={{ marginBottom: 24 }}>
+            <div className="ac-card">
+              <h3 className="ac-section-title" style={{ fontSize: 17, marginBottom: 16 }}>Create Program</h3>
               <form onSubmit={handleCreateProgram}>
                 <div className="form-group">
                   <label className="form-label">Program Title</label>
@@ -1219,16 +1046,16 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   <textarea className="form-control" value={programForm.description}
                     onChange={e => setProgramForm(p => ({ ...p, description: e.target.value }))} placeholder="Program overview..." />
                 </div>
-                <button type="submit" className="btn btn-primary" disabled={loading}>Create Program</button>
+                <button type="submit" className="ac-btn ac-btn-primary" disabled={loading}>Create Program</button>
               </form>
             </div>
-            <div className="card" style={{ padding: 0 }}>
-              <div className="card-header" style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
-                <h3>Programs ({programs.length})</h3>
+            <div className="ac-card" style={{ padding: 0 }}>
+              <div style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
+                <h3 className="ac-section-title" style={{ fontSize: 17 }}>Programs ({programs.length})</h3>
               </div>
               {programs.length === 0 ? (
-                <div className="empty-state">
-                  <p style={{ color: 'var(--text-secondary)' }}>No programs created yet.</p>
+                <div className="ac-empty">
+                  <p style={{ color: 'var(--academic-text-muted)' }}>No programs created yet.</p>
                 </div>
               ) : (
                 <div className="table-wrapper" style={{ border: 'none' }}>
@@ -1238,9 +1065,9 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                       {programs.map(p => (
                         <tr key={p.id}>
                           <td className="font-medium">{p.title}</td>
-                          <td style={{ color: 'var(--text-secondary)', maxWidth: 200 }} className="text-sm">{(p.description || '').slice(0, 60)}</td>
+                          <td style={{ color: 'var(--academic-text-secondary)', maxWidth: 200 }} className="text-sm">{(p.description || '').slice(0, 60)}</td>
                           <td>{p.courseCount ?? 0}</td>
-                          <td><button className="btn btn-sm btn-danger" onClick={() => handleDeleteProgram(p.id, p.title)}>Delete</button></td>
+                          <td><button className="ac-btn ac-btn-sm ac-btn-danger" onClick={() => handleDeleteProgram(p.id, p.title)}>Delete</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -1249,9 +1076,9 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               )}
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 24 }}>
-            <div className="card">
-              <div className="card-header"><h3>Create Course</h3></div>
+          <div className="ac-grid-2">
+            <div className="ac-card">
+              <h3 className="ac-section-title" style={{ fontSize: 17, marginBottom: 16 }}>Create Course</h3>
               <form onSubmit={handleCreateCourse}>
                 <div className="form-group">
                   <label className="form-label">Course Title</label>
@@ -1284,16 +1111,16 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                     onChange={(val) => setCourseForm(p => ({ ...p, trainerId: val }))}
                   />
                 </div>
-                <button type="submit" className="btn btn-primary" disabled={loading}>Create Course</button>
+                <button type="submit" className="ac-btn ac-btn-primary" disabled={loading}>Create Course</button>
               </form>
             </div>
-            <div className="card" style={{ padding: 0 }}>
-              <div className="card-header" style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
-                <h3>Courses ({courses.length})</h3>
+            <div className="ac-card" style={{ padding: 0 }}>
+              <div style={{ padding: '24px 24px 0', border: 'none', margin: 0 }}>
+                <h3 className="ac-section-title" style={{ fontSize: 17 }}>Courses ({courses.length})</h3>
               </div>
               {courses.length === 0 ? (
-                <div className="empty-state">
-                  <p style={{ color: 'var(--text-secondary)' }}>No courses created yet.</p>
+                <div className="ac-empty">
+                  <p style={{ color: 'var(--academic-text-muted)' }}>No courses created yet.</p>
                 </div>
               ) : (
                 <div className="table-wrapper" style={{ border: 'none' }}>
@@ -1303,10 +1130,10 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                       {courses.map(c => (
                         <tr key={c.id}>
                           <td className="font-medium">{c.title}</td>
-                          <td style={{ color: 'var(--text-secondary)' }}>{c.programTitle || '-'}</td>
-                          <td style={{ color: 'var(--text-secondary)' }}>{c.trainerName || 'Unassigned'}</td>
-                          <td><span className={`badge ${c.status === 'ACTIVE' ? 'badge-green' : 'badge-gray'}`} style={{ fontWeight: 600 }}>{c.status || 'ACTIVE'}</span></td>
-                          <td><button className="btn btn-sm btn-danger" onClick={() => handleDeleteCourse(c.id, c.title)}>Delete</button></td>
+                          <td style={{ color: 'var(--academic-text-secondary)' }}>{c.programTitle || '-'}</td>
+                          <td style={{ color: 'var(--academic-text-secondary)' }}>{c.trainerName || 'Unassigned'}</td>
+                          <td><span className={`ac-chip ${c.status === 'ACTIVE' ? 'ac-chip-success' : 'ac-chip'}`} style={{ fontWeight: 600 }}>{c.status || 'ACTIVE'}</span></td>
+                          <td><button className="ac-btn ac-btn-sm ac-btn-danger" onClick={() => handleDeleteCourse(c.id, c.title)}>Delete</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -1366,8 +1193,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   onChange={e => setEditForm(p => ({ ...p, capacity: e.target.value }))} placeholder="Unlimited" min="1" />
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn" onClick={() => setEditModal(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Saving...' : 'Save Changes'}</button>
+                <button type="button" className="ac-btn ac-btn-secondary" onClick={() => setEditModal(null)}>Cancel</button>
+                <button type="submit" className="ac-btn ac-btn-primary" disabled={loading}>{loading ? 'Saving...' : 'Save Changes'}</button>
               </div>
             </form>
           </div>
@@ -1383,10 +1210,10 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
               <button type="button" className="modal-close" onClick={() => setConfirmModal(null)}>×</button>
             </div>
             <div className="modal-body">
-              {confirmModal.subtitle && <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>{confirmModal.subtitle}</p>}
+              {confirmModal.subtitle && <p style={{ fontSize: 14, color: 'var(--academic-text-secondary)', marginBottom: 16 }}>{confirmModal.subtitle}</p>}
               <div className="modal-footer">
-                <button type="button" className="btn" onClick={() => setConfirmModal(null)}>Cancel</button>
-                <button type="button" className="btn btn-danger" onClick={confirmAction} disabled={loading}>
+                <button type="button" className="ac-btn ac-btn-secondary" onClick={() => setConfirmModal(null)}>Cancel</button>
+                <button type="button" className="ac-btn ac-btn-danger" onClick={confirmAction} disabled={loading}>
                   {loading ? 'Processing...' : 'Confirm'}
                 </button>
               </div>
@@ -1425,8 +1252,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   onChange={e => setParticipantForm(p => ({ ...p, password: e.target.value }))} required placeholder="Min 6 characters" minLength="6" />
               </div>
               <div className="modal-footer" style={{ marginTop: 24 }}>
-                <button type="button" className="btn" onClick={() => setAddParticipantModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={loading}>
+                <button type="button" className="ac-btn ac-btn-secondary" onClick={() => setAddParticipantModal(false)}>Cancel</button>
+                <button type="submit" className="ac-btn ac-btn-primary" disabled={loading}>
                   {loading ? 'Creating...' : 'Create Participant'}
                 </button>
               </div>

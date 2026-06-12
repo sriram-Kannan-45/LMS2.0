@@ -154,7 +154,7 @@ function DashboardWrapper({ component: Component, user, onLogout }) {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onLogout={onLogout}
-        headerSlot={user?.role === 'PARTICIPANT' ? <NotificationsPanel placement="top" /> : null}
+        headerSlot={user?.role === 'PARTICIPANT' || user?.role === 'ADMIN' ? <NotificationsPanel placement="top" /> : null}
       >
         <motion.div
           initial="initial"
@@ -183,9 +183,9 @@ function AppRoutes({ user, onLogin, onLogout }) {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/admin/login" element={<AdminLogin onLogin={onLogin} />} />
-      <Route path="/trainer/login" element={<TrainerLogin onLogin={onLogin} />} />
-      <Route path="/participant/login" element={<ParticipantLogin onLogin={onLogin} />} />
+      <Route path="/admin/login" element={<Navigate to="/admin" replace />} />
+      <Route path="/trainer/login" element={<Navigate to="/trainer" replace />} />
+      <Route path="/participant/login" element={<Navigate to="/participant" replace />} />
       <Route path="/register" element={<Register onLogin={onLogin} />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
 
@@ -195,7 +195,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'ADMIN' ? (
             <DashboardWrapper component={AdminDashboard} user={user} onLogout={onLogout} />
           ) : (
-            <Navigate to="/admin/login" />
+            <AdminLogin onLogin={onLogin} />
           )
         }
       />
@@ -206,7 +206,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'TRAINER' ? (
             <DashboardWrapper component={TrainerDashboard} user={user} onLogout={onLogout} />
           ) : (
-            <Navigate to="/trainer/login" />
+            <TrainerLogin onLogin={onLogin} />
           )
         }
       />
@@ -217,7 +217,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'PARTICIPANT' ? (
             <DashboardWrapper component={ParticipantDashboard} user={user} onLogout={onLogout} />
           ) : (
-            <Navigate to="/participant/login" />
+            <ParticipantLogin onLogin={onLogin} />
           )
         }
       />
@@ -230,7 +230,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
               <ParticipantQuizzes user={user} />
             </Layout>
           ) : (
-            <Navigate to="/participant/login" />
+            <Navigate to="/participant" />
           )
         }
       />
@@ -240,7 +240,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
         element={
           user?.role === 'PARTICIPANT'
             ? <PreExamReadiness />
-            : <Navigate to="/participant/login" />
+            : <Navigate to="/participant" />
         }
       />
 
@@ -252,21 +252,21 @@ function AppRoutes({ user, onLogin, onLogout }) {
         element={
           (user?.role === 'TRAINER' || user?.role === 'ADMIN')
             ? <TrainerProctoringPage />
-            : <Navigate to="/trainer/login" />
+            : <Navigate to="/trainer" />
         }
       />
 
       <Route
         path="/participant/coding/:assessmentId"
-        element={user?.role === 'PARTICIPANT' ? <ParticipantCodingPage /> : <Navigate to="/participant/login" />}
+        element={user?.role === 'PARTICIPANT' ? <ParticipantCodingPage /> : <Navigate to="/participant" />}
       />
       <Route
         path="/trainer/coding"
-        element={user?.role === 'TRAINER' ? <TrainerCodingFormPage /> : <Navigate to="/trainer/login" />}
+        element={user?.role === 'TRAINER' ? <TrainerCodingFormPage /> : <Navigate to="/trainer" />}
       />
       <Route
         path="/trainer/coding/:assessmentId/results"
-        element={(user?.role === 'TRAINER' || user?.role === 'ADMIN') ? <TrainerCodingResultsPage /> : <Navigate to="/trainer/login" />}
+        element={(user?.role === 'TRAINER' || user?.role === 'ADMIN') ? <TrainerCodingResultsPage /> : <Navigate to="/trainer" />}
       />
 
       <Route path="*" element={<Navigate to="/login" />} />
