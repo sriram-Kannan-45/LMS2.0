@@ -244,7 +244,7 @@ function TrainerLogin({ onLogin }) {
   }
 
   return (
-    <div className="premium-login-page">
+    <div className="premium-login-page trainer-theme">
       {/* ─── LEFT VISUAL PANEL ─── */}
       <aside className="login-visual-panel">
         <div className="visual-bg-gradient" />

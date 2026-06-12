@@ -250,7 +250,7 @@ function AdminLogin({ onLogin }) {
   }
 
   return (
-    <div className="premium-login-page">
+    <div className="premium-login-page admin-theme">
       {/* ─── LEFT VISUAL PANEL ─── */}
       <aside className="login-visual-panel">
         <div className="visual-bg-gradient" />
