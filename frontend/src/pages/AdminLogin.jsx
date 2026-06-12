@@ -1,148 +1,21 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   Eye, EyeOff, Mail, Lock, Shield, GraduationCap, User,
-  CheckCircle2, AlertCircle, ArrowRight, Loader2,
-  Sparkles, TrendingUp, Lightbulb, Bot
+  CheckCircle2, AlertCircle, ArrowRight, Loader2
 } from 'lucide-react'
 import { useToast } from '../components/Toast'
 import { API } from '../api/api'
-import loginIllustration from '../assets/red.png'
-
-const AI_CARDS = [
-  {
-    id: 'personalized',
-    icon: Sparkles,
-    title: 'System Governance',
-    subtitle: 'Automated compliance checks',
-    accent: '#f43f5e',
-    pos: { top: '6%', left: '3%' },
-    from: { x: -40, y: -20 },
-  },
-  {
-    id: 'progress',
-    icon: TrendingUp,
-    title: 'Usage Analytics',
-    subtitle: '+48% active users this week',
-    accent: '#10b981',
-    pos: { top: '8%', right: '4%' },
-    from: { x: 40, y: -20 },
-  },
-  {
-    id: 'recommend',
-    icon: Lightbulb,
-    title: 'Admin Insights',
-    subtitle: '3 optimizations recommended',
-    accent: '#a855f7',
-    pos: { top: '42%', right: '3%' },
-    from: { x: 40, y: 20 },
-  },
-]
-
-function AIFloatingCards({ visible }) {
-  const containerVariants = {
-    hidden: {},
-    visible: {
-      transition: { staggerChildren: 0.12, delayChildren: 0.05 },
-    },
-    exit: {
-      transition: { staggerChildren: 0.06, staggerDirection: -1 },
-    },
-  }
-
-  const cardVariants = (from) => ({
-    hidden: { opacity: 0, scale: 0.8, x: from.x, y: from.y },
-    visible: {
-      opacity: 1,
-      scale: 1,
-      x: 0,
-      y: 0,
-      transition: { type: 'spring', stiffness: 220, damping: 22 },
-    },
-    exit: {
-      opacity: 0,
-      scale: 0.85,
-      x: from.x * 0.5,
-      y: from.y * 0.5,
-      transition: { duration: 0.25, ease: 'easeIn' },
-    },
-  })
-
-  return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          className="ai-cards-layer"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-        >
-          <motion.div
-            className="ai-bubble"
-            style={{ bottom: '34%', left: '22%' }}
-            variants={{
-              hidden: { opacity: 0, scale: 0.85, y: 16, x: -8 },
-              visible: {
-                opacity: 1,
-                scale: 1,
-                y: 0,
-                x: 0,
-                transition: { type: 'spring', stiffness: 260, damping: 20, delay: 0.08 },
-              },
-              exit: {
-                opacity: 0,
-                scale: 0.88,
-                y: 10,
-                transition: { duration: 0.2, ease: 'easeIn' },
-              },
-            }}
-          >
-            <div className="ai-bubble-inner">
-              <div className="ai-bubble-avatar">
-                <Bot size={14} strokeWidth={2.4} />
-              </div>
-              <div className="ai-bubble-body">
-                <span className="ai-bubble-title">AI System Guard</span>
-                <span className="ai-bubble-text">Ready to oversee your learning ecosystem today?</span>
-              </div>
-            </div>
-            <span className="ai-bubble-tail" />
-          </motion.div>
-
-          {AI_CARDS.map(({ id, icon: Icon, title, subtitle, accent, pos, from }) => (
-            <motion.div
-              key={id}
-              className="ai-feature-card"
-              style={{ ...pos, '--card-accent': accent }}
-              variants={cardVariants(from)}
-              whileHover={{ y: -3, transition: { duration: 0.2 } }}
-            >
-              <div className="ai-feature-icon">
-                <Icon size={16} strokeWidth={2.4} />
-              </div>
-              <div className="ai-feature-text">
-                <span className="ai-feature-title">{title}</span>
-                <span className="ai-feature-sub">{subtitle}</span>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
-}
+import redVideo from '../assets/red.mp4'
 
 function AdminLogin({ onLogin }) {
   const [form, setForm] = useState({ email: '', password: '', role: 'ADMIN' })
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [focusedField, setFocusedField] = useState(null)
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [aiCardsVisible, setAiCardsVisible] = useState(false)
 
   const navigate = useNavigate()
   const navTimeoutRef = useRef(null)
@@ -250,252 +123,167 @@ function AdminLogin({ onLogin }) {
   }
 
   return (
-    <div className="premium-login-page admin-theme">
-      {/* ─── LEFT VISUAL PANEL ─── */}
-      <aside className="login-visual-panel">
-        <div className="visual-bg-gradient" />
-        <div className="visual-glow visual-glow-1" />
-        <div className="visual-glow visual-glow-2" />
+    <div className="trainer-video-login">
+      <video
+        className="trainer-video-bg"
+        autoPlay
+        muted
+        loop
+        playsInline
+        poster={redVideo}
+      >
+        <source src={redVideo} type="video/mp4" />
+      </video>
+      <div className="trainer-video-overlay" />
 
+      <div className="trainer-login-content">
         <motion.div
-          className="visual-image-wrap"
-          initial={{ opacity: 0, scale: 1.05 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <img
-            src={loginIllustration}
-            alt="AI-powered learning illustration"
-            className="visual-image"
-            draggable={false}
-          />
-          <div className="visual-image-overlay" />
-        </motion.div>
-
-        <motion.button
-          type="button"
-          className={`robot-hotspot ${aiCardsVisible ? 'is-active' : ''}`}
-          onClick={() => setAiCardsVisible(v => !v)}
-          aria-label={aiCardsVisible ? 'Hide AI features' : 'Reveal AI features'}
-          aria-pressed={aiCardsVisible}
-          whileTap={{ scale: 0.94 }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.0, duration: 0.5 }}
-        >
-          <span className="robot-hotspot-pulse" />
-          <span className="robot-hotspot-pulse robot-hotspot-pulse-2" />
-          <span className="robot-hotspot-ring" />
-        </motion.button>
-
-        <motion.div
-          className="visual-float visual-float-1"
-          initial={{ opacity: 0, y: 14 }}
+          className="trainer-login-card"
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         >
-          <span className="visual-float-dot" />
-          <span>AI Online</span>
-        </motion.div>
+          <div className="trainer-card-logo">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="32" height="32" rx="8" fill="url(#adminLogoGrad)" />
+              <path d="M7 16C9.5 16 11 11 13 11C15 11 16.5 21 18.5 21C20.5 21 22 16 25 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <defs>
+                <linearGradient id="adminLogoGrad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#dc2626" />
+                  <stop offset="1" stopColor="#f87171" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <span>WaveInit</span>
+          </div>
 
-        <AIFloatingCards visible={aiCardsVisible} />
+          <div className="trainer-card-header">
+            <h2>Welcome back</h2>
+            <p>Sign in to your Admin Portal</p>
+          </div>
 
-        <AnimatePresence>
-          {!aiCardsVisible && (
-            <motion.div
-              className="robot-tap-hint"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={{ delay: 1.4, duration: 0.4 }}
-            >
-              <Sparkles size={12} strokeWidth={2.4} />
-              <span>Tap the robot to explore AI features</span>
-            </motion.div>
+          {error && (
+            <div className="trainer-alert trainer-alert-error">
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
           )}
-        </AnimatePresence>
-      </aside>
+          {success && (
+            <div className="trainer-alert trainer-alert-success">
+              <CheckCircle2 size={16} />
+              <span>{success}</span>
+            </div>
+          )}
 
-      {/* ─── RIGHT FORM PANEL ─── */}
-      <section className="login-form-panel">
-        <div className="premium-login-bg">
-          <div className="premium-bg-shape premium-bg-shape-1" />
-          <div className="premium-bg-shape premium-bg-shape-2" />
-        </div>
-
-        <motion.div
-          className="premium-login-container"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <div className="premium-login-card">
-            <div className="premium-card-accent" />
-
-            <div className="premium-card-body">
-              {/* WaveInit Logo */}
-              <div className="premium-logo-container">
-                <div className="premium-logo-icon-box">
-                  <svg className="premium-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                      <linearGradient id="admin-logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="var(--brand-600)" />
-                        <stop offset="1" stopColor="var(--brand-400)" />
-                      </linearGradient>
-                    </defs>
-                    <rect width="32" height="32" rx="8" fill="url(#admin-logo-grad)" />
-                    <path d="M7 16C9.5 16 11 11 13 11C15 11 16.5 21 18.5 21C20.5 21 22 16 25 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <span className="premium-logo-text">Wave<span className="premium-logo-highlight">Init</span></span>
+          <form onSubmit={handleSubmit}>
+            <div className="trainer-field">
+              <label className="trainer-label" htmlFor="admin-email">Email Address</label>
+              <div className="trainer-input-wrap">
+                <Mail size={16} className="trainer-input-icon" />
+                <input
+                  id="admin-email"
+                  type="text"
+                  className="trainer-input"
+                  value={form.email}
+                  onChange={e => set('email', e.target.value)}
+                  placeholder="admin@test.com"
+                  autoComplete="username"
+                />
               </div>
+            </div>
 
-              {/* Portal Header */}
-              <div className="portal-header-section">
-                <h1 className="portal-title">Admin Portal</h1>
-                <p className="portal-subtitle">Platform Management & Analytics Console</p>
-              </div>
-
-              {/* Alerts */}
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
-                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    className="premium-alert premium-alert-error"
-                  >
-                    <AlertCircle size={16} />
-                    <span>{error}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              <AnimatePresence>
-                {success && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
-                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    className="premium-alert premium-alert-success"
-                  >
-                    <CheckCircle2 size={16} />
-                    <span>{success}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <form onSubmit={handleSubmit}>
-                {/* Email Field */}
-                <div className={`premium-field ${focusedField === 'email' ? 'focused' : ''}`}>
-                  <label htmlFor="login-email" className="premium-label">Email Address</label>
-                  <div className="premium-input-wrapper">
-                    <Mail size={18} className="premium-input-icon" />
-                    <input
-                      id="login-email"
-                      type="text"
-                      value={form.email}
-                      onChange={e => set('email', e.target.value)}
-                      onFocus={() => setFocusedField('email')}
-                      onBlur={() => setFocusedField(null)}
-                      placeholder="admin@test.com"
-                      autoComplete="username"
-                      className="premium-input"
-                    />
-                  </div>
-                </div>
-
-                {/* Password Field */}
-                <div className={`premium-field ${focusedField === 'password' ? 'focused' : ''}`}>
-                  <label htmlFor="login-password" className="premium-label">Password</label>
-                  <div className="premium-input-wrapper">
-                    <Lock size={18} className="premium-input-icon" />
-                    <input
-                      id="login-password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={form.password}
-                      onChange={e => set('password', e.target.value)}
-                      onFocus={() => setFocusedField('password')}
-                      onBlur={() => setFocusedField(null)}
-                      placeholder="••••••••"
-                      autoComplete="current-password"
-                      className="premium-input"
-                    />
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => setShowPassword(v => !v)}
-                      className="premium-password-toggle"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Remember Me & Forgot */}
-                <div className="premium-options-row">
-                  <label className="premium-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={e => setRememberMe(e.target.checked)}
-                      className="premium-checkbox"
-                    />
-                    <span className="premium-checkmark" />
-                    <span>Remember me</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/forgot-password')}
-                    className="premium-forgot-link"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-
-                {/* Submit Button */}
-                <motion.button
-                  type="submit"
-                  disabled={loading}
-                  whileHover={{ scale: loading ? 1 : 1.01 }}
-                  whileTap={{ scale: loading ? 1 : 0.99 }}
-                  className="premium-submit-btn"
+            <div className="trainer-field">
+              <label className="trainer-label" htmlFor="admin-password">Password</label>
+              <div className="trainer-input-wrap">
+                <Lock size={16} className="trainer-input-icon" />
+                <input
+                  id="admin-password"
+                  type={showPassword ? 'text' : 'password'}
+                  className="trainer-input"
+                  value={form.password}
+                  onChange={e => set('password', e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword(v => !v)}
+                  className="trainer-password-toggle"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {loading ? (
-                    <>
-                      <Loader2 size={18} className="premium-spinner" />
-                      <span>Signing in...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Sign In as Admin</span>
-                      <ArrowRight size={18} />
-                    </>
-                  )}
-                </motion.button>
-              </form>
-
-              {/* Switch Portal */}
-              <div className="premium-switch-roles">
-                <span className="premium-switch-label">Switch Portal</span>
-                <div className="premium-switch-links">
-                  <button type="button" onClick={() => navigate('/trainer')} className="premium-switch-link">
-                    <GraduationCap size={15} />
-                    <span>Trainer Hub</span>
-                  </button>
-                  <button type="button" onClick={() => navigate('/participant')} className="premium-switch-link">
-                    <User size={15} />
-                    <span>Participant Space</span>
-                  </button>
-                </div>
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
+            </div>
+
+            <div className="trainer-options-row">
+              <label className="trainer-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  className="trainer-checkbox"
+                />
+                <span className="trainer-checkmark" />
+                <span>Remember me</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => navigate('/forgot-password')}
+                className="trainer-forgot-link"
+              >
+                Forgot password?
+              </button>
+            </div>
+
+            <motion.button
+              type="submit"
+              disabled={loading}
+              className="trainer-submit-btn"
+              whileHover={{ scale: loading ? 1 : 1.01 }}
+              whileTap={{ scale: loading ? 1 : 0.99 }}
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={18} className="trainer-spinner" />
+                  <span>Signing in...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In as Admin</span>
+                  <ArrowRight size={18} />
+                </>
+              )}
+            </motion.button>
+          </form>
+
+          <div className="trainer-switch-section">
+            <span className="trainer-switch-label">Switch Portal</span>
+            <div className="trainer-switch-row">
+              <button
+                type="button"
+                onClick={() => navigate('/trainer')}
+                className="trainer-switch-btn"
+              >
+                <GraduationCap size={14} />
+                <span>Trainer Hub</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/participant')}
+                className="trainer-switch-btn"
+              >
+                <User size={14} />
+                <span>Participant Space</span>
+              </button>
             </div>
           </div>
 
-          {/* Footer */}
-          <p className="premium-footer">© 2026 · WaveInit LMS · Secure Admin Login</p>
         </motion.div>
-      </section>
+
+        <p className="trainer-footer">© 2026 · WaveInit LMS · Secure Admin Login</p>
+      </div>
     </div>
   )
 }
