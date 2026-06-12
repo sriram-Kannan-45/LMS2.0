@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -10,7 +10,6 @@ import { useToast } from '../components/Toast'
 import { API } from '../api/api'
 import loginIllustration from '../assets/green.png'
 
-/* ─── Floating AI Cards Data (Tailored for Trainer role) ─── */
 const AI_CARDS = [
   {
     id: 'personalized',
@@ -80,7 +79,6 @@ function AIFloatingCards({ visible }) {
           animate="visible"
           exit="exit"
         >
-          {/* AI Assistant speech bubble — floats above-left of robot */}
           <motion.div
             className="ai-bubble"
             style={{ bottom: '34%', left: '22%' }}
@@ -110,11 +108,9 @@ function AIFloatingCards({ visible }) {
                 <span className="ai-bubble-text">Let's create engaging assessments for your classes!</span>
               </div>
             </div>
-            {/* tail points down-right toward robot */}
             <span className="ai-bubble-tail" />
           </motion.div>
 
-          {/* Feature cards */}
           {AI_CARDS.map(({ id, icon: Icon, title, subtitle, accent, pos, from }) => (
             <motion.div
               key={id}
@@ -149,12 +145,12 @@ function TrainerLogin({ onLogin }) {
   const [aiCardsVisible, setAiCardsVisible] = useState(false)
 
   const navigate = useNavigate()
+  const navTimeoutRef = useRef(null)
   const location = useLocation()
   const { success: showSuccess, error: showError } = useToast()
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  // Lock the scroll
   useEffect(() => {
     const prevHtmlOverflow = document.documentElement.style.overflow
     const prevBodyOverflow = document.body.style.overflow
@@ -165,10 +161,8 @@ function TrainerLogin({ onLogin }) {
     document.documentElement.style.height = '100%'
     document.body.style.height = '100%'
 
-    // Remember current role route context
     localStorage.setItem('lastRole', 'TRAINER')
 
-    // Load remembered email if exists
     const remembered = localStorage.getItem('rememberedEmail')
     const remember = localStorage.getItem('rememberMe') === 'true'
     if (remember && remembered) {
@@ -181,6 +175,7 @@ function TrainerLogin({ onLogin }) {
       document.body.style.overflow = prevBodyOverflow
       document.documentElement.style.height = prevHtmlHeight
       document.body.style.height = prevBodyHeight
+      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current)
     }
   }, [])
 
@@ -238,7 +233,7 @@ function TrainerLogin({ onLogin }) {
       showSuccess('Welcome! Redirecting to hub...')
       onLogin(data)
 
-      setTimeout(() => {
+      navTimeoutRef.current = setTimeout(() => {
         navigate('/trainer')
       }, 500)
     } catch (err) {
@@ -249,7 +244,7 @@ function TrainerLogin({ onLogin }) {
   }
 
   return (
-    <div className="classic-login-page">
+    <div className="premium-login-page">
       {/* ─── LEFT VISUAL PANEL ─── */}
       <aside className="login-visual-panel">
         <div className="visual-bg-gradient" />
@@ -271,7 +266,6 @@ function TrainerLogin({ onLogin }) {
           <div className="visual-image-overlay" />
         </motion.div>
 
-        {/* Interactive robot hotspot */}
         <motion.button
           type="button"
           className={`robot-hotspot ${aiCardsVisible ? 'is-active' : ''}`}
@@ -288,7 +282,6 @@ function TrainerLogin({ onLogin }) {
           <span className="robot-hotspot-ring" />
         </motion.button>
 
-        {/* "AI Online" pill */}
         <motion.div
           className="visual-float visual-float-1"
           initial={{ opacity: 0, y: 14 }}
@@ -299,10 +292,8 @@ function TrainerLogin({ onLogin }) {
           <span>AI Online</span>
         </motion.div>
 
-        {/* Floating AI feature cards */}
         <AIFloatingCards visible={aiCardsVisible} />
 
-        {/* Tap-hint */}
         <AnimatePresence>
           {!aiCardsVisible && (
             <motion.div
@@ -321,37 +312,36 @@ function TrainerLogin({ onLogin }) {
 
       {/* ─── RIGHT FORM PANEL ─── */}
       <section className="login-form-panel">
-        <div className="classic-login-bg">
-          <div className="classic-bg-shape classic-bg-shape-1" />
-          <div className="classic-bg-shape classic-bg-shape-2" />
+        <div className="premium-login-bg">
+          <div className="premium-bg-shape premium-bg-shape-1" />
+          <div className="premium-bg-shape premium-bg-shape-2" />
         </div>
 
         <motion.div
-          className="classic-login-container"
+          className="premium-login-container"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
-          {/* Glassmorphism Card */}
-          <div className="classic-login-card">
-            <div className="classic-card-accent" />
+          <div className="premium-login-card">
+            <div className="premium-card-accent" />
 
-            <div className="classic-card-body">
+            <div className="premium-card-body">
               {/* WaveInit Logo */}
-              <div className="waveinit-logo-container">
-                <div className="waveinit-logo-icon-box">
-                  <svg className="waveinit-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <div className="premium-logo-container">
+                <div className="premium-logo-icon-box">
+                  <svg className="premium-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <defs>
-                      <linearGradient id="waveinit-logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                      <linearGradient id="trainer-logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
                         <stop stopColor="var(--brand-600)" />
                         <stop offset="1" stopColor="var(--brand-400)" />
                       </linearGradient>
                     </defs>
-                    <rect width="32" height="32" rx="8" fill="url(#waveinit-logo-grad)" />
+                    <rect width="32" height="32" rx="8" fill="url(#trainer-logo-grad)" />
                     <path d="M7 16C9.5 16 11 11 13 11C15 11 16.5 21 18.5 21C20.5 21 22 16 25 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <span className="waveinit-logo-text">Wave<span className="waveinit-logo-highlight">Init</span></span>
+                <span className="premium-logo-text">Wave<span className="premium-logo-highlight">Init</span></span>
               </div>
 
               {/* Portal Header */}
@@ -367,7 +357,7 @@ function TrainerLogin({ onLogin }) {
                     initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                     animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
                     exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    className="classic-alert classic-alert-error"
+                    className="premium-alert premium-alert-error"
                   >
                     <AlertCircle size={16} />
                     <span>{error}</span>
@@ -380,7 +370,7 @@ function TrainerLogin({ onLogin }) {
                     initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                     animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
                     exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    className="classic-alert classic-alert-success"
+                    className="premium-alert premium-alert-success"
                   >
                     <CheckCircle2 size={16} />
                     <span>{success}</span>
@@ -390,10 +380,10 @@ function TrainerLogin({ onLogin }) {
 
               <form onSubmit={handleSubmit}>
                 {/* Email Field */}
-                <div className={`classic-field ${focusedField === 'email' ? 'focused' : ''}`}>
-                  <label htmlFor="login-email" className="classic-label">Username or Email</label>
-                  <div className="classic-input-wrapper">
-                    <Mail size={18} className="classic-input-icon" />
+                <div className={`premium-field ${focusedField === 'email' ? 'focused' : ''}`}>
+                  <label htmlFor="login-email" className="premium-label">Username or Email</label>
+                  <div className="premium-input-wrapper">
+                    <Mail size={18} className="premium-input-icon" />
                     <input
                       id="login-email"
                       type="text"
@@ -403,16 +393,16 @@ function TrainerLogin({ onLogin }) {
                       onBlur={() => setFocusedField(null)}
                       placeholder="trainer_username"
                       autoComplete="username"
-                      className="classic-input"
+                      className="premium-input"
                     />
                   </div>
                 </div>
 
                 {/* Password Field */}
-                <div className={`classic-field ${focusedField === 'password' ? 'focused' : ''}`}>
-                  <label htmlFor="login-password" className="classic-label">Password</label>
-                  <div className="classic-input-wrapper">
-                    <Lock size={18} className="classic-input-icon" />
+                <div className={`premium-field ${focusedField === 'password' ? 'focused' : ''}`}>
+                  <label htmlFor="login-password" className="premium-label">Password</label>
+                  <div className="premium-input-wrapper">
+                    <Lock size={18} className="premium-input-icon" />
                     <input
                       id="login-password"
                       type={showPassword ? 'text' : 'password'}
@@ -422,13 +412,13 @@ function TrainerLogin({ onLogin }) {
                       onBlur={() => setFocusedField(null)}
                       placeholder="••••••••"
                       autoComplete="current-password"
-                      className="classic-input"
+                      className="premium-input"
                     />
                     <button
                       type="button"
                       tabIndex={-1}
                       onClick={() => setShowPassword(v => !v)}
-                      className="classic-password-toggle"
+                      className="premium-password-toggle"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -437,21 +427,21 @@ function TrainerLogin({ onLogin }) {
                 </div>
 
                 {/* Remember Me & Forgot */}
-                <div className="classic-options-row">
-                  <label className="classic-checkbox-label">
+                <div className="premium-options-row">
+                  <label className="premium-checkbox-label">
                     <input
                       type="checkbox"
                       checked={rememberMe}
                       onChange={e => setRememberMe(e.target.checked)}
-                      className="classic-checkbox"
+                      className="premium-checkbox"
                     />
-                    <span className="classic-checkmark" />
+                    <span className="premium-checkmark" />
                     <span>Remember me</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => navigate('/forgot-password')}
-                    className="classic-forgot-link"
+                    className="premium-forgot-link"
                   >
                     Forgot password?
                   </button>
@@ -459,16 +449,15 @@ function TrainerLogin({ onLogin }) {
 
                 {/* Submit Button */}
                 <motion.button
-                  id="login-submit"
                   type="submit"
                   disabled={loading}
                   whileHover={{ scale: loading ? 1 : 1.01 }}
                   whileTap={{ scale: loading ? 1 : 0.99 }}
-                  className="classic-submit-btn"
+                  className="premium-submit-btn"
                 >
                   {loading ? (
                     <>
-                      <Loader2 size={18} className="classic-spinner" />
+                      <Loader2 size={18} className="premium-spinner" />
                       <span>Signing in...</span>
                     </>
                   ) : (
@@ -480,1029 +469,27 @@ function TrainerLogin({ onLogin }) {
                 </motion.button>
               </form>
 
-              {/* Demo hints */}
-              <div className="classic-demo-box">
-                <span className="classic-demo-label">Access Information</span>
-                <span className="classic-demo-value">Use a Trainer account created by the Admin.</span>
-              </div>
-
-              {/* Switch Roles Links */}
-              <div className="classic-switch-roles">
-                <span className="classic-switch-label">Switch Portal</span>
-                <div className="classic-switch-links">
-                  <button type="button" onClick={() => navigate('/admin/login')} className="classic-switch-link">
+              {/* Switch Portal */}
+              <div className="premium-switch-roles">
+                <span className="premium-switch-label">Switch Portal</span>
+                <div className="premium-switch-links">
+                  <button type="button" onClick={() => navigate('/admin')} className="premium-switch-link">
                     <Shield size={15} />
                     <span>Admin Portal</span>
                   </button>
-                  <button type="button" onClick={() => navigate('/participant/login')} className="classic-switch-link">
+                  <button type="button" onClick={() => navigate('/participant')} className="premium-switch-link">
                     <User size={15} />
                     <span>Participant Space</span>
                   </button>
                 </div>
               </div>
-
             </div>
           </div>
 
           {/* Footer */}
-          <p className="classic-footer">© 2026 · WaveInit LMS · Trainer Portal</p>
+          <p className="premium-footer">© 2026 · WaveInit LMS · Trainer Portal</p>
         </motion.div>
       </section>
-
-      <style>{`
-        :root {
-          --brand-50:  #f5f3ff;
-          --brand-100: #ede9fe;
-          --brand-200: #ddd6fe;
-          --brand-300: #c4b5fd;
-          --brand-400: #a78bfa;
-          --brand-500: #8b5cf6;
-          --brand-600: #7c3aed;
-          --brand-700: #6d28d9;
-          --brand-800: #5b21b6;
-          --brand-900: #4c1d95;
-          --ink-900: #0f172a;
-          --ink-700: #334155;
-          --ink-500: #64748b;
-          --ink-400: #94a3b8;
-          --ink-300: #cbd5e1;
-          --ink-200: #e2e8f0;
-          --surface: rgba(255, 255, 255, 0.78);
-          --surface-strong: rgba(255, 255, 255, 0.92);
-        }
-
-        /* Lock the document so the login route never scrolls */
-        html:has(.classic-login-page),
-        body:has(.classic-login-page) {
-          height: 100%;
-          margin: 0;
-          overflow: hidden;
-        }
-
-        .classic-login-page {
-          height: 100vh;
-          height: 100dvh;
-          width: 100%;
-          max-width: 100vw;
-          display: flex;
-          flex-direction: row;
-          position: relative;
-          overflow: hidden;
-          box-sizing: border-box;
-          background: linear-gradient(135deg, #fbfaff 0%, #f6f3ff 50%, #faf9ff 100%);
-          font-family: 'Manrope', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-          font-feature-settings: "cv02","cv03","cv04","cv11";
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-          text-rendering: optimizeLegibility;
-        }
-
-        .classic-login-page *,
-        .classic-login-page *::before,
-        .classic-login-page *::after {
-          box-sizing: border-box;
-        }
-
-        /* ─── LEFT — VISUAL PANEL ─── */
-        .login-visual-panel {
-          flex: 1.35 1 0;
-          position: relative;
-          overflow: visible;
-          isolation: isolate;
-          background:
-            radial-gradient(ellipse at 25% 20%, rgba(167,139,250,0.25) 0%, transparent 55%),
-            radial-gradient(ellipse at 80% 80%, rgba(124,58,237,0.18) 0%, transparent 60%),
-            linear-gradient(135deg, #ede9fe 0%, #f5f3ff 50%, #faf9ff 100%);
-          clip-path: none;
-        }
-
-        .visual-bg-gradient {
-          position: absolute;
-          inset: 0;
-          background:
-            radial-gradient(circle at 20% 30%, rgba(167,139,250,0.20) 0%, transparent 45%),
-            radial-gradient(circle at 80% 70%, rgba(124,58,237,0.14) 0%, transparent 50%);
-          pointer-events: none;
-          z-index: 0;
-        }
-
-        .visual-glow {
-          position: absolute;
-          border-radius: 50%;
-          filter: blur(90px);
-          pointer-events: none;
-          z-index: 0;
-          opacity: 0.55;
-        }
-
-        .visual-glow-1 {
-          width: 480px;
-          height: 480px;
-          top: -160px;
-          left: -140px;
-          background: radial-gradient(circle, rgba(139,92,246,0.55) 0%, transparent 70%);
-          animation: visualPulse 9s ease-in-out infinite;
-        }
-
-        .visual-glow-2 {
-          width: 380px;
-          height: 380px;
-          bottom: -120px;
-          right: -100px;
-          background: radial-gradient(circle, rgba(196,181,253,0.55) 0%, transparent 70%);
-          animation: visualPulse 11s ease-in-out infinite reverse;
-        }
-
-        @keyframes visualPulse {
-          0%, 100% { transform: scale(1);    opacity: 0.45; }
-          50%      { transform: scale(1.18); opacity: 0.75; }
-        }
-
-        .visual-image-wrap {
-          position: absolute;
-          inset: 0;
-          z-index: 1;
-          display: flex;
-          align-items: flex-end;
-          justify-content: flex-start;
-          overflow: hidden;
-        }
-
-        .visual-image {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          object-position: 18% center;
-          filter: saturate(1.04) contrast(1.01);
-          user-select: none;
-          -webkit-user-drag: none;
-        }
-
-        .visual-image-overlay {
-          position: absolute;
-          inset: 0;
-          background:
-            linear-gradient(135deg,
-              rgba(124,58,237,0.04) 0%,
-              transparent 45%,
-              rgba(139,92,246,0.04) 100%);
-          pointer-events: none;
-        }
-
-        .robot-hotspot {
-          position: absolute;
-          top: 38%;
-          left: 60%;
-          width: clamp(80px, 11vw, 130px);
-          height: clamp(80px, 11vw, 130px);
-          transform: translate(-50%, -50%);
-          background: transparent;
-          border: none;
-          border-radius: 50%;
-          cursor: pointer;
-          z-index: 5;
-          padding: 0;
-          outline: none;
-          -webkit-tap-highlight-color: transparent;
-          transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-        }
-
-        .robot-hotspot:hover {
-          transform: translate(-50%, -50%) scale(1.08);
-        }
-
-        .robot-hotspot:focus-visible {
-          outline: 2px solid var(--brand-600);
-          outline-offset: 6px;
-        }
-
-        .robot-hotspot-ring {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          background: radial-gradient(
-            circle,
-            rgba(139,92,246,0.22) 0%,
-            rgba(139,92,246,0.12) 45%,
-            transparent 72%
-          );
-          opacity: 0;
-          transform: scale(0.85);
-          transition:
-            opacity 0.35s ease,
-            transform 0.35s ease;
-          pointer-events: none;
-        }
-
-        .robot-hotspot:hover .robot-hotspot-ring,
-        .robot-hotspot.is-active .robot-hotspot-ring {
-          opacity: 1;
-          transform: scale(1.05);
-        }
-
-        .robot-hotspot-pulse {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          border: 2px solid rgba(139,92,246,0.55);
-          opacity: 0;
-          pointer-events: none;
-          animation: robotPulse 2.6s ease-out infinite;
-        }
-
-        .robot-hotspot-pulse-2 {
-          animation-delay: 1.3s;
-        }
-
-        @keyframes robotPulse {
-          0% {
-            transform: scale(0.6);
-            opacity: 0;
-            border-color: rgba(139,92,246,0.65);
-          }
-          25% {
-            opacity: 0.85;
-          }
-          100% {
-            transform: scale(1.45);
-            opacity: 0;
-            border-color: rgba(167,139,250,0.05);
-          }
-        }
-
-        .robot-hotspot.is-active .robot-hotspot-pulse {
-          animation-duration: 3.6s;
-          opacity: 0.4;
-        }
-
-        .ai-cards-layer {
-          position: absolute;
-          inset: 0;
-          z-index: 10;
-          pointer-events: none;
-          overflow: visible;
-        }
-
-        .ai-cards-layer > * {
-          pointer-events: auto;
-        }
-
-        .ai-feature-card {
-          position: absolute;
-          display: flex;
-          align-items: center;
-          gap: 11px;
-          padding: 11px 14px 11px 11px;
-          min-width: 180px;
-          max-width: 240px;
-          background: rgba(255,255,255,0.88);
-          border: 1px solid rgba(255,255,255,0.95);
-          backdrop-filter: blur(18px) saturate(1.5);
-          -webkit-backdrop-filter: blur(18px) saturate(1.5);
-          border-radius: 14px;
-          box-shadow:
-            0 1px 0 rgba(255,255,255,0.95) inset,
-            0 8px 24px rgba(124,58,237,0.14),
-            0 2px 6px rgba(15,23,42,0.05);
-          will-change: transform, opacity;
-        }
-
-        .ai-feature-icon {
-          width: 34px;
-          height: 34px;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-          background: linear-gradient(135deg,
-            var(--card-accent, var(--brand-600)) 0%,
-            color-mix(in srgb, var(--card-accent, var(--brand-600)) 70%, #fff) 100%);
-          box-shadow:
-            0 1px 0 rgba(255,255,255,0.32) inset,
-            0 4px 10px color-mix(in srgb, var(--card-accent, #7c3aed) 35%, transparent);
-          flex-shrink: 0;
-        }
-
-        .ai-feature-text {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          min-width: 0;
-        }
-
-        .ai-feature-title {
-          font-size: 12.5px;
-          font-weight: 700;
-          color: var(--ink-900);
-          letter-spacing: -0.005em;
-          line-height: 1.15;
-        }
-
-        .ai-feature-sub {
-          font-size: 11px;
-          font-weight: 500;
-          color: var(--ink-500);
-          line-height: 1.2;
-          letter-spacing: 0.005em;
-        }
-
-        .ai-bubble {
-          position: absolute;
-          z-index: 20;
-          width: 210px;
-          will-change: transform, opacity;
-          filter: drop-shadow(0 8px 24px rgba(124,58,237,0.18));
-        }
-
-        .ai-bubble-inner {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          padding: 14px 16px 12px;
-          background: rgba(255,255,255,0.96);
-          border: 1px solid rgba(237,233,254,0.9);
-          backdrop-filter: blur(20px) saturate(1.6);
-          -webkit-backdrop-filter: blur(20px) saturate(1.6);
-          border-radius: 16px;
-          box-shadow:
-            0 1px 0 rgba(255,255,255,1) inset,
-            0 4px 6px rgba(15,23,42,0.04),
-            0 12px 32px rgba(124,58,237,0.13);
-          position: relative;
-        }
-
-        .ai-bubble-avatar {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 4px 10px 4px 8px;
-          background: var(--brand-600);
-          border-radius: 999px;
-          color: #fff;
-          width: fit-content;
-        }
-
-        .ai-bubble-body {
-          display: flex;
-          flex-direction: column;
-          gap: 0;
-        }
-
-        .ai-bubble-title {
-          font-size: 12px;
-          font-weight: 700;
-          color: #fff;
-          letter-spacing: 0.01em;
-          line-height: 1.2;
-        }
-
-        .ai-bubble-text {
-          font-size: 13.5px;
-          font-weight: 600;
-          color: var(--ink-900);
-          line-height: 1.45;
-          letter-spacing: 0.005em;
-        }
-
-        .ai-bubble-tail {
-          position: absolute;
-          bottom: -9px;
-          right: 28px;
-          width: 18px;
-          height: 18px;
-          background: rgba(255,255,255,0.96);
-          border-right: 1px solid rgba(237,233,254,0.9);
-          border-bottom: 1px solid rgba(237,233,254,0.9);
-          transform: rotate(45deg);
-          border-radius: 0 0 4px 0;
-        }
-
-        .robot-tap-hint {
-          position: absolute;
-          bottom: clamp(20px, 4vh, 36px);
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 6;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 7px 12px;
-          background: rgba(255,255,255,0.78);
-          border: 1px solid rgba(255,255,255,0.92);
-          backdrop-filter: blur(14px) saturate(1.4);
-          -webkit-backdrop-filter: blur(14px) saturate(1.4);
-          border-radius: 999px;
-          font-size: 11.5px;
-          font-weight: 600;
-          color: var(--brand-700);
-          letter-spacing: 0.005em;
-          box-shadow: 0 4px 14px rgba(124,58,237,0.12);
-          white-space: nowrap;
-          pointer-events: none;
-        }
-
-        .visual-float {
-          position: absolute;
-          z-index: 3;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 14px;
-          background: rgba(255,255,255,0.78);
-          border: 1px solid rgba(255,255,255,0.9);
-          backdrop-filter: blur(18px) saturate(1.4);
-          -webkit-backdrop-filter: blur(18px) saturate(1.4);
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 600;
-          color: var(--brand-700);
-          letter-spacing: 0.01em;
-          box-shadow:
-            0 1px 0 rgba(255,255,255,0.9) inset,
-            0 6px 20px rgba(124,58,237,0.14);
-        }
-
-        .visual-float-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background: #22c55e;
-          box-shadow: 0 0 0 3px rgba(34,197,94,0.18);
-          animation: floatDotPulse 2.4s ease-in-out infinite;
-        }
-
-        @keyframes floatDotPulse {
-          0%, 100% { box-shadow: 0 0 0 3px rgba(34,197,94,0.18); }
-          50%      { box-shadow: 0 0 0 6px rgba(34,197,94,0.04); }
-        }
-
-        .visual-float-1 {
-          top: clamp(20px, 4vh, 36px);
-          left: clamp(20px, 3vw, 36px);
-          z-index: 6;
-        }
-
-        /* ─── RIGHT — FORM PANEL ─── */
-        .login-form-panel {
-          flex: 1 1 0;
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: clamp(20px, 2.5vw, 40px);
-          overflow: hidden;
-          background:
-            radial-gradient(ellipse at 70% 0%, rgba(237,233,254,0.45) 0%, transparent 50%),
-            radial-gradient(ellipse at 30% 100%, rgba(221,214,254,0.35) 0%, transparent 55%),
-            linear-gradient(180deg, #ffffff 0%, #faf9ff 100%);
-          min-width: 0;
-        }
-
-        .classic-login-bg {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          z-index: 0;
-          overflow: hidden;
-        }
-
-        .classic-bg-shape {
-          position: absolute;
-          border-radius: 50%;
-          opacity: 0.55;
-          filter: blur(60px);
-        }
-
-        .classic-bg-shape-1 {
-          width: min(540px, 70%);
-          height: min(540px, 70%);
-          top: -200px;
-          right: -130px;
-          background: radial-gradient(circle, rgba(167,139,250,0.18) 0%, transparent 70%);
-        }
-
-        .classic-bg-shape-2 {
-          width: min(460px, 60%);
-          height: min(460px, 60%);
-          bottom: -180px;
-          left: -110px;
-          background: radial-gradient(circle, rgba(221,214,254,0.14) 0%, transparent 70%);
-        }
-
-        .classic-login-container {
-          position: relative;
-          z-index: 1;
-          width: 100%;
-          max-width: 460px;
-          max-height: 100%;
-          display: flex;
-          flex-direction: column;
-          gap: clamp(8px, 1.2vh, 14px);
-          overflow-y: auto;
-          overflow-x: hidden;
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-        .classic-login-container::-webkit-scrollbar { display: none; width: 0; height: 0; }
-
-        /* Glassmorphism Card */
-        .classic-login-card {
-          background: rgba(255,255,255,0.78);
-          backdrop-filter: blur(28px) saturate(1.5);
-          -webkit-backdrop-filter: blur(28px) saturate(1.5);
-          border: 1px solid rgba(255,255,255,0.92);
-          border-radius: 24px;
-          box-shadow:
-            0 1px 0 rgba(255,255,255,0.95) inset,
-            0 1px 2px rgba(15,23,42,0.04),
-            0 14px 36px rgba(124,58,237,0.09),
-            0 28px 72px rgba(124,58,237,0.07);
-          overflow: hidden;
-          position: relative;
-          flex-shrink: 0;
-          transition:
-            transform 0.45s cubic-bezier(0.16,1,0.3,1),
-            box-shadow 0.45s ease;
-        }
-
-        .classic-login-card:hover {
-          box-shadow:
-            0 1px 0 rgba(255,255,255,0.95) inset,
-            0 1px 2px rgba(15,23,42,0.04),
-            0 18px 44px rgba(124,58,237,0.13),
-            0 36px 88px rgba(124,58,237,0.09);
-        }
-
-        .classic-card-accent {
-          height: 3px;
-          background: linear-gradient(90deg, var(--brand-700) 0%, var(--brand-500) 50%, var(--brand-300) 100%);
-        }
-
-        .classic-card-body {
-          padding: clamp(24px, 3.4vh, 36px) clamp(24px, 4vw, 38px);
-        }
-
-        .waveinit-logo-container {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          margin-bottom: clamp(20px, 3vh, 32px);
-          user-select: none;
-        }
-        .waveinit-logo-icon-box {
-          width: 32px;
-          height: 32px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .waveinit-logo-svg {
-          width: 100%;
-          height: 100%;
-          border-radius: 8px;
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-        }
-        .waveinit-logo-text {
-          font-family: 'Outfit', 'Inter', sans-serif;
-          font-size: 21px;
-          font-weight: 800;
-          color: var(--ink-900);
-          letter-spacing: -0.02em;
-          line-height: 1;
-        }
-        .waveinit-logo-highlight {
-          background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-500) 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-
-        /* Alerts */
-        .classic-alert {
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          padding: 10px 14px;
-          border-radius: 11px;
-          font-size: 13px;
-          font-weight: 500;
-          overflow: hidden;
-          letter-spacing: 0.005em;
-        }
-
-        .classic-alert-error {
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          color: #dc2626;
-        }
-
-        .classic-alert-success {
-          background: #f0fdf4;
-          border: 1px solid #bbf7d0;
-          color: #16a34a;
-        }
-
-        /* Form Fields */
-        .classic-field {
-          margin-bottom: clamp(12px, 1.8vh, 16px);
-        }
-
-        .classic-label {
-          display: block;
-          font-size: 12.5px;
-          font-weight: 600;
-          color: var(--ink-700);
-          margin-bottom: 7px;
-          letter-spacing: 0.01em;
-          line-height: 1.2;
-        }
-
-        .classic-input-wrapper {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .classic-input-icon {
-          position: absolute;
-          left: 14px;
-          color: var(--ink-400);
-          pointer-events: none;
-          transition: color 0.25s ease;
-          z-index: 1;
-        }
-
-        .classic-field.focused .classic-input-icon {
-          color: var(--brand-600);
-        }
-
-        .classic-input {
-          width: 100%;
-          height: clamp(44px, 5.6vh, 50px);
-          padding: 0 14px 0 44px;
-          background: rgba(248,250,252,0.85);
-          border: 1.5px solid rgba(226,232,240,0.9);
-          border-radius: 13px;
-          font-size: 14px;
-          font-weight: 500;
-          color: var(--ink-900);
-          font-family: 'Manrope', 'Inter', sans-serif;
-          letter-spacing: 0.005em;
-          transition:
-            border-color 0.25s ease,
-            background 0.25s ease,
-            box-shadow 0.25s ease;
-          outline: none;
-          box-shadow: 0 1px 2px rgba(15,23,42,0.02);
-        }
-
-        .classic-input::placeholder {
-          color: var(--ink-300);
-          font-weight: 400;
-        }
-
-        .classic-input:hover:not(:focus) {
-          background: #fff;
-          border-color: var(--brand-200);
-          box-shadow: 0 2px 6px rgba(124,58,237,0.06);
-        }
-
-        .classic-input:focus {
-          background: #fff;
-          border-color: var(--brand-500);
-          box-shadow:
-            0 0 0 4px rgba(139,92,246,0.14),
-            0 4px 12px rgba(124,58,237,0.08);
-        }
-
-        .classic-password-toggle {
-          position: absolute;
-          right: 10px;
-          background: none;
-          border: none;
-          color: var(--ink-400);
-          cursor: pointer;
-          padding: 7px;
-          display: flex;
-          align-items: center;
-          border-radius: 9px;
-          transition: color 0.2s ease, background 0.2s ease;
-          z-index: 1;
-        }
-
-        .classic-password-toggle:hover {
-          color: var(--brand-600);
-          background: var(--brand-50);
-        }
-
-        /* Options Row */
-        .classic-options-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: clamp(14px, 2vh, 20px);
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-
-        .classic-checkbox-label {
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          font-size: 13px;
-          color: var(--ink-700);
-          cursor: pointer;
-          user-select: none;
-          position: relative;
-          font-weight: 500;
-          letter-spacing: 0.005em;
-        }
-
-        .classic-checkbox {
-          position: absolute;
-          opacity: 0;
-          width: 0;
-          height: 0;
-        }
-
-        .classic-checkmark {
-          width: 18px;
-          height: 18px;
-          border: 1.5px solid var(--ink-300);
-          border-radius: 5px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-          background: #fff;
-          flex-shrink: 0;
-        }
-
-        .classic-checkbox-label:hover .classic-checkmark {
-          border-color: var(--brand-400);
-        }
-
-        .classic-checkbox:checked + .classic-checkmark {
-          background: var(--brand-600);
-          border-color: var(--brand-600);
-          box-shadow: 0 2px 6px rgba(124,58,237,0.32);
-        }
-
-        .classic-checkbox:checked + .classic-checkmark::after {
-          content: '';
-          width: 4px;
-          height: 8px;
-          border: solid #fff;
-          border-width: 0 2px 2px 0;
-          transform: rotate(45deg);
-          margin-top: -1px;
-        }
-
-        .classic-forgot-link {
-          background: none;
-          border: none;
-          font-size: 13px;
-          font-weight: 600;
-          color: var(--brand-600);
-          cursor: pointer;
-          padding: 0;
-          font-family: inherit;
-          transition: color 0.2s ease;
-          letter-spacing: 0.005em;
-        }
-
-        .classic-forgot-link:hover {
-          color: var(--brand-800);
-          text-decoration: underline;
-        }
-
-        /* Submit Button */
-        .classic-submit-btn {
-          width: 100%;
-          height: clamp(46px, 6vh, 52px);
-          background: linear-gradient(135deg, var(--brand-700) 0%, var(--brand-500) 100%);
-          background-size: 200% 200%;
-          background-position: 0% 50%;
-          color: #fff;
-          border: none;
-          border-radius: 13px;
-          font-size: 15px;
-          font-weight: 700;
-          font-family: 'Manrope', 'Inter', sans-serif;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 9px;
-          transition:
-            background-position 0.5s ease,
-            box-shadow 0.35s ease,
-            transform 0.2s ease;
-          box-shadow:
-            0 1px 0 rgba(255,255,255,0.22) inset,
-            0 10px 22px rgba(124,58,237,0.34),
-            0 2px 6px rgba(124,58,237,0.22);
-          position: relative;
-          overflow: hidden;
-          letter-spacing: 0.01em;
-        }
-
-        .classic-submit-btn::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(120deg,
-            transparent 0%,
-            transparent 35%,
-            rgba(255,255,255,0.22) 50%,
-            transparent 65%,
-            transparent 100%);
-          transform: translateX(-100%);
-          transition: transform 0.7s ease;
-        }
-
-        .classic-submit-btn:hover:not(:disabled) {
-          background-position: 100% 50%;
-          box-shadow:
-            0 1px 0 rgba(255,255,255,0.22) inset,
-            0 14px 32px rgba(124,58,237,0.44),
-            0 4px 10px rgba(124,58,237,0.26);
-          transform: translateY(-1px);
-        }
-
-        .classic-submit-btn:hover:not(:disabled)::before {
-          transform: translateX(100%);
-        }
-
-        .classic-submit-btn:active:not(:disabled) {
-          transform: translateY(0);
-          box-shadow: 0 4px 12px rgba(124,58,237,0.3);
-        }
-
-        .classic-submit-btn:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-        }
-
-        .classic-spinner { animation: classicSpin 0.8s linear infinite; }
-
-        @keyframes classicSpin { to { transform: rotate(360deg); } }
-
-        /* Demo Box */
-        .classic-demo-box {
-          background: linear-gradient(135deg, var(--brand-50) 0%, rgba(255,255,255,0.6) 100%);
-          border: 1px solid var(--brand-100);
-          border-radius: 12px;
-          padding: 11px 14px;
-          text-align: center;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-          margin-top: 16px;
-        }
-
-        .classic-demo-label {
-          font-size: 10px;
-          font-weight: 700;
-          color: var(--brand-700);
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          line-height: 1.2;
-        }
-
-        .classic-demo-value {
-          font-size: 12.5px;
-          font-weight: 600;
-          color: var(--ink-700);
-          font-family: 'Manrope', 'Inter', monospace;
-          line-height: 1.3;
-          letter-spacing: 0.005em;
-        }
-
-        /* Switch Roles Links */
-        .classic-switch-roles {
-          margin-top: clamp(16px, 2.5vh, 24px);
-          padding-top: clamp(14px, 2vh, 20px);
-          border-top: 1px dashed rgba(226, 232, 240, 0.9);
-          text-align: center;
-        }
-        .classic-switch-label {
-          display: block;
-          font-size: 11px;
-          font-weight: 700;
-          color: var(--ink-400);
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          margin-bottom: 10px;
-        }
-        .classic-switch-links {
-          display: flex;
-          justify-content: center;
-          gap: 12px;
-        }
-        .classic-switch-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 12px;
-          background: rgba(248, 250, 252, 0.85);
-          border: 1px solid rgba(226, 232, 240, 0.9);
-          border-radius: 8px;
-          font-size: 12.5px;
-          font-weight: 600;
-          color: var(--ink-700);
-          cursor: pointer;
-          transition: all 0.25s ease;
-          font-family: inherit;
-        }
-        .classic-switch-link:hover {
-          background: #fff;
-          border-color: var(--brand-400);
-          color: var(--brand-700);
-          transform: translateY(-1px);
-          box-shadow: 0 4px 10px rgba(124,58,237,0.06);
-        }
-
-        /* Footer */
-        .classic-footer {
-          text-align: center;
-          font-size: 11.5px;
-          color: var(--ink-400);
-          font-weight: 500;
-          margin: 0;
-          flex-shrink: 0;
-          letter-spacing: 0.01em;
-        }
-
-        /* RESPONSIVE BREAKPOINTS */
-        @media (max-width: 1100px) {
-          .login-visual-panel { flex: 1.1 1 0; }
-          .ai-feature-card {
-            min-width: 160px;
-            max-width: 200px;
-            padding: 9px 12px 9px 9px;
-            gap: 9px;
-          }
-          .ai-feature-icon { width: 30px; height: 30px; border-radius: 9px; }
-          .ai-feature-title { font-size: 12px; }
-          .ai-feature-sub { font-size: 10.5px; }
-          .ai-bubble { max-width: 200px; }
-          .ai-bubble-text { font-size: 12px; }
-        }
-
-        @media (max-width: 900px) {
-          .login-visual-panel { display: none; }
-          .login-form-panel {
-            flex: 1 1 100%;
-            background:
-              radial-gradient(ellipse at 50% 0%, rgba(237,233,254,0.55) 0%, transparent 55%),
-              radial-gradient(ellipse at 50% 100%, rgba(221,214,254,0.4) 0%, transparent 60%),
-              linear-gradient(180deg, #ffffff 0%, #faf9ff 100%);
-          }
-        }
-
-        @media (max-width: 480px) {
-          .login-form-panel { padding: 14px; }
-          .classic-login-container { max-width: 100%; }
-          .classic-card-body { padding: 22px 20px 20px; }
-        }
-
-        /* Very short viewports */
-        @media (max-height: 680px) {
-          .classic-demo-box { display: none; }
-        }
-
-        @media (max-height: 480px) {
-          .classic-footer { display: none; }
-          .classic-card-body { padding: 16px 18px; }
-          .classic-field { margin-bottom: 8px; }
-        }
-
-        /* Reduce motion */
-        @media (prefers-reduced-motion: reduce) {
-          .visual-glow-1, .visual-glow-2, .visual-float-dot,
-          .robot-hotspot-pulse { animation: none; }
-          .classic-login-card,
-          .classic-input,
-          .classic-submit-btn,
-          .robot-hotspot-ring { transition: none; }
-        }
-
-        /* Fix autofill styles */
-        .classic-input:-webkit-autofill,
-        .classic-input:-webkit-autofill:hover,
-        .classic-input:-webkit-autofill:focus {
-          -webkit-text-fill-color: var(--ink-900) !important;
-          -webkit-box-shadow: 0 0 0 30px rgba(248,250,252,0.95) inset !important;
-          caret-color: var(--ink-900);
-          transition: background-color 5000s ease-in-out 0s;
-        }
-
-        .classic-input:focus:-webkit-autofill {
-          -webkit-box-shadow: 0 0 0 30px #fff inset !important;
-        }
-      `}</style>
     </div>
   )
 }

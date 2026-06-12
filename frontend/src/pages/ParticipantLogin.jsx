@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -10,7 +10,6 @@ import { useToast } from '../components/Toast'
 import { API } from '../api/api'
 import loginIllustration from '../assets/blue.png'
 
-/* ─── Floating AI Cards Data (Tailored for Participant role) ─── */
 const AI_CARDS = [
   {
     id: 'personalized',
@@ -80,7 +79,6 @@ function AIFloatingCards({ visible }) {
           animate="visible"
           exit="exit"
         >
-          {/* AI Assistant speech bubble — floats above-left of robot */}
           <motion.div
             className="ai-bubble"
             style={{ bottom: '34%', left: '22%' }}
@@ -110,11 +108,9 @@ function AIFloatingCards({ visible }) {
                 <span className="ai-bubble-text">How can I help you learn today?</span>
               </div>
             </div>
-            {/* tail points down-right toward robot */}
             <span className="ai-bubble-tail" />
           </motion.div>
 
-          {/* Feature cards */}
           {AI_CARDS.map(({ id, icon: Icon, title, subtitle, accent, pos, from }) => (
             <motion.div
               key={id}
@@ -149,12 +145,12 @@ function ParticipantLogin({ onLogin }) {
   const [aiCardsVisible, setAiCardsVisible] = useState(false)
 
   const navigate = useNavigate()
+  const navTimeoutRef = useRef(null)
   const location = useLocation()
   const { success: showSuccess, error: showError } = useToast()
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  // Lock the scroll
   useEffect(() => {
     const prevHtmlOverflow = document.documentElement.style.overflow
     const prevBodyOverflow = document.body.style.overflow
@@ -165,10 +161,8 @@ function ParticipantLogin({ onLogin }) {
     document.documentElement.style.height = '100%'
     document.body.style.height = '100%'
 
-    // Remember current role route context
     localStorage.setItem('lastRole', 'PARTICIPANT')
 
-    // Load remembered email if exists
     const remembered = localStorage.getItem('rememberedEmail')
     const remember = localStorage.getItem('rememberMe') === 'true'
     if (remember && remembered) {
@@ -181,6 +175,7 @@ function ParticipantLogin({ onLogin }) {
       document.body.style.overflow = prevBodyOverflow
       document.documentElement.style.height = prevHtmlHeight
       document.body.style.height = prevBodyHeight
+      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current)
     }
   }, [])
 
@@ -239,7 +234,7 @@ function ParticipantLogin({ onLogin }) {
       showSuccess('Welcome! Redirecting to classroom...')
       onLogin(data)
 
-      setTimeout(() => {
+      navTimeoutRef.current = setTimeout(() => {
         navigate('/participant')
       }, 500)
     } catch (err) {
@@ -250,7 +245,7 @@ function ParticipantLogin({ onLogin }) {
   }
 
   return (
-    <div className="classic-login-page participant-theme">
+    <div className="premium-login-page">
       {/* ─── LEFT VISUAL PANEL ─── */}
       <aside className="login-visual-panel">
         <div className="visual-bg-gradient" />
@@ -272,7 +267,6 @@ function ParticipantLogin({ onLogin }) {
           <div className="visual-image-overlay" />
         </motion.div>
 
-        {/* Interactive robot hotspot */}
         <motion.button
           type="button"
           className={`robot-hotspot ${aiCardsVisible ? 'is-active' : ''}`}
@@ -289,7 +283,6 @@ function ParticipantLogin({ onLogin }) {
           <span className="robot-hotspot-ring" />
         </motion.button>
 
-        {/* "AI Online" pill */}
         <motion.div
           className="visual-float visual-float-1"
           initial={{ opacity: 0, y: 14 }}
@@ -300,10 +293,8 @@ function ParticipantLogin({ onLogin }) {
           <span>AI Online</span>
         </motion.div>
 
-        {/* Floating AI feature cards */}
         <AIFloatingCards visible={aiCardsVisible} />
 
-        {/* Tap-hint */}
         <AnimatePresence>
           {!aiCardsVisible && (
             <motion.div
@@ -322,37 +313,36 @@ function ParticipantLogin({ onLogin }) {
 
       {/* ─── RIGHT FORM PANEL ─── */}
       <section className="login-form-panel">
-        <div className="classic-login-bg">
-          <div className="classic-bg-shape classic-bg-shape-1" />
-          <div className="classic-bg-shape classic-bg-shape-2" />
+        <div className="premium-login-bg">
+          <div className="premium-bg-shape premium-bg-shape-1" />
+          <div className="premium-bg-shape premium-bg-shape-2" />
         </div>
 
         <motion.div
-          className="classic-login-container"
+          className="premium-login-container"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
-          {/* Glassmorphism Card */}
-          <div className="classic-login-card">
-            <div className="classic-card-accent" />
+          <div className="premium-login-card">
+            <div className="premium-card-accent" />
 
-            <div className="classic-card-body">
+            <div className="premium-card-body">
               {/* WaveInit Logo */}
-              <div className="waveinit-logo-container">
-                <div className="waveinit-logo-icon-box">
-                  <svg className="waveinit-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <div className="premium-logo-container">
+                <div className="premium-logo-icon-box">
+                  <svg className="premium-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <defs>
-                      <linearGradient id="waveinit-logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                      <linearGradient id="participant-logo-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
                         <stop stopColor="var(--brand-600)" />
                         <stop offset="1" stopColor="var(--brand-400)" />
                       </linearGradient>
                     </defs>
-                    <rect width="32" height="32" rx="8" fill="url(#waveinit-logo-grad)" />
+                    <rect width="32" height="32" rx="8" fill="url(#participant-logo-grad)" />
                     <path d="M7 16C9.5 16 11 11 13 11C15 11 16.5 21 18.5 21C20.5 21 22 16 25 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <span className="waveinit-logo-text">Wave<span className="waveinit-logo-highlight">Init</span></span>
+                <span className="premium-logo-text">Wave<span className="premium-logo-highlight">Init</span></span>
               </div>
 
               {/* Portal Header */}
@@ -368,7 +358,7 @@ function ParticipantLogin({ onLogin }) {
                     initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                     animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
                     exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    className="classic-alert classic-alert-error"
+                    className="premium-alert premium-alert-error"
                   >
                     <AlertCircle size={16} />
                     <span>{error}</span>
@@ -381,7 +371,7 @@ function ParticipantLogin({ onLogin }) {
                     initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                     animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
                     exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                    className="classic-alert classic-alert-success"
+                    className="premium-alert premium-alert-success"
                   >
                     <CheckCircle2 size={16} />
                     <span>{success}</span>
@@ -391,10 +381,10 @@ function ParticipantLogin({ onLogin }) {
 
               <form onSubmit={handleSubmit}>
                 {/* Email Field */}
-                <div className={`classic-field ${focusedField === 'email' ? 'focused' : ''}`}>
-                  <label htmlFor="login-email" className="classic-label">Username or Email</label>
-                  <div className="classic-input-wrapper">
-                    <Mail size={18} className="classic-input-icon" />
+                <div className={`premium-field ${focusedField === 'email' ? 'focused' : ''}`}>
+                  <label htmlFor="login-email" className="premium-label">Username or Email</label>
+                  <div className="premium-input-wrapper">
+                    <Mail size={18} className="premium-input-icon" />
                     <input
                       id="login-email"
                       type="text"
@@ -404,16 +394,16 @@ function ParticipantLogin({ onLogin }) {
                       onBlur={() => setFocusedField(null)}
                       placeholder="you@example.com"
                       autoComplete="username"
-                      className="classic-input"
+                      className="premium-input"
                     />
                   </div>
                 </div>
 
                 {/* Password Field */}
-                <div className={`classic-field ${focusedField === 'password' ? 'focused' : ''}`}>
-                  <label htmlFor="login-password" className="classic-label">Password</label>
-                  <div className="classic-input-wrapper">
-                    <Lock size={18} className="classic-input-icon" />
+                <div className={`premium-field ${focusedField === 'password' ? 'focused' : ''}`}>
+                  <label htmlFor="login-password" className="premium-label">Password</label>
+                  <div className="premium-input-wrapper">
+                    <Lock size={18} className="premium-input-icon" />
                     <input
                       id="login-password"
                       type={showPassword ? 'text' : 'password'}
@@ -423,13 +413,13 @@ function ParticipantLogin({ onLogin }) {
                       onBlur={() => setFocusedField(null)}
                       placeholder="••••••••"
                       autoComplete="current-password"
-                      className="classic-input"
+                      className="premium-input"
                     />
                     <button
                       type="button"
                       tabIndex={-1}
                       onClick={() => setShowPassword(v => !v)}
-                      className="classic-password-toggle"
+                      className="premium-password-toggle"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -438,21 +428,21 @@ function ParticipantLogin({ onLogin }) {
                 </div>
 
                 {/* Remember Me & Forgot */}
-                <div className="classic-options-row">
-                  <label className="classic-checkbox-label">
+                <div className="premium-options-row">
+                  <label className="premium-checkbox-label">
                     <input
                       type="checkbox"
                       checked={rememberMe}
                       onChange={e => setRememberMe(e.target.checked)}
-                      className="classic-checkbox"
+                      className="premium-checkbox"
                     />
-                    <span className="classic-checkmark" />
+                    <span className="premium-checkmark" />
                     <span>Remember me</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => navigate('/forgot-password')}
-                    className="classic-forgot-link"
+                    className="premium-forgot-link"
                   >
                     Forgot password?
                   </button>
@@ -460,16 +450,15 @@ function ParticipantLogin({ onLogin }) {
 
                 {/* Submit Button */}
                 <motion.button
-                  id="login-submit"
                   type="submit"
                   disabled={loading}
                   whileHover={{ scale: loading ? 1 : 1.01 }}
                   whileTap={{ scale: loading ? 1 : 0.99 }}
-                  className="classic-submit-btn"
+                  className="premium-submit-btn"
                 >
                   {loading ? (
                     <>
-                      <Loader2 size={18} className="classic-spinner" />
+                      <Loader2 size={18} className="premium-spinner" />
                       <span>Signing in...</span>
                     </>
                   ) : (
@@ -481,34 +470,33 @@ function ParticipantLogin({ onLogin }) {
                 </motion.button>
               </form>
 
-              {/* Create Account Link (Participant Only) */}
-              <p className="classic-register-text">
+              {/* Create Account */}
+              <p className="premium-register-text">
                 Don't have an account?{' '}
-                <button type="button" onClick={() => navigate('/register')} className="classic-register-link">
+                <button type="button" onClick={() => navigate('/register')} className="premium-register-link">
                   Create Account
                 </button>
               </p>
 
-              {/* Switch Roles Links */}
-              <div className="classic-switch-roles">
-                <span className="classic-switch-label">Switch Portal</span>
-                <div className="classic-switch-links">
-                  <button type="button" onClick={() => navigate('/trainer/login')} className="classic-switch-link">
+              {/* Switch Portal */}
+              <div className="premium-switch-roles">
+                <span className="premium-switch-label">Switch Portal</span>
+                <div className="premium-switch-links">
+                  <button type="button" onClick={() => navigate('/trainer')} className="premium-switch-link">
                     <GraduationCap size={15} />
                     <span>Trainer Hub</span>
                   </button>
-                  <button type="button" onClick={() => navigate('/admin/login')} className="classic-switch-link">
+                  <button type="button" onClick={() => navigate('/admin')} className="premium-switch-link">
                     <Shield size={15} />
                     <span>Admin Portal</span>
                   </button>
                 </div>
               </div>
-
             </div>
           </div>
 
           {/* Footer */}
-          <p className="classic-footer">© 2026 · WaveInit LMS · Learning Space</p>
+          <p className="premium-footer">© 2026 · WaveInit LMS · Learning Space</p>
         </motion.div>
       </section>
     </div>
