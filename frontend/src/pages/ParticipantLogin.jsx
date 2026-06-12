@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Eye, EyeOff, Mail, Lock, Shield, GraduationCap,
+  Eye, EyeOff, Mail, Lock,
   CheckCircle2, AlertCircle, ArrowRight, Loader2
 } from 'lucide-react'
 import { useToast } from '../components/Toast'
@@ -275,27 +275,7 @@ function ParticipantLogin({ onLogin }) {
             </button>
           </p>
 
-          <div className="trainer-switch-section">
-            <span className="trainer-switch-label">Switch Portal</span>
-            <div className="trainer-switch-row">
-              <button
-                type="button"
-                onClick={() => navigate('/trainer')}
-                className="trainer-switch-btn"
-              >
-                <GraduationCap size={14} />
-                <span>Trainer Hub</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/admin')}
-                className="trainer-switch-btn"
-              >
-                <Shield size={14} />
-                <span>Admin Portal</span>
-              </button>
-            </div>
-          </div>
+
 
         </motion.div>
 
