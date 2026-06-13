@@ -25,7 +25,7 @@
 }
 
 /* Card container ─────────────────────────────────────────────────────────── */
-.ac-card {
+.ac-backdrop .ac-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 18px;
@@ -40,7 +40,7 @@
     0 4px 16px rgba(15, 23, 42, 0.10);
   font-family: 'Inter', system-ui, sans-serif;
 }
-.ac-card--locked {
+.ac-backdrop .ac-card--locked {
   max-width: 480px;
   text-align: center;
   padding: 36px 30px 28px;
@@ -376,7 +376,7 @@
 
 /* Mobile tweaks */
 @media (max-width: 480px) {
-  .ac-card { max-width: 100%; border-radius: 14px; }
+  .ac-backdrop .ac-card { max-width: 100%; border-radius: 14px; }
   .ac-card__header { padding: 14px 18px 12px; }
   .ac-step { padding: 20px 18px 18px; }
   .ac-step__title { font-size: 18px; }

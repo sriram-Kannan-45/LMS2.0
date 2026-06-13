@@ -494,11 +494,6 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       initial="hidden"
       animate="visible"
     >
-      {/* Page Title Bar */}
-      <motion.div variants={itemVariants} style={{ marginBottom: 32 }}>
-        {pageTitle('Dashboard')}
-      </motion.div>
-
       {/* ── OVERVIEW ── */}
       {tab === 'overview' && (
         <AdminOverviewTab
@@ -897,6 +892,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
         <motion.div variants={itemVariants}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Create Trainer')}
+            <button className="ac-btn ac-btn-secondary" onClick={() => handleTabChange('trainers')}>← Back to Trainers</button>
           </div>
           <div className="ac-grid-2">
             <div className="ac-card">
@@ -940,6 +936,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
         <motion.div variants={itemVariants}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Create Training')}
+            <button className="ac-btn ac-btn-secondary" onClick={() => handleTabChange('trainings')}>← Back to Trainings</button>
           </div>
           <div className="ac-grid-2">
             <div className="ac-card">

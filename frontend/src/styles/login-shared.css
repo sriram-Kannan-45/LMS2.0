@@ -986,6 +986,7 @@ body:has(.premium-login-page) {
   align-items: center;
   justify-content: center;
   font-family: 'Poppins', sans-serif;
+  background: #0f172a;
 }
 
 .trainer-video-bg {

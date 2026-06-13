@@ -44,7 +44,6 @@ const navItems = {
     { key: 'notes', label: 'Notes', icon: 'Lessons' },
     { key: 'feedback', label: 'Feedback', icon: 'Feedback' },
     { key: 'surveys', label: 'Surveys', icon: 'Surveys' },
-    { key: 'createTrainer', label: 'Add Trainer', icon: 'Add Trainer' },
     { key: 'createTraining', label: 'Add Training', icon: 'Add Training' },
   ],
   TRAINER: [
