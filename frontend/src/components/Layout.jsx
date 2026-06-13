@@ -55,7 +55,6 @@ const navItems = {
   ],
   PARTICIPANT: [
     { key: 'overview', label: 'Overview', icon: 'Overview' },
-    { key: 'available', label: 'Courses', icon: 'Available' },
     { key: 'myEnrollments', label: 'My Courses', icon: 'Enrollments' },
     { key: 'lessons', label: 'Lessons', icon: 'Lessons' },
     { key: 'ai-quizzes', label: 'Quizzes', icon: 'AI Quizzes' },

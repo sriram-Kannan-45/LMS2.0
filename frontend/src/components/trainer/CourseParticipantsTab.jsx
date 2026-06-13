@@ -214,33 +214,254 @@ function ParticipantDetailModal({ user, courseId, participantId, onClose }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// Invite Modal
+// ════════════════════════════════════════════════════════════════════════════
+function InviteModal({ user, courseId, onClose, onInviteSuccess }) {
+  const { error: showError, success } = useToast()
+  const [participants, setParticipants] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [invitingId, setInvitingId] = useState(null)
+
+  useEffect(() => {
+    let aborted = false
+    const fetchAvailable = async () => {
+      try {
+        const r = await fetch(API.TRAINER_COURSES.AVAILABLE_PARTICIPANTS(courseId), {
+          headers: { Authorization: `Bearer ${user.token}` },
+        })
+        const d = await r.json()
+        if (aborted) return
+        if (d.success) {
+          setParticipants(d.participants || [])
+        } else {
+          showError(d.error || 'Failed to load available participants')
+        }
+      } catch (e) {
+        if (!aborted) showError(e.message)
+      } finally {
+        if (!aborted) setLoading(false)
+      }
+    }
+    fetchAvailable()
+    return () => { aborted = true }
+  }, [courseId])
+
+  const handleInvite = async (participantId) => {
+    try {
+      setInvitingId(participantId)
+      const r = await fetch(API.TRAINER_COURSES.PARTICIPANTS(courseId), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ participantId }),
+      })
+      const d = await r.json()
+      if (d.success) {
+        success('Participant invited successfully!')
+        setParticipants(prev => prev.filter(p => p.id !== participantId))
+        onInviteSuccess()
+      } else {
+        showError(d.error || 'Failed to invite participant')
+      }
+    } catch (e) {
+      showError(e.message)
+    } finally {
+      setInvitingId(null)
+    }
+  }
+
+  const filtered = useMemo(() => {
+    if (!search) return participants
+    const q = search.toLowerCase()
+    return participants.filter(p =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.email || '').toLowerCase().includes(q)
+    )
+  }, [participants, search])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
+        zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <motion.div
+        onClick={(e) => e.stopPropagation()}
+        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        style={{
+          background: '#fff', borderRadius: 14, width: '100%', maxWidth: 520,
+          maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+          boxShadow: '0 25px 60px -10px rgba(0,0,0,0.25)',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          padding: 18, borderBottom: '1px solid #e2e8f0',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
+              Invite Participant
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+              Select a registered participant to enroll them directly.
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            border: 'none', background: '#f1f5f9', color: '#475569',
+            padding: 8, borderRadius: 8, cursor: 'pointer',
+          }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div style={{ padding: 12, borderBottom: '1px solid #e2e8f0' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10,
+            padding: '8px 12px',
+          }}>
+            <Search size={14} color="#94a3b8" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or email…"
+              style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13 }}
+            />
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}>
+              <span style={{ fontSize: 13, color: '#64748b' }}>Loading available participants...</span>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={{
+              padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 13,
+              border: '1px dashed #cbd5e1', borderRadius: 12,
+            }}>
+              {participants.length === 0
+                ? 'All registered participants are already enrolled.'
+                : 'No participants match your search.'}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {filtered.map(p => (
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'flex', gap: 12, alignItems: 'center', padding: 10,
+                    border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff',
+                  }}
+                >
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 999, flexShrink: 0,
+                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12, fontWeight: 700,
+                  }}>
+                    {initials(p.name)}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.email}
+                    </div>
+                  </div>
+                  <button
+                    disabled={invitingId === p.id}
+                    onClick={() => handleInvite(p.id)}
+                    style={{
+                      padding: '6px 12px', background: '#4f46e5', color: '#fff',
+                      border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                      cursor: 'pointer', transition: 'opacity 0.2s',
+                      opacity: invitingId === p.id ? 0.6 : 1,
+                    }}
+                  >
+                    {invitingId === p.id ? 'Adding...' : 'Add'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Main tab
 // ════════════════════════════════════════════════════════════════════════════
 export default function CourseParticipantsTab({ user, courseId }) {
-  const { error: showError } = useToast()
+  const { error: showError, success } = useToast()
   const [participants, setParticipants] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('progress')
   const [openDetailId, setOpenDetailId] = useState(null)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+
+  const fetchParticipants = async () => {
+    try {
+      setLoading(true)
+      const r = await fetch(API.TRAINER_COURSES.PARTICIPANTS(courseId), {
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+      const d = await r.json()
+      if (d.success) setParticipants(d.participants || [])
+      else showError(d.error || 'Failed to load participants')
+    } catch (e) { showError(e.message) }
+    finally { setLoading(false) }
+  }
 
   useEffect(() => {
-    let aborted = false
-    ;(async () => {
-      try {
-        setLoading(true)
-        const r = await fetch(API.TRAINER_COURSES.PARTICIPANTS(courseId), {
-          headers: { Authorization: `Bearer ${user.token}` },
-        })
-        const d = await r.json()
-        if (aborted) return
-        if (d.success) setParticipants(d.participants || [])
-        else showError(d.error || 'Failed to load participants')
-      } catch (e) { showError(e.message) }
-      finally { if (!aborted) setLoading(false) }
-    })()
-    return () => { aborted = true }
+    fetchParticipants()
   }, [courseId])
+
+  const handleApprove = async (userId) => {
+    try {
+      const r = await fetch(`${API.TRAINER_COURSES.PARTICIPANTS(courseId)}/${userId}/approve`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+      const d = await r.json()
+      if (d.success) {
+        success('Participant approved successfully!')
+        await fetchParticipants()
+      } else {
+        showError(d.error || 'Failed to approve participant')
+      }
+    } catch (e) { showError(e.message) }
+  }
+
+  const handleReject = async (userId) => {
+    if (!window.confirm('Are you sure you want to reject this enrollment request?')) return
+    try {
+      const r = await fetch(`${API.TRAINER_COURSES.PARTICIPANTS(courseId)}/${userId}/reject`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${user.token}` },
+      })
+      const d = await r.json()
+      if (d.success) {
+        success('Enrollment request rejected.')
+        await fetchParticipants()
+      } else {
+        showError(d.error || 'Failed to reject enrollment')
+      }
+    } catch (e) { showError(e.message) }
+  }
 
   const filtered = useMemo(() => {
     let out = participants
@@ -308,6 +529,16 @@ export default function CourseParticipantsTab({ user, courseId }) {
           <option value="score">Sort: Quiz Score (high→low)</option>
           <option value="name">Sort: Name (A→Z)</option>
         </select>
+        <button
+          onClick={() => setShowInviteModal(true)}
+          style={{
+            background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 10,
+            padding: '10px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            marginLeft: 'auto',
+          }}
+        >
+          Invite Participant
+        </button>
       </div>
 
       {/* Table */}
@@ -352,39 +583,79 @@ export default function CourseParticipantsTab({ user, courseId }) {
                         {initials(p.name)}
                       </div>
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{p.name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{p.name}</span>
+                          {p.status === 'PENDING' && (
+                            <span style={{
+                              fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 999,
+                              background: '#ffebeb', color: '#dc2626', textTransform: 'uppercase',
+                              letterSpacing: 0.3,
+                            }}>
+                              Pending
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 11, color: '#64748b' }}>{p.email}</div>
                       </div>
                     </div>
                   </td>
                   <td style={{ ...td, fontSize: 12, color: '#64748b' }}>{fmtDate(p.enrolledAt)}</td>
                   <td style={{ ...td, fontSize: 13, color: '#475569' }}>
-                    {p.lessonsDone} / {p.totalLessons}
+                    {p.status === 'PENDING' ? '—' : `${p.lessonsDone} / ${p.totalLessons}`}
                   </td>
-                  <td style={{ ...td, fontSize: 13, fontWeight: 600, color: p.avgQuizScore ? '#15803d' : '#94a3b8' }}>
-                    {p.avgQuizScore != null ? `${Number(p.avgQuizScore).toFixed(0)}%` : '—'}
+                  <td style={{ ...td, fontSize: 13, fontWeight: 600, color: p.avgQuizScore && p.status !== 'PENDING' ? '#15803d' : '#94a3b8' }}>
+                    {p.avgQuizScore != null && p.status !== 'PENDING' ? `${Number(p.avgQuizScore).toFixed(0)}%` : '—'}
                   </td>
                   <td style={{ ...td, minWidth: 140 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <ProgressBar percent={p.progressPercent} />
-                      <span style={{ fontSize: 10, color: '#94a3b8' }}>
-                        {Math.round(p.progressPercent)}%
-                      </span>
-                    </div>
+                    {p.status === 'PENDING' ? (
+                      <span style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>Awaiting Approval</span>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <ProgressBar percent={p.progressPercent} />
+                        <span style={{ fontSize: 10, color: '#94a3b8' }}>
+                          {Math.round(p.progressPercent)}%
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td style={td}>
-                    <button
-                      onClick={() => setOpenDetailId(p.participantId)}
-                      title="View detail"
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        padding: '6px 10px', background: '#eef2ff', color: '#4f46e5',
-                        border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Eye size={12} /> View
-                    </button>
+                    {p.status === 'PENDING' ? (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          onClick={() => handleApprove(p.participantId)}
+                          style={{
+                            padding: '6px 10px', background: '#dcfce7', color: '#15803d',
+                            border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                            cursor: 'pointer', transition: 'opacity 0.2s',
+                          }}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleReject(p.participantId)}
+                          style={{
+                            padding: '6px 10px', background: '#fee2e2', color: '#dc2626',
+                            border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                            cursor: 'pointer', transition: 'opacity 0.2s',
+                          }}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setOpenDetailId(p.participantId)}
+                        title="View detail"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '6px 10px', background: '#eef2ff', color: '#4f46e5',
+                          border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Eye size={12} /> View
+                      </button>
+                    )}
                   </td>
                 </motion.tr>
               ))}
@@ -400,6 +671,14 @@ export default function CourseParticipantsTab({ user, courseId }) {
             courseId={courseId}
             participantId={openDetailId}
             onClose={() => setOpenDetailId(null)}
+          />
+        )}
+        {showInviteModal && (
+          <InviteModal
+            user={user}
+            courseId={courseId}
+            onClose={() => setShowInviteModal(false)}
+            onInviteSuccess={fetchParticipants}
           />
         )}
       </AnimatePresence>

@@ -20,6 +20,8 @@ router.use(authenticateToken);
 const trainerOrAdmin = roleMiddleware('TRAINER', 'ADMIN');
 
 // ── Courses ────────────────────────────────────────────────────────────────
+router.get(  '/programs',                         trainerOrAdmin, c.listAllPrograms);
+router.post( '/courses',                          trainerOrAdmin, c.createCourse);
 router.get(  '/courses',                          trainerOrAdmin, c.listMyCourses);
 router.get(  '/courses/:courseId',                trainerOrAdmin, c.getCourseDetail);
 router.put(  '/courses/:courseId',                trainerOrAdmin, c.updateOwnCourse);
@@ -51,7 +53,11 @@ router.get(  '/courses/:courseId/quizzes/:quizId/dashboard', trainerOrAdmin, c.q
 
 // ── Participants ───────────────────────────────────────────────────────────
 router.get(  '/courses/:courseId/participants',              trainerOrAdmin, c.listParticipants);
+router.get(  '/courses/:courseId/available-participants',    trainerOrAdmin, c.getAvailableParticipants);
+router.post( '/courses/:courseId/participants',              trainerOrAdmin, c.addParticipant);
 router.get(  '/courses/:courseId/participants/:userId',      trainerOrAdmin, c.getParticipantDetail);
+router.put(  '/courses/:courseId/participants/:userId/approve', trainerOrAdmin, c.approveParticipant);
+router.put(  '/courses/:courseId/participants/:userId/reject',  trainerOrAdmin, c.rejectParticipant);
 
 // ── Analytics ──────────────────────────────────────────────────────────────
 router.get(  '/courses/:courseId/analytics',                 trainerOrAdmin, c.courseAnalytics);

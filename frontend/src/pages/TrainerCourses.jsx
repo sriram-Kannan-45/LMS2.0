@@ -45,33 +45,71 @@ function Stat({ icon, label, value }) {
 // COURSES LIST PAGE
 // ════════════════════════════════════════════════════════════════════════════
 function CoursesList({ user, onOpenCourse }) {
-  const { error: showError } = useToast()
+  const { error: showError, success } = useToast()
   const [loading, setLoading] = useState(true)
   const [courses, setCourses] = useState([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [programs, setPrograms] = useState([])
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newCourse, setNewCourse] = useState({ title: '', description: '', trainingProgramId: '', status: 'DRAFT', thumbnailUrl: '' })
 
   const auth = () => ({ Authorization: `Bearer ${user.token}` })
 
+  const fetchCourses = async () => {
+    try {
+      setLoading(true)
+      const r = await fetch(API.TRAINER_COURSES.LIST, { headers: auth() })
+      const d = await r.json()
+      if (d.success) setCourses(d.courses || [])
+      else showError(d.error || 'Failed to load courses')
+    } catch (e) {
+      showError(e.message || 'Failed to load courses')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
+    fetchCourses()
+
+    // Fetch training programs for the select dropdown
     let aborted = false
     ;(async () => {
       try {
-        setLoading(true)
-        const r = await fetch(API.TRAINER_COURSES.LIST, { headers: auth() })
+        const r = await fetch(`${API.TRAINER_COURSES.LIST.slice(0, -7)}programs`, { headers: auth() })
         const d = await r.json()
-        if (!aborted) {
-          if (d.success) setCourses(d.courses || [])
-          else showError(d.error || 'Failed to load courses')
+        if (!aborted && d.success) {
+          setPrograms(d.programs || [])
         }
       } catch (e) {
-        if (!aborted) showError(e.message || 'Failed to load courses')
-      } finally {
-        if (!aborted) setLoading(false)
+        console.error('Failed to load programs:', e.message)
       }
     })()
     return () => { aborted = true }
   }, [])
+
+  const handleCreateCourse = async (e) => {
+    e.preventDefault()
+    if (!newCourse.title.trim()) { showError('Title is required'); return }
+    if (!newCourse.trainingProgramId) { showError('Training Program is required'); return }
+
+    try {
+      const r = await fetch(API.TRAINER_COURSES.LIST, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...auth() },
+        body: JSON.stringify(newCourse),
+      })
+      const d = await r.json()
+      if (!r.ok || d.success === false) { showError(d.error || 'Failed to create course'); return }
+      success('Course created successfully!')
+      setShowCreateModal(false)
+      setNewCourse({ title: '', description: '', trainingProgramId: '', status: 'DRAFT', thumbnailUrl: '' })
+      await fetchCourses()
+    } catch (e) {
+      showError(e.message)
+    }
+  }
 
   const filtered = useMemo(() => {
     return courses.filter(c => {
@@ -88,13 +126,24 @@ function CoursesList({ user, onOpenCourse }) {
 
   return (
     <div style={{ padding: '24px 0' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: '#0f172a' }}>My Courses</h1>
           <p style={{ marginTop: 4, color: '#64748b', fontSize: 14 }}>
             All courses assigned to you. Open one to manage lessons, materials, quizzes, and analytics.
           </p>
         </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '10px 16px', background: '#4f46e5', color: '#fff',
+            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <Plus size={14} /> Create Course
+        </button>
       </div>
 
       {/* Search + filter row */}
@@ -226,6 +275,92 @@ function CoursesList({ user, onOpenCourse }) {
           ))}
         </div>
       )}
+
+      {/* Create Course Modal */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setShowCreateModal(false)}
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16,
+            }}
+          >
+            <motion.form
+              onClick={(e) => e.stopPropagation()}
+              onSubmit={handleCreateCourse}
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              style={{
+                background: '#fff', borderRadius: 14, padding: 24, width: '100%', maxWidth: 540,
+                boxShadow: '0 25px 60px -10px rgba(0,0,0,0.25)',
+              }}
+            >
+              <h2 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+                Create New Course
+              </h2>
+
+              <label style={lblStyle}>Title <span style={{ color: '#dc2626' }}>*</span></label>
+              <input
+                value={newCourse.title}
+                onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })}
+                placeholder="e.g. Advanced JavaScript Patterns"
+                style={inputStyle}
+                autoFocus
+              />
+
+              <label style={lblStyle}>Training Program <span style={{ color: '#dc2626' }}>*</span></label>
+              <select
+                value={newCourse.trainingProgramId}
+                onChange={(e) => setNewCourse({ ...newCourse, trainingProgramId: e.target.value })}
+                style={inputStyle}
+              >
+                <option value="">-- Select Training Program --</option>
+                {programs.map(p => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </select>
+
+              <label style={lblStyle}>Description</label>
+              <textarea
+                value={newCourse.description}
+                onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })}
+                placeholder="Brief course description..."
+                rows={3}
+                style={{ ...inputStyle, resize: 'vertical' }}
+              />
+
+              <label style={lblStyle}>Status</label>
+              <select
+                value={newCourse.status}
+                onChange={(e) => setNewCourse({ ...newCourse, status: e.target.value })}
+                style={inputStyle}
+              >
+                <option value="DRAFT">Draft</option>
+                <option value="PUBLISHED">Published</option>
+                <option value="ARCHIVED">Archived</option>
+              </select>
+
+              <label style={lblStyle}>Thumbnail URL (optional)</label>
+              <input
+                value={newCourse.thumbnailUrl}
+                onChange={(e) => setNewCourse({ ...newCourse, thumbnailUrl: e.target.value })}
+                placeholder="e.g. /uploads/image.jpg"
+                style={inputStyle}
+              />
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
+                <button type="button" onClick={() => setShowCreateModal(false)} style={btnSecondary}>
+                  Cancel
+                </button>
+                <button type="submit" style={btnPrimary}>
+                  Create Course
+                </button>
+              </div>
+            </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

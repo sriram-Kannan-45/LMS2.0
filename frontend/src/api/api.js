@@ -138,6 +138,7 @@ export const API = {
 
     PARTICIPANTS:  (courseId)          => `${API_BASE}/trainer/courses/${courseId}/participants`,
     PARTICIPANT:   (courseId, userId)  => `${API_BASE}/trainer/courses/${courseId}/participants/${userId}`,
+    AVAILABLE_PARTICIPANTS: (courseId) => `${API_BASE}/trainer/courses/${courseId}/available-participants`,
 
     ANALYTICS:     (courseId)          => `${API_BASE}/trainer/courses/${courseId}/analytics`,
 

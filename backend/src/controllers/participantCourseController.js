@@ -157,11 +157,18 @@ async function recomputeCourseProgress(courseId, participantId) {
 // Enrollment
 // ─────────────────────────────────────────────────────────────────────────────
 
-// POST /api/participant/enroll  { courseId }
+// POST /api/participant/enroll  { courseId } / { trainingId }
 async function enroll(req, res) {
   try {
     const courseId = parseInt(req.body.courseId, 10);
-    if (!courseId) return res.status(422).json({ error: 'courseId is required' });
+    if (!courseId) {
+      const trainingId = parseInt(req.body.trainingId, 10);
+      if (trainingId) {
+        const enrollmentController = require('./enrollmentController');
+        return enrollmentController.enrollInTraining(req, res);
+      }
+      return res.status(422).json({ error: 'courseId is required' });
+    }
     const course = await Course.findByPk(courseId);
     if (!course) return res.status(404).json({ error: 'Course not found' });
     if (course.status !== 'PUBLISHED') {
@@ -170,14 +177,14 @@ async function enroll(req, res) {
 
     const [enrollment, created] = await Enrollment.findOrCreate({
       where: { courseId, participantId: req.user.id },
-      defaults: { courseId, participantId: req.user.id, status: 'ENROLLED', progressPercent: 0 },
+      defaults: { courseId, participantId: req.user.id, status: 'PENDING', progressPercent: 0 },
     });
     if (!created && enrollment.status === 'CANCELLED') {
-      await enrollment.update({ status: 'ENROLLED', progressPercent: 0 });
+      await enrollment.update({ status: 'PENDING', progressPercent: 0 });
     }
     res.status(created ? 201 : 200).json({
       success: true,
-      message: created ? 'Enrolled successfully' : 'Already enrolled',
+      message: created ? 'Enrollment request submitted for approval' : (enrollment.status === 'PENDING' ? 'Enrollment request already pending' : 'Already enrolled'),
       enrollment: {
         id: enrollment.id,
         courseId: enrollment.courseId,
@@ -195,13 +202,25 @@ async function enroll(req, res) {
 // DELETE /api/participant/enroll/:courseId
 async function unenroll(req, res) {
   try {
-    const courseId = parseInt(req.params.courseId, 10);
-    const enrollment = await Enrollment.findOne({
-      where: { courseId, participantId: req.user.id, status: 'ENROLLED' },
+    const id = parseInt(req.params.courseId, 10);
+    const courseEnrollment = await Enrollment.findOne({
+      where: { courseId: id, participantId: req.user.id, status: 'ENROLLED' },
     });
-    if (!enrollment) return res.status(404).json({ error: 'Enrollment not found' });
-    await enrollment.update({ status: 'CANCELLED' });
-    res.json({ success: true, message: 'Unenrolled successfully' });
+    if (courseEnrollment) {
+      await courseEnrollment.update({ status: 'CANCELLED' });
+      return res.json({ success: true, message: 'Unenrolled successfully' });
+    }
+
+    const trainingEnrollment = await Enrollment.findOne({
+      where: { trainingId: id, participantId: req.user.id, status: 'ENROLLED' },
+    });
+    if (trainingEnrollment) {
+      const enrollmentController = require('./enrollmentController');
+      req.params.trainingId = req.params.courseId;
+      return enrollmentController.cancelEnrollment(req, res);
+    }
+
+    return res.status(404).json({ error: 'Enrollment not found' });
   } catch (e) {
     console.error('unenroll:', e.message);
     res.status(500).json({ error: 'Failed to unenroll' });
@@ -212,11 +231,14 @@ async function unenroll(req, res) {
 // Courses (participant view)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// GET /api/participant/courses  — all courses the participant is currently enrolled in
+// GET /api/participant/courses  — all courses the participant is currently enrolled in or pending approval
 async function listMyCourses(req, res) {
   try {
     const enrollments = await Enrollment.findAll({
-      where: { participantId: req.user.id, status: 'ENROLLED' },
+      where: {
+        participantId: req.user.id,
+        status: { [Op.in]: ['ENROLLED', 'PENDING'] }
+      },
       include: [{
         model: Course, as: 'course', required: true,
         include: [
@@ -241,6 +263,7 @@ async function listMyCourses(req, res) {
           trainerName: e.course.trainer?.name || null,
           progressPercent: Number(e.progressPercent || 0),
           enrolledAt: e.enrolled_at || e.createdAt,
+          enrollmentStatus: e.status,
         })),
     });
   } catch (e) {
@@ -253,7 +276,10 @@ async function listMyCourses(req, res) {
 async function explore(req, res) {
   try {
     const myEnrolled = await Enrollment.findAll({
-      where: { participantId: req.user.id, status: 'ENROLLED' },
+      where: {
+        participantId: req.user.id,
+        status: { [Op.in]: ['ENROLLED', 'PENDING', 'COMPLETED'] }
+      },
       attributes: ['courseId'],
     });
     const myIds = myEnrolled.map(e => e.courseId).filter(Boolean);

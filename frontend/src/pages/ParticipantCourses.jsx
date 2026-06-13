@@ -4,7 +4,7 @@ import {
   ArrowLeft, BookOpen, FileText, Sparkles, ClipboardList, Folder,
   PlayCircle, CheckCircle2, Clock, ExternalLink, Send, X, Eye,
   Image as ImageIcon, Video, Link as LinkIcon, FilePenLine, Presentation,
-  Trophy, AlertCircle,
+  Trophy, AlertCircle, User,
 } from 'lucide-react'
 import { API, assetUrl } from '../api/api'
 import { useToast } from '../components/Toast'
@@ -106,11 +106,19 @@ function MyCoursesList({ user, onOpen }) {
               key={c.courseId}
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              whileHover={{ y: -3 }}
-              onClick={() => onOpen(c.courseId)}
+              whileHover={c.enrollmentStatus !== 'PENDING' ? { y: -3 } : {}}
+              onClick={() => {
+                if (c.enrollmentStatus === 'PENDING') {
+                  showError('Your enrollment request is pending approval by the trainer.')
+                  return
+                }
+                onOpen(c.courseId)
+              }}
               style={{
                 background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
-                overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column',
+                overflow: 'hidden', cursor: c.enrollmentStatus === 'PENDING' ? 'not-allowed' : 'pointer',
+                display: 'flex', flexDirection: 'column',
+                opacity: c.enrollmentStatus === 'PENDING' ? 0.75 : 1,
               }}
             >
               <div style={{
@@ -135,20 +143,35 @@ function MyCoursesList({ user, onOpen }) {
                 </div>
 
                 <div style={{ marginTop: 'auto' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
-                    <span>Progress</span><span style={{ fontWeight: 700, color: '#4f46e5' }}>{Math.round(c.progressPercent)}%</span>
-                  </div>
-                  <ProgressBar percent={c.progressPercent} />
-                  <button
-                    style={{
-                      width: '100%', marginTop: 12, padding: '9px 14px',
-                      background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8,
-                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    }}
-                  >
-                    <PlayCircle size={14} /> Continue
-                  </button>
+                  {c.enrollmentStatus === 'PENDING' ? (
+                    <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 999,
+                        background: '#fef3c7', color: '#92400e', textTransform: 'uppercase',
+                        display: 'inline-block', width: '100%', boxSizing: 'border-box',
+                        letterSpacing: 0.4,
+                      }}>
+                        Awaiting Approval
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
+                        <span>Progress</span><span style={{ fontWeight: 700, color: '#4f46e5' }}>{Math.round(c.progressPercent)}%</span>
+                      </div>
+                      <ProgressBar percent={c.progressPercent} />
+                      <button
+                        style={{
+                          width: '100%', marginTop: 12, padding: '9px 14px',
+                          background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8,
+                          fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        }}
+                      >
+                        <PlayCircle size={14} /> Continue
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -1160,6 +1183,143 @@ function AssessmentModal({ user, assessmentId, onClose }) {
         </div>
       </motion.div>
     </motion.div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// EXPLORE CATALOG
+// ════════════════════════════════════════════════════════════════════════════
+function ExploreCatalog({ user, onEnrollSuccess }) {
+  const { error: showError, success } = useToast()
+  const [courses, setCourses] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [enrollingId, setEnrollingId] = useState(null)
+
+  const fetchExplore = async () => {
+    try {
+      setLoading(true)
+      const r = await fetch(API.PARTICIPANT_COURSES.EXPLORE, { headers: auth(user.token) })
+      const d = await r.json()
+      if (d.success) setCourses(d.courses || [])
+      else showError(d.error || 'Failed to load courses')
+    } catch (e) { showError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => {
+    fetchExplore()
+  }, [])
+
+  const handleEnroll = async (courseId) => {
+    try {
+      setEnrollingId(courseId)
+      const r = await fetch(API.PARTICIPANT_COURSES.ENROLL, {
+        method: 'POST',
+        headers: auth(user.token),
+        body: JSON.stringify({ courseId }),
+      })
+      const d = await r.json()
+      if (d.success) {
+        success(d.message || 'Enrollment request submitted!')
+        onEnrollSuccess?.()
+        await fetchExplore()
+      } else {
+        showError(d.error || 'Enrollment failed')
+      }
+    } catch (e) { showError(e.message) }
+    finally { setEnrollingId(null) }
+  }
+
+  return (
+    <div style={{ padding: '20px 0' }}>
+      <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>Explore Courses</h2>
+      <p style={{ marginTop: 4, color: '#64748b', fontSize: 14 }}>
+        Discover and request enrollment in published courses.
+      </p>
+
+      {loading ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, marginTop: 20 }}>
+          {[1, 2, 3].map(i => <div key={i} style={{ height: 280, background: '#f1f5f9', borderRadius: 12 }} />)}
+        </div>
+      ) : courses.length === 0 ? (
+        <div style={emptyCard}>
+          <BookOpen size={48} color="#cbd5e1" style={{ margin: '0 auto 12px' }} />
+          <h3 style={{ margin: '0 0 6px', color: '#475569', fontSize: 16, fontWeight: 600 }}>
+            No new courses to explore
+          </h3>
+          <p style={{ margin: 0, color: '#94a3b8', fontSize: 13 }}>
+            You've requested enrollment in all published courses!
+          </p>
+        </div>
+      ) : (
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+          gap: 16, marginTop: 20,
+        }}>
+          {courses.map((c, i) => (
+            <motion.div
+              key={c.courseId}
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
+              whileHover={{ y: -3 }}
+              style={{
+                background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
+                overflow: 'hidden', display: 'flex', flexDirection: 'column',
+              }}
+            >
+              <div style={{
+                height: 140, position: 'relative',
+                background: c.thumbnailUrl
+                  ? `url(${assetUrl(c.thumbnailUrl)}) center/cover`
+                  : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+              }}>
+                {!c.thumbnailUrl && <BookOpen size={42} />}
+              </div>
+              <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <h3 style={{
+                  fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 4px',
+                  display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
+                  overflow: 'hidden', minHeight: '2.4em', lineHeight: '1.3',
+                }}>
+                  {c.title}
+                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#64748b', fontSize: 11, marginBottom: 10 }}>
+                  <Folder size={11} /> {c.programTitle || '—'}
+                </div>
+                {c.description && (
+                  <p style={{
+                    fontSize: 12.5, color: '#64748b', lineHeight: 1.5,
+                    display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
+                    overflow: 'hidden', minHeight: '3em', margin: '0 0 12px',
+                  }}>
+                    {c.description}
+                  </p>
+                )}
+                <div style={{ marginTop: 'auto' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#64748b', fontSize: 11.5, marginBottom: 12 }}>
+                    <User size={12} /> <span style={{ fontWeight: 600 }}>{c.trainerName || 'TBA'}</span>
+                  </div>
+                  <button
+                    disabled={enrollingId === c.courseId}
+                    onClick={() => handleEnroll(c.courseId)}
+                    style={{
+                      width: '100%', padding: '9px 14px',
+                      background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8,
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      opacity: enrollingId === c.courseId ? 0.7 : 1,
+                    }}
+                  >
+                    Request Enrollment
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

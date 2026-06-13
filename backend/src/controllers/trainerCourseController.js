@@ -24,6 +24,7 @@ const { Op } = require('sequelize');
 const {
   sequelize,
   Course,
+  CourseTrainerAssignment,
   Training,
   Lesson,
   LessonMaterial,
@@ -134,6 +135,52 @@ async function listMyCourses(req, res) {
   } catch (e) {
     console.error('listMyCourses:', e.message);
     res.status(500).json({ error: 'Failed to list courses' });
+  }
+}
+
+// POST /api/trainer/courses
+async function createCourse(req, res) {
+  try {
+    const { title, description, trainingProgramId, status, thumbnailUrl } = req.body;
+    if (!title || !title.trim()) return res.status(422).json({ error: 'Title is required' });
+    if (!trainingProgramId) return res.status(422).json({ error: 'Training Program is required' });
+
+    const program = await Training.findByPk(trainingProgramId);
+    if (!program) return res.status(404).json({ error: 'Training Program not found' });
+
+    const course = await Course.create({
+      trainingProgramId,
+      trainerId: req.user.id,
+      title: title.trim(),
+      description: description || null,
+      status: status || 'DRAFT',
+      thumbnailUrl: thumbnailUrl || null,
+    });
+
+    // Also create the mapping in CourseTrainerAssignment
+    await CourseTrainerAssignment.create({
+      courseId: course.id,
+      trainerId: req.user.id,
+    });
+
+    res.status(201).json({ success: true, course });
+  } catch (e) {
+    console.error('createCourse:', e.message);
+    res.status(500).json({ error: 'Failed to create course' });
+  }
+}
+
+// GET /api/trainer/programs
+async function listAllPrograms(req, res) {
+  try {
+    const programs = await Training.findAll({
+      attributes: ['id', 'title', 'description'],
+      order: [['title', 'ASC']],
+    });
+    res.json({ success: true, programs });
+  } catch (e) {
+    console.error('listAllPrograms:', e.message);
+    res.status(500).json({ error: 'Failed to list programs' });
   }
 }
 
@@ -797,7 +844,10 @@ async function listParticipants(req, res) {
     if (!course) return;
 
     const enrollments = await Enrollment.findAll({
-      where: { courseId: course.id, status: 'ENROLLED' },
+      where: {
+        courseId: course.id,
+        status: { [Op.in]: ['ENROLLED', 'PENDING'] }
+      },
       include: [{ model: User, as: 'participant', attributes: ['id', 'name', 'email'] }],
       order: [['enrolled_at', 'DESC']],
     });
@@ -848,6 +898,7 @@ async function listParticipants(req, res) {
         totalLessons,
         avgQuizScore: avgScore != null ? Number(avgScore.toFixed(2)) : null,
         progressPercent: Number(e.progressPercent || 0),
+        status: e.status,
       };
     });
     res.json({ success: true, participants: out });
@@ -927,6 +978,72 @@ async function getParticipantDetail(req, res) {
   } catch (e) {
     console.error('getParticipantDetail:', e.message);
     res.status(500).json({ error: 'Failed to load participant detail' });
+  }
+}
+
+// PUT /api/trainer/courses/:courseId/participants/:userId/approve
+async function approveParticipant(req, res) {
+  try {
+    const course = await loadOwnedCourse(req, res, req.params.courseId);
+    if (!course) return;
+
+    const userId = parseInt(req.params.userId, 10);
+    const enrollment = await Enrollment.findOne({
+      where: { courseId: course.id, participantId: userId, status: 'PENDING' },
+    });
+    if (!enrollment) {
+      return res.status(404).json({ error: 'Pending enrollment request not found' });
+    }
+
+    await enrollment.update({ status: 'ENROLLED' });
+
+    // Send notification to participant
+    NotificationService.createNotification({
+      userId: userId,
+      message: `Your enrollment in course "${course.title}" has been approved!`,
+      type: 'OTHER',
+      actionUrl: `/participant/courses/${course.id}`,
+      relatedEntityId: course.id,
+      relatedEntityType: 'Course',
+    }, req.app.get('io')).catch(() => {});
+
+    res.json({ success: true, message: 'Participant approved successfully' });
+  } catch (e) {
+    console.error('approveParticipant:', e.message);
+    res.status(500).json({ error: 'Failed to approve participant' });
+  }
+}
+
+// PUT /api/trainer/courses/:courseId/participants/:userId/reject
+async function rejectParticipant(req, res) {
+  try {
+    const course = await loadOwnedCourse(req, res, req.params.courseId);
+    if (!course) return;
+
+    const userId = parseInt(req.params.userId, 10);
+    const enrollment = await Enrollment.findOne({
+      where: { courseId: course.id, participantId: userId, status: 'PENDING' },
+    });
+    if (!enrollment) {
+      return res.status(404).json({ error: 'Pending enrollment request not found' });
+    }
+
+    await enrollment.update({ status: 'CANCELLED' });
+
+    // Send notification to participant
+    NotificationService.createNotification({
+      userId: userId,
+      message: `Your enrollment request for "${course.title}" was rejected.`,
+      type: 'OTHER',
+      actionUrl: `/participant/courses/explore`,
+      relatedEntityId: course.id,
+      relatedEntityType: 'Course',
+    }, req.app.get('io')).catch(() => {});
+
+    res.json({ success: true, message: 'Participant enrollment request rejected' });
+  } catch (e) {
+    console.error('rejectParticipant:', e.message);
+    res.status(500).json({ error: 'Failed to reject participant' });
   }
 }
 
@@ -1165,9 +1282,107 @@ async function publishSubmission(req, res) {
   }
 }
 
+// GET /api/trainer/courses/:courseId/available-participants
+async function getAvailableParticipants(req, res) {
+  try {
+    const course = await loadOwnedCourse(req, res, req.params.courseId);
+    if (!course) return;
+
+    // Find all participants already enrolled or pending in this course
+    const enrollments = await Enrollment.findAll({
+      where: {
+        courseId: course.id,
+        status: { [Op.in]: ['ENROLLED', 'PENDING', 'COMPLETED'] }
+      },
+      attributes: ['participantId'],
+    });
+    const enrolledIds = enrollments.map(e => e.participantId);
+
+    // Fetch all users with role 'PARTICIPANT' who are not in enrolledIds
+    const whereClause = { role: 'PARTICIPANT' };
+    if (enrolledIds.length > 0) {
+      whereClause.id = { [Op.notIn]: enrolledIds };
+    }
+
+    const participants = await User.findAll({
+      where: whereClause,
+      attributes: ['id', 'name', 'email'],
+      order: [['name', 'ASC']],
+    });
+
+    res.json({ success: true, participants });
+  } catch (e) {
+    console.error('getAvailableParticipants:', e.message);
+    res.status(500).json({ error: 'Failed to list available participants' });
+  }
+}
+
+// POST /api/trainer/courses/:courseId/participants
+async function addParticipant(req, res) {
+  try {
+    const course = await loadOwnedCourse(req, res, req.params.courseId);
+    if (!course) return;
+
+    const participantId = parseInt(req.body.participantId, 10);
+    if (!participantId) return res.status(422).json({ error: 'participantId is required' });
+
+    const participant = await User.findOne({ where: { id: participantId, role: 'PARTICIPANT' } });
+    if (!participant) return res.status(404).json({ error: 'Participant not found' });
+
+    // Check if there is already an enrollment
+    const [enrollment, created] = await Enrollment.findOrCreate({
+      where: { courseId: course.id, participantId },
+      defaults: {
+        courseId: course.id,
+        participantId,
+        trainingId: course.trainingProgramId, // copy trainingProgramId to trainingId for legacy compat
+        status: 'ENROLLED',
+        progressPercent: 0,
+      }
+    });
+
+    if (!created && enrollment.status !== 'ENROLLED') {
+      await enrollment.update({ status: 'ENROLLED', progressPercent: 0 });
+    }
+
+    // Send notification
+    const io = req.app.get('io');
+    NotificationService.createNotification({
+      userId: participantId,
+      message: `You have been enrolled in course "${course.title}"!`,
+      type: 'OTHER',
+      actionUrl: `/participant/courses/${course.id}`,
+      relatedEntityId: course.id,
+      relatedEntityType: 'Course',
+    }, io).catch(() => {});
+
+    // Log activity
+    try {
+      const ActivityService = require('../services/activityService');
+      await ActivityService.logActivity({
+        userId: req.user.id, // the trainer who added the participant
+        userName: req.user.name || 'Trainer',
+        action: 'ENROLLMENT_DONE',
+        entityType: 'Course',
+        entityId: course.id,
+        details: { courseName: course.title, participantName: participant.name }
+      }, io);
+    } catch (actError) {
+      console.error('logActivity failed:', actError.message);
+    }
+
+    res.status(created ? 201 : 200).json({ success: true, message: 'Participant added successfully', enrollment });
+  } catch (e) {
+    console.error('addParticipant:', e.message);
+    res.status(500).json({ error: 'Failed to add participant' });
+  }
+}
+
 module.exports = {
   // Courses
   listMyCourses,
+  createCourse,
+  listAllPrograms,
   getCourseDetail,
   updateOwnCourse,
   // Lessons
@@ -1194,6 +1409,10 @@ module.exports = {
   // Participants
   listParticipants,
   getParticipantDetail,
+  approveParticipant,
+  rejectParticipant,
+  getAvailableParticipants,
+  addParticipant,
   // Analytics
   courseAnalytics,
   // Assessments
