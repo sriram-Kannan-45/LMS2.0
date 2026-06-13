@@ -511,14 +511,18 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Pending Approval')}
           </div>
-          <div className="ac-card" style={{ padding: 0 }}>
-            {initialLoading ? (
-              <SkeletonTable rows={3} />
-            ) : pendingParticipants.length === 0 ? (
-              <div className="ac-empty">
-                <p style={{ color: 'var(--academic-text-muted)' }}>No participants are currently waiting for approval.</p>
-              </div>
-            ) : (
+          {initialLoading ? (
+            <div className="ac-card"><SkeletonTable rows={3} /></div>
+          ) : pendingParticipants.length === 0 ? (
+            <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>✔️</div>
+              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>All Approved</h3>
+              <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: 0, lineHeight: 1.5 }}>
+                No participants are currently waiting for registration approval.
+              </p>
+            </div>
+          ) : (
+            <div className="ac-card" style={{ padding: 0 }}>
               <div className="table-wrapper" style={{ border: 'none' }}>
                 <table className="table">
                   <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Registered</th><th></th></tr></thead>
@@ -538,8 +542,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </motion.div>
       )}
 
@@ -548,17 +552,25 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
         <motion.div variants={itemVariants}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Training Sessions')}
-            <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
+            {trainings.length > 0 && (
+              <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTraining')}>+ Add Training</button>
+            )}
           </div>
-          <div className="ac-card" style={{ padding: 0 }}>
-            {initialLoading ? (
-              <SkeletonTable rows={5} />
-            ) : trainings.length === 0 ? (
-              <div className="ac-empty">
-                <p style={{ color: 'var(--academic-text-muted)' }}>No training sessions created yet.</p>
-                <button className="ac-btn ac-btn-primary" style={{ marginTop: 16 }} onClick={() => handleTabChange('createTraining')}>+ Create Training</button>
-              </div>
-            ) : (
+          {initialLoading ? (
+            <div className="ac-card"><SkeletonTable rows={5} /></div>
+          ) : trainings.length === 0 ? (
+            <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>📚</div>
+              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Trainings Yet</h3>
+              <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: '0 0 20px', lineHeight: 1.5 }}>
+                Create your first training session to schedule classes, assign trainers, and track enrollment.
+              </p>
+              <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTraining')}>
+                + Create Training
+              </button>
+            </div>
+          ) : (
+            <div className="ac-card" style={{ padding: 0 }}>
               <div className="table-wrapper" style={{ border: 'none' }}>
                 <table className="table">
                   <thead>
@@ -585,8 +597,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </motion.div>
       )}
 
@@ -595,16 +607,32 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
         <motion.div variants={itemVariants}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Trainers')}
-            <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTrainer')}>+ Add Trainer</button>
+            {trainers.length > 0 && (
+              <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTrainer')}>+ Add Trainer</button>
+            )}
           </div>
-          <div className="ac-card">
-            <TrainerList 
-              trainers={trainers}
-              token={user.token}
-              onDelete={handleDeleteTrainer}
-              onAddTrainer={() => handleTabChange('createTrainer')}
-            />
-          </div>
+          {initialLoading ? (
+            <div className="ac-card"><SkeletonTable rows={5} /></div>
+          ) : trainers.length === 0 ? (
+            <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>👤</div>
+              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Trainers Yet</h3>
+              <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: '0 0 20px', lineHeight: 1.5 }}>
+                Add your first trainer to assign them courses and start tracking performance feedback.
+              </p>
+              <button className="ac-btn ac-btn-primary" onClick={() => handleTabChange('createTrainer')}>
+                + Add First Trainer
+              </button>
+            </div>
+          ) : (
+            <div className="ac-card" style={{ padding: '8px 0' }}>
+              <TrainerList 
+                trainers={trainers}
+                token={user.token}
+                onDelete={handleDeleteTrainer}
+              />
+            </div>
+          )}
         </motion.div>
       )}
 
@@ -613,12 +641,25 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
         <motion.div variants={itemVariants}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
             {pageTitle('Participants')}
-            <button className="ac-btn ac-btn-primary" onClick={() => setAddParticipantModal(true)}>+ Add Participant</button>
+            {participants.length > 0 && (
+              <button className="ac-btn ac-btn-primary" onClick={() => setAddParticipantModal(true)}>+ Add Participant</button>
+            )}
           </div>
-          <div className="ac-card">
-            {initialLoading ? (
-              <div className="text-center py-8" style={{ color: 'var(--academic-text-muted)' }}>Loading participants...</div>
-            ) : (
+          {initialLoading ? (
+            <div className="ac-card"><SkeletonTable rows={5} /></div>
+          ) : participants.length === 0 ? (
+            <div className="ac-empty" style={{ maxWidth: 480, margin: '40px auto', padding: '36px 24px' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>👥</div>
+              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--academic-text)', margin: '0 0 6px' }}>No Participants Yet</h3>
+              <p style={{ color: 'var(--academic-text-secondary)', fontSize: 13.5, margin: '0 0 20px', lineHeight: 1.5 }}>
+                Enrolled students and participants will appear here. Add your first participant to get started.
+              </p>
+              <button className="ac-btn ac-btn-primary" onClick={() => setAddParticipantModal(true)}>
+                + Add First Participant
+              </button>
+            </div>
+          ) : (
+            <div className="ac-card">
               <ParticipantList 
                 participants={participants}
                 loading={false}
@@ -646,8 +687,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   }
                 }}
               />
-            )}
-          </div>
+            </div>
+          )}
         </motion.div>
       )}
 
