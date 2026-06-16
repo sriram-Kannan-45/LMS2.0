@@ -1,16 +1,27 @@
-const { Training, User, Enrollment, Notification } = require('../models');
+const { Training, User, Enrollment, Notification, TrainingTrainerAssignment, Course, CourseTrainerAssignment } = require('../models');
 const { Op } = require('sequelize');
 
 const createTraining = async (req, res) => {
   try {
-    const { title, description, trainerId, startDate, endDate, capacity } = req.body;
+    const { title, description, trainerId, trainerIds, startDate, endDate, capacity, sequentialLearning } = req.body;
 
     if (!title) return res.status(422).json({ error: 'Title is required' });
-    if (!trainerId) return res.status(422).json({ error: 'Trainer ID is required' });
+    if (!trainerId && (!trainerIds || trainerIds.length === 0)) {
+      return res.status(422).json({ error: 'Trainer ID or Trainer IDs is required' });
+    }
     if (!startDate || !endDate) return res.status(422).json({ error: 'Start and end dates are required' });
 
-    const trainer = await User.findOne({ where: { id: trainerId, role: 'TRAINER' } });
-    if (!trainer) return res.status(400).json({ error: 'Invalid trainer ID or user is not a TRAINER' });
+    let finalTrainerIds = [];
+    if (Array.isArray(trainerIds)) {
+      finalTrainerIds = trainerIds.map(id => parseInt(id));
+    } else if (trainerId) {
+      finalTrainerIds = [parseInt(trainerId)];
+    }
+
+    const trainers = await User.findAll({ where: { id: finalTrainerIds, role: 'TRAINER' } });
+    if (trainers.length !== finalTrainerIds.length) {
+      return res.status(400).json({ error: 'One or more trainer IDs are invalid' });
+    }
 
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -19,22 +30,56 @@ const createTraining = async (req, res) => {
     if (isNaN(end.getTime())) return res.status(422).json({ error: 'Invalid end date format' });
     if (end <= start) return res.status(422).json({ error: 'End date must be after start date' });
 
+    const primaryTrainerId = finalTrainerIds[0] || null;
+
     const training = await Training.create({
       title,
       description: description || null,
-      trainerId: parseInt(trainerId),
+      trainerId: primaryTrainerId,
       startDate: start,
       endDate: end,
       capacity: capacity ? parseInt(capacity) : null,
+      sequentialLearning: !!sequentialLearning,
       createdBy: req.user.id
     });
 
-    // Notify Trainer
-    await Notification.create({
-      userId: trainer.id,
-      message: `You have been assigned as the instructor for training: ${training.title}`,
-      isRead: false
+    // Create many-to-many trainer assignments
+    const assignments = finalTrainerIds.map(tId => ({
+      trainingId: training.id,
+      trainerId: tId
+    }));
+    await TrainingTrainerAssignment.bulkCreate(assignments);
+
+    // Automatically create a corresponding Course with 'PUBLISHED' status
+    const course = await Course.create({
+      trainingProgramId: training.id,
+      trainerId: primaryTrainerId,
+      title: training.title,
+      description: training.description || null,
+      status: 'PUBLISHED'
     });
+
+    // Sync trainer assignments in CourseTrainerAssignment
+    const courseAssignments = finalTrainerIds.map(tId => ({
+      courseId: course.id,
+      trainerId: tId
+    }));
+    await CourseTrainerAssignment.bulkCreate(courseAssignments);
+
+    // Notify Trainers
+    const io = req.app.get('io');
+    for (const trainer of trainers) {
+      await Notification.create({
+        userId: trainer.id,
+        message: `You have been assigned as the instructor for training: ${training.title}`,
+        isRead: false
+      });
+      if (io) {
+        io.to(`user_${trainer.id}`).emit('notification:new', {
+          message: `You have been assigned as the instructor for training: ${training.title}`
+        });
+      }
+    }
 
     console.log('✅ Training saved:', training.id, '-', training.title);
 
@@ -43,7 +88,8 @@ const createTraining = async (req, res) => {
       title: training.title,
       description: training.description,
       trainerId: training.trainerId,
-      trainerName: trainer.name,
+      trainerIds: finalTrainerIds,
+      trainerName: trainers.map(t => t.name).join(', '),
       startDate: training.startDate,
       endDate: training.endDate,
       capacity: training.capacity,
@@ -62,23 +108,25 @@ const getAllTrainings = async (req, res) => {
 
     console.log('📋 getAllTrainings called, user:', userId, 'role:', userRole);
 
-    // Fetch all trainings WITHOUT filtering the trainer include
-    // Use LEFT JOIN without WHERE on the joined table to avoid filtering out rows
     const trainings = await Training.findAll({
       include: [
         {
           model: User,
           as: 'trainer',
           attributes: ['id', 'name', 'email'],
-          required: false   // true LEFT JOIN — no WHERE on trainer
+          required: false
+        },
+        {
+          model: TrainingTrainerAssignment,
+          as: 'trainerAssignments',
+          include: [{ model: User, as: 'trainer', attributes: ['id', 'name', 'email'] }]
         }
       ],
-      order: [['id', 'DESC']]  // Use primary key ordering (always safe)
+      order: [['id', 'DESC']]
     });
 
     console.log('📋 Raw trainings from DB:', trainings.length);
 
-    // Format the results
     const formattedTrainings = await Promise.all(trainings.map(async t => {
       let enrolledCount = 0;
       try {
@@ -101,12 +149,17 @@ const getAllTrainings = async (req, res) => {
         }
       }
 
+      const assignedTrainers = (t.trainerAssignments || []).map(ta => ta.trainer).filter(Boolean);
+      const trainerNames = assignedTrainers.length > 0 ? assignedTrainers.map(tr => tr.name).join(', ') : (t.trainer ? t.trainer.name : null);
+      const trainerIds = assignedTrainers.length > 0 ? assignedTrainers.map(tr => tr.id) : (t.trainerId ? [t.trainerId] : []);
+
       return {
         id: t.id,
         title: t.title,
         description: t.description,
         trainerId: t.trainerId,
-        trainerName: t.trainer ? t.trainer.name : null,
+        trainerIds,
+        trainerName: trainerNames,
         trainerEmail: t.trainer ? t.trainer.email : null,
         startDate: t.startDate,
         endDate: t.endDate,
@@ -114,7 +167,8 @@ const getAllTrainings = async (req, res) => {
         enrolledCount,
         availableSeats: t.capacity ? (t.capacity - enrolledCount) : null,
         isEnrolled,
-        isFull: t.capacity ? enrolledCount >= t.capacity : false
+        isFull: t.capacity ? enrolledCount >= t.capacity : false,
+        sequentialLearning: t.sequentialLearning || false
       };
     }));
 
@@ -131,20 +185,33 @@ const getTrainingById = async (req, res) => {
     const { id } = req.params;
 
     const training = await Training.findByPk(id, {
-      include: [{ model: User, as: 'trainer', attributes: ['id', 'name', 'email'], required: false }]
+      include: [
+        { model: User, as: 'trainer', attributes: ['id', 'name', 'email'], required: false },
+        {
+          model: TrainingTrainerAssignment,
+          as: 'trainerAssignments',
+          include: [{ model: User, as: 'trainer', attributes: ['id', 'name', 'email'] }]
+        }
+      ]
     });
 
     if (!training) return res.status(404).json({ error: 'Training not found' });
+
+    const assignedTrainers = (training.trainerAssignments || []).map(ta => ta.trainer).filter(Boolean);
+    const trainerNames = assignedTrainers.length > 0 ? assignedTrainers.map(tr => tr.name).join(', ') : (training.trainer ? training.trainer.name : null);
+    const trainerIds = assignedTrainers.length > 0 ? assignedTrainers.map(tr => tr.id) : (training.trainerId ? [training.trainerId] : []);
 
     res.json({
       id: training.id,
       title: training.title,
       description: training.description,
       trainerId: training.trainerId,
-      trainerName: training.trainer ? training.trainer.name : null,
+      trainerIds,
+      trainerName: trainerNames,
       startDate: training.startDate,
       endDate: training.endDate,
-      capacity: training.capacity
+      capacity: training.capacity,
+      sequentialLearning: training.sequentialLearning || false
     });
   } catch (error) {
     console.error('Get training by ID error:', error.message);

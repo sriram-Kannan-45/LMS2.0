@@ -150,7 +150,82 @@ async function recomputeCourseProgress(courseId, participantId) {
     { progressPercent: percent },
     { where: { courseId, participantId, status: 'ENROLLED' } }
   );
+
+  if (percent === 100) {
+    checkAndGenerateCertificate(courseId, participantId).catch(err => console.error(err));
+  }
+
   return percent;
+}
+
+async function checkAndGenerateCertificate(courseId, participantId) {
+  try {
+    const { Course, Lesson, LessonAssessment, AssessmentSubmission, Certificate } = require('../models');
+    const crypto = require('crypto');
+
+    const course = await Course.findByPk(courseId);
+    if (!course) return;
+
+    const lessons = await Lesson.findAll({ where: { courseId } });
+    const lessonIds = lessons.map(l => l.id);
+
+    const mandatoryAssessments = await LessonAssessment.findAll({
+      where: { lessonId: lessonIds, isMandatory: true }
+    });
+    const mandatoryAssessmentIds = mandatoryAssessments.map(a => a.id);
+
+    if (mandatoryAssessmentIds.length > 0) {
+      const submissions = await AssessmentSubmission.findAll({
+        where: {
+          assessmentId: mandatoryAssessmentIds,
+          participantId,
+          status: ['REVIEWED', 'PUBLISHED']
+        }
+      });
+
+      if (submissions.length !== mandatoryAssessmentIds.length) {
+        return;
+      }
+
+      const assessmentMap = Object.fromEntries(mandatoryAssessments.map(a => [String(a.id), a]));
+      for (const sub of submissions) {
+        const ass = assessmentMap[String(sub.assessmentId)];
+        if (ass) {
+          const passScore = Number(ass.maxScore) * 0.5;
+          if (Number(sub.score || 0) < passScore) {
+            return;
+          }
+        }
+      }
+    }
+
+    const existingCert = await Certificate.findOne({
+      where: { userId: participantId, courseId }
+    });
+
+    if (!existingCert) {
+      const certificateCode = `CERT-${crypto.randomBytes(3).toString('hex').toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+      const cert = await Certificate.create({
+        certificateCode,
+        userId: participantId,
+        courseId,
+        trainingId: course.trainingProgramId
+      });
+
+      const NotificationService = require('../services/notificationService');
+      await NotificationService.createNotification({
+        userId: participantId,
+        message: `Congratulations! You have earned a certificate for "${course.title}". Code: ${certificateCode}`,
+        type: 'APPROVAL',
+        actionUrl: `/participant`,
+        relatedEntityId: cert.id,
+        relatedEntityType: 'Certificate'
+      });
+      console.log(`🏆 Certificate generated for user ${participantId} in course ${courseId}: ${certificateCode}`);
+    }
+  } catch (error) {
+    console.error('Error generating certificate:', error.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,9 +254,44 @@ async function enroll(req, res) {
       where: { courseId, participantId: req.user.id },
       defaults: { courseId, participantId: req.user.id, status: 'PENDING', progressPercent: 0 },
     });
+    const shouldNotify = created || enrollment.status === 'CANCELLED';
     if (!created && enrollment.status === 'CANCELLED') {
       await enrollment.update({ status: 'PENDING', progressPercent: 0 });
     }
+
+    if (shouldNotify) {
+      const io = req.app.get('io');
+      const user = await User.findByPk(req.user.id);
+      const { CourseTrainerAssignment } = require('../models');
+      const assignments = await CourseTrainerAssignment.findAll({ where: { courseId } });
+      const trainerIds = new Set(assignments.map(a => a.trainerId));
+      if (course.trainerId) trainerIds.add(course.trainerId);
+
+      const NotificationService = require('../services/notificationService');
+      
+      // Notify Trainers
+      for (const tId of trainerIds) {
+        await NotificationService.createNotification({
+          userId: tId,
+          message: `${user?.name || 'A participant'} has requested to enroll in course: ${course.title}`,
+          type: 'ENROLLMENT',
+          actionUrl: `/trainer`,
+          relatedEntityId: enrollment.id,
+          relatedEntityType: 'Enrollment'
+        }, io);
+      }
+
+      // Notify Participant
+      await NotificationService.createNotification({
+        userId: req.user.id,
+        message: `Your enrollment request for course: ${course.title} has been submitted.`,
+        type: 'ENROLLMENT',
+        actionUrl: `/participant`,
+        relatedEntityId: enrollment.id,
+        relatedEntityType: 'Enrollment'
+      }, io);
+    }
+
     res.status(created ? 201 : 200).json({
       success: true,
       message: created ? 'Enrollment request submitted for approval' : (enrollment.status === 'PENDING' ? 'Enrollment request already pending' : 'Already enrolled'),
@@ -369,6 +479,7 @@ async function getCourseOverview(req, res) {
         description: course.description,
         thumbnailUrl: course.thumbnailUrl,
         programTitle: course.program?.title || null,
+        trainingProgramId: course.trainingProgramId,
         trainer: trainer ? { id: trainer.id, name: trainer.name, email: trainer.email } : null,
       },
       enrollment: {
@@ -411,10 +522,21 @@ async function listCourseLessons(req, res) {
     });
     const progMap = Object.fromEntries(progress.map(p => [String(p.lessonId), p]));
 
-    const out = lessons.map(l => {
+    const { Training } = require('../models');
+    const training = await Training.findByPk(course.trainingProgramId);
+    const isSequential = training?.sequentialLearning || false;
+
+    let previousCompleted = true;
+    const out = lessons.map((l, index) => {
       const p = progMap[String(l.id)];
-      const counts = { NOTE: 0, VIDEO: 0, IMAGE: 0, LINK: 0, PDF: 0, PPT: 0 };
+      const isCompleted = p?.status === 'COMPLETED';
+
+      const counts = { NOTE: 0, VIDEO: 0, IMAGE: 0, LINK: 0, PDF: 0, PPT: 0, ATTACHMENT: 0, LIVE_SESSION: 0 };
       (l.materials || []).forEach(m => { counts[m.materialType] = (counts[m.materialType] || 0) + 1; });
+
+      const isLocked = isSequential && !previousCompleted;
+      previousCompleted = isCompleted;
+
       return {
         lessonId: l.id,
         title: l.title,
@@ -422,6 +544,7 @@ async function listCourseLessons(req, res) {
         orderIndex: l.orderIndex,
         materialCounts: counts,
         hasAssessment: (l.assessments || []).length > 0,
+        isLocked,
         progress: p ? {
           status: p.status,
           contentViewed: p.contentViewed,
@@ -540,7 +663,39 @@ async function getLessonDetail(req, res) {
   try {
     const ctx = await loadEnrolledLesson(req, res, req.params.lessonId);
     if (!ctx) return;
-    const { lesson } = ctx;
+    const { lesson, course } = ctx;
+
+    // Enforce sequential learning gate
+    const { Training } = require('../models');
+    const training = await Training.findByPk(course.trainingProgramId);
+    if (training && training.sequentialLearning) {
+      const sortedLessons = await Lesson.findAll({
+        where: { courseId: course.id },
+        order: [['orderIndex', 'ASC'], ['id', 'ASC']]
+      });
+      const currentIndex = sortedLessons.findIndex(l => l.id === lesson.id);
+      if (currentIndex > 0) {
+        const prevLesson = sortedLessons[currentIndex - 1];
+        const prevProgress = await LessonProgress.findOne({
+          where: { lessonId: prevLesson.id, participantId: req.user.id }
+        });
+        if (!prevProgress || prevProgress.status !== 'COMPLETED') {
+          return res.status(403).json({ error: 'This lesson is locked. You must complete the previous lesson first.' });
+        }
+      }
+    }
+
+    // Track lesson viewed (Last Activity)
+    try {
+      const { ParticipantTracking } = require('../models');
+      const [tracking] = await ParticipantTracking.findOrCreate({
+        where: { userId: req.user.id, lessonId: lesson.id },
+        defaults: { userId: req.user.id, lessonId: lesson.id, trainingId: course.trainingProgramId }
+      });
+      await tracking.update({ lastActivity: new Date() });
+    } catch (e) {
+      console.error('ParticipantTracking view log error:', e.message);
+    }
 
     const [materials, quizzes, assessments, progress] = await Promise.all([
       LessonMaterial.findAll({ where: { lessonId: lesson.id }, order: [['orderIndex', 'ASC']] }),
@@ -980,4 +1135,109 @@ module.exports = {
   // Assessments
   submitAssessment,
   getAssessmentResult,
+  trackActivity,
+  listMyCertificates,
+  forceRegenerateCertificate
 };
+
+async function trackActivity(req, res) {
+  try {
+    const userId = req.user.id;
+    const { lessonId, trainingId, videoCompletionPercent, incrementStudyTimeSeconds } = req.body;
+    const { ParticipantTracking } = require('../models');
+
+    const whereClause = { userId };
+    if (lessonId) whereClause.lessonId = lessonId;
+    if (trainingId) whereClause.trainingId = trainingId;
+
+    const [tracking, created] = await ParticipantTracking.findOrCreate({
+      where: whereClause,
+      defaults: {
+        userId,
+        lessonId: lessonId || null,
+        trainingId: trainingId || null,
+        videoCompletionPercent: videoCompletionPercent || 0,
+        studyTimeSeconds: incrementStudyTimeSeconds || 0,
+        lastActivity: new Date()
+      }
+    });
+
+    if (!created) {
+      const updates = { lastActivity: new Date() };
+      if (videoCompletionPercent !== undefined) {
+        updates.videoCompletionPercent = Math.max(tracking.videoCompletionPercent, parseFloat(videoCompletionPercent));
+      }
+      if (incrementStudyTimeSeconds !== undefined) {
+        updates.studyTimeSeconds = tracking.studyTimeSeconds + parseInt(incrementStudyTimeSeconds, 10);
+      }
+      await tracking.update(updates);
+    }
+
+    res.json({ success: true, tracking });
+  } catch (error) {
+    console.error('Track activity error:', error.message);
+    res.status(500).json({ error: 'Server error tracking activity' });
+  }
+}
+
+async function listMyCertificates(req, res) {
+  try {
+    const participantId = req.user.id;
+    const { Certificate, Course, Training } = require('../models');
+    const certificates = await Certificate.findAll({
+      where: { userId: participantId },
+      include: [
+        { model: Course, as: 'course', attributes: ['id', 'title'] },
+        { model: Training, as: 'training', attributes: ['id', 'title'] }
+      ],
+      order: [['issuedAt', 'DESC']]
+    });
+    res.json({ success: true, certificates });
+  } catch (error) {
+    console.error('List certificates error:', error.message);
+    res.status(500).json({ error: 'Server error listing certificates' });
+  }
+}
+
+async function forceRegenerateCertificate(req, res) {
+  try {
+    const { participantId, courseId } = req.body;
+    if (!participantId || !courseId) {
+      return res.status(422).json({ error: 'participantId and courseId are required' });
+    }
+
+    const { Certificate, Course } = require('../models');
+    const crypto = require('crypto');
+
+    const course = await Course.findByPk(courseId);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+
+    await Certificate.destroy({
+      where: { userId: participantId, courseId }
+    });
+
+    const certificateCode = `CERT-${crypto.randomBytes(3).toString('hex').toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+    const cert = await Certificate.create({
+      certificateCode,
+      userId: participantId,
+      courseId,
+      trainingId: course.trainingProgramId
+    });
+
+    const NotificationService = require('../services/notificationService');
+    const io = req.app.get('io');
+    await NotificationService.createNotification({
+      userId: participantId,
+      message: `Your certificate for "${course.title}" has been regenerated. Code: ${certificateCode}`,
+      type: 'APPROVAL',
+      actionUrl: `/participant`,
+      relatedEntityId: cert.id,
+      relatedEntityType: 'Certificate'
+    }, io);
+
+    res.json({ success: true, message: 'Certificate regenerated successfully', certificateCode });
+  } catch (error) {
+    console.error('Regenerate certificate error:', error.message);
+    res.status(500).json({ error: 'Server error regenerating certificate' });
+  }
+}

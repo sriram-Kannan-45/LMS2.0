@@ -9,6 +9,7 @@ import {
   X, FileText, Video, Image as ImageIcon, Link as LinkIcon, FilePenLine, Presentation,
   Bold, Italic, Underline, Heading1, Heading2, Heading3, List, ListOrdered, Code,
   Upload, Trash2, Pencil, GripVertical, Save, ExternalLink, FileQuestion,
+  Paperclip, Calendar,
 } from 'lucide-react'
 import { API, assetUrl } from '../../api/api'
 import { useToast } from '../Toast'
@@ -23,6 +24,8 @@ const TYPES = [
   { key: 'VIDEO', label: 'Video', icon: <Video size={16} />,        hint: 'Upload a video file (mp4/webm — max 500 MB) or paste a YouTube/Vimeo link' },
   { key: 'IMAGE', label: 'Image', icon: <ImageIcon size={16} />,    hint: 'Upload images (JPG/PNG/GIF/WEBP — max 10 MB each)' },
   { key: 'LINK',  label: 'Link',  icon: <LinkIcon size={16} />,     hint: 'Save an external URL (article, doc, anything web-hosted)' },
+  { key: 'ATTACHMENT', label: 'Attachment', icon: <Paperclip size={16} />, hint: 'Upload any general file attachment (max 100 MB)' },
+  { key: 'LIVE_SESSION', label: 'Live Session', icon: <Calendar size={16} />, hint: 'Link a scheduled live session URL (Zoom, Meet, Teams)' },
 ]
 
 const TYPE_ACCEPT = {
@@ -30,9 +33,10 @@ const TYPE_ACCEPT = {
   PPT:   '.pptx,.ppt,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint',
   VIDEO: 'video/*',
   IMAGE: 'image/*',
+  ATTACHMENT: '*',
 }
 
-const TYPE_LIMIT_MB = { PDF: 50, PPT: 100, VIDEO: 500, IMAGE: 10 }
+const TYPE_LIMIT_MB = { PDF: 50, PPT: 100, VIDEO: 500, IMAGE: 10, ATTACHMENT: 100 }
 
 const TYPE_BADGE = {
   NOTE:  { bg: '#eef2ff', fg: '#4f46e5' },
@@ -41,6 +45,8 @@ const TYPE_BADGE = {
   VIDEO: { bg: '#dbeafe', fg: '#1d4ed8' },
   IMAGE: { bg: '#dcfce7', fg: '#15803d' },
   LINK:  { bg: '#f3e8ff', fg: '#7e22ce' },
+  ATTACHMENT: { bg: '#e2e8f0', fg: '#475569' },
+  LIVE_SESSION: { bg: '#fae8ff', fg: '#c084fc' },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -319,8 +325,8 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
           headers: { 'Content-Type': 'application/json', ...auth() },
           body: JSON.stringify({
             title,
-            content:  type === 'NOTE' ? noteContent : (type === 'LINK' ? linkDesc : undefined),
-            linkUrl:  type === 'LINK' ? linkUrl : (type === 'VIDEO' && !file ? videoExternalUrl : undefined),
+            content:  type === 'NOTE' ? noteContent : (type === 'LINK' || type === 'LIVE_SESSION' ? linkDesc : undefined),
+            linkUrl:  type === 'LINK' || type === 'LIVE_SESSION' ? linkUrl : (type === 'VIDEO' && !file ? videoExternalUrl : undefined),
           }),
         })
         const d = await r.json()
@@ -338,12 +344,12 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
       setSaving(true); setProgress(null)
 
       // NOTE / LINK / external-video → JSON POST (no upload)
-      if (type === 'NOTE' || type === 'LINK' || (type === 'VIDEO' && !file && videoExternalUrl)) {
+      if (type === 'NOTE' || type === 'LINK' || type === 'LIVE_SESSION' || (type === 'VIDEO' && !file && videoExternalUrl)) {
         const body = {
           materialType: type,
           title,
-          content:  type === 'NOTE' ? noteContent : (type === 'LINK' ? linkDesc : null),
-          linkUrl:  type === 'LINK' ? linkUrl : (type === 'VIDEO' ? videoExternalUrl : null),
+          content:  type === 'NOTE' ? noteContent : (type === 'LINK' || type === 'LIVE_SESSION' ? linkDesc : null),
+          linkUrl:  type === 'LINK' || type === 'LIVE_SESSION' ? linkUrl : (type === 'VIDEO' ? videoExternalUrl : null),
         }
         const r = await fetch(API.TRAINER_COURSES.MATERIALS(lessonId), {
           method: 'POST',
@@ -387,8 +393,8 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
     setEditingId(m.id)
     setTitle(m.title || '')
     setNoteContent(m.materialType === 'NOTE' ? (m.content || '') : '')
-    setLinkUrl(m.materialType === 'LINK' || m.materialType === 'VIDEO' ? (m.linkUrl || '') : '')
-    setLinkDesc(m.materialType === 'LINK' ? (m.content || '') : '')
+    setLinkUrl(m.materialType === 'LINK' || m.materialType === 'LIVE_SESSION' || m.materialType === 'VIDEO' ? (m.linkUrl || '') : '')
+    setLinkDesc(m.materialType === 'LINK' || m.materialType === 'LIVE_SESSION' ? (m.content || '') : '')
     setVideoExternalUrl(m.materialType === 'VIDEO' && !m.fileUrl ? (m.linkUrl || '') : '')
     setFile(null)
   }
@@ -580,6 +586,40 @@ export default function MaterialManager({ user, lessonId, lessonTitle, open, onC
                   <div style={{ marginTop: 8, fontSize: 11, color: '#94a3b8' }}>
                     For multiple images, save one then upload the next — each becomes its own material.
                   </div>
+                </>
+              )}
+
+              {type === 'ATTACHMENT' && (
+                <>
+                  <label style={lblStyle}>Attachment file</label>
+                  <DropZone
+                    accept={TYPE_ACCEPT.ATTACHMENT}
+                    file={file}
+                    onFile={setFile}
+                    hint={`Any file format · max ${TYPE_LIMIT_MB.ATTACHMENT} MB`}
+                    limitMb={TYPE_LIMIT_MB.ATTACHMENT}
+                  />
+                </>
+              )}
+
+              {type === 'LIVE_SESSION' && (
+                <>
+                  <label style={lblStyle}>Live Session URL (Zoom/Meet/Teams) <span style={{ color: '#dc2626' }}>*</span></label>
+                  <input
+                    type="url"
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    placeholder="https://zoom.us/j/…"
+                    style={inputStyle}
+                  />
+                  <label style={lblStyle}>Description (optional)</label>
+                  <textarea
+                    value={linkDesc}
+                    onChange={(e) => setLinkDesc(e.target.value)}
+                    rows={3}
+                    placeholder="Enter session passcode, agenda, or timing details..."
+                    style={inputStyle}
+                  />
                 </>
               )}
 

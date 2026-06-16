@@ -54,6 +54,12 @@ const Violation = require('./violation');
 const DeviceFingerprint = require('./deviceFingerprint');
 const ProctorActivity = require('./proctorActivity');
 
+// New Enhancements
+const TrainingTrainerAssignment = require('./trainingTrainerAssignment');
+const DiscussionPost = require('./discussionPost');
+const Certificate = require('./certificate');
+const ParticipantTracking = require('./participantTracking');
+
 // --- Core LMS Associations ---
 
 // User <-> TrainerProfile
@@ -79,6 +85,36 @@ Course.hasMany(CourseTrainerAssignment, { foreignKey: 'courseId', as: 'trainerAs
 CourseTrainerAssignment.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
 CourseTrainerAssignment.belongsTo(User, { foreignKey: 'trainerId', as: 'trainer' });
 User.hasMany(CourseTrainerAssignment, { foreignKey: 'trainerId', as: 'courseAssignments' });
+
+// Training ←→ TrainingTrainerAssignment
+Training.hasMany(TrainingTrainerAssignment, { foreignKey: 'trainingId', as: 'trainerAssignments' });
+TrainingTrainerAssignment.belongsTo(Training, { foreignKey: 'trainingId', as: 'training' });
+TrainingTrainerAssignment.belongsTo(User, { foreignKey: 'trainerId', as: 'trainer' });
+User.hasMany(TrainingTrainerAssignment, { foreignKey: 'trainerId', as: 'trainingAssignments' });
+
+// DiscussionPost associations
+DiscussionPost.belongsTo(Training, { foreignKey: 'trainingId', as: 'training' });
+Training.hasMany(DiscussionPost, { foreignKey: 'trainingId', as: 'discussionPosts' });
+DiscussionPost.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+User.hasMany(DiscussionPost, { foreignKey: 'userId', as: 'discussionPosts' });
+DiscussionPost.belongsTo(DiscussionPost, { foreignKey: 'parentId', as: 'parent' });
+DiscussionPost.hasMany(DiscussionPost, { foreignKey: 'parentId', as: 'replies' });
+
+// Certificate associations
+Certificate.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+User.hasMany(Certificate, { foreignKey: 'userId', as: 'certificates' });
+Certificate.belongsTo(Training, { foreignKey: 'trainingId', as: 'training' });
+Training.hasMany(Certificate, { foreignKey: 'trainingId', as: 'certificates' });
+Certificate.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
+Course.hasMany(Certificate, { foreignKey: 'courseId', as: 'certificates' });
+
+// ParticipantTracking associations
+ParticipantTracking.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+User.hasMany(ParticipantTracking, { foreignKey: 'userId', as: 'trackingRecords' });
+ParticipantTracking.belongsTo(Lesson, { foreignKey: 'lessonId', as: 'lesson' });
+Lesson.hasMany(ParticipantTracking, { foreignKey: 'lessonId', as: 'trackingRecords' });
+ParticipantTracking.belongsTo(Training, { foreignKey: 'trainingId', as: 'training' });
+Training.hasMany(ParticipantTracking, { foreignKey: 'trainingId', as: 'trackingRecords' });
 
 // Enrollment associations — both legacy (Training) and new (Course)
 Enrollment.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
@@ -272,5 +308,9 @@ module.exports = {
   CodingSubmission,
   SubmissionResult,
   CodingViolation,
-  PlagiarismReport
+  PlagiarismReport,
+  TrainingTrainerAssignment,
+  DiscussionPost,
+  Certificate,
+  ParticipantTracking
 };

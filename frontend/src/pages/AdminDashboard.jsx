@@ -59,9 +59,10 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [credentials, setCredentials] = useState(null)
   const [editModal, setEditModal] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [adminReport, setAdminReport] = useState(null)
 
   const [trainerForm, setTrainerForm] = useState({ name: '', email: '', password: '' })
-  const [trainingForm, setTrainingForm] = useState({ title: '', description: '', trainerId: '', startDate: '', endDate: '', capacity: '' })
+  const [trainingForm, setTrainingForm] = useState({ title: '', description: '', trainerId: '', trainerIds: [], startDate: '', endDate: '', capacity: '', sequentialLearning: false })
   const [questionForm, setQuestionForm] = useState({ trainingId: '', questionText: '', questionType: 'TEXT', options: '' })
   const [addParticipantModal, setAddParticipantModal] = useState(false)
   const [participantForm, setParticipantForm] = useState({ name: '', email: '', phone: '', password: '' })
@@ -77,6 +78,18 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
 
   const auth = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` })
 
+  const fetchAdminReport = async () => {
+    try {
+      const r = await fetch(`${API_BASE}/reports/admin`, { headers: auth() })
+      const d = await r.json()
+      if (r.ok && d.success) {
+        setAdminReport(d.data)
+      }
+    } catch (e) {
+      console.error('fetchAdminReport error:', e.message)
+    }
+  }
+
   useEffect(() => {
     const loadAll = async () => {
       setInitialLoading(true)
@@ -89,6 +102,12 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
     loadAll()
   }, [])
 
+  useEffect(() => {
+    if (tab === 'reports') {
+      fetchAdminReport()
+    }
+  }, [tab])
+
   const fetchAll = async () => {
     await Promise.all([
       fetchStats(),
@@ -100,7 +119,8 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       fetchPendingParticipants(),
       fetchNotes(),
       fetchPrograms(),
-      fetchCourses()
+      fetchCourses(),
+      fetchAdminReport()
     ])
   }
 
@@ -302,13 +322,23 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
   const handleCreateTraining = async (e) => {
     e.preventDefault(); setLoading(true)
     try {
+      const body = {
+        title: trainingForm.title,
+        description: trainingForm.description,
+        trainerId: trainingForm.trainerId ? parseInt(trainingForm.trainerId) : undefined,
+        trainerIds: (trainingForm.trainerIds || []).map(id => parseInt(id)),
+        startDate: trainingForm.startDate,
+        endDate: trainingForm.endDate,
+        capacity: trainingForm.capacity ? parseInt(trainingForm.capacity) : null,
+        sequentialLearning: !!trainingForm.sequentialLearning
+      }
       const r = await fetch(`${API_BASE}/admin/trainings`, {
         method: 'POST', headers: auth(),
-        body: JSON.stringify({ ...trainingForm, trainerId: parseInt(trainingForm.trainerId), capacity: trainingForm.capacity ? parseInt(trainingForm.capacity) : null })
+        body: JSON.stringify(body)
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
-      setTrainingForm({ title: '', description: '', trainerId: '', startDate: '', endDate: '', capacity: '' })
+      setTrainingForm({ title: '', description: '', trainerId: '', trainerIds: [], startDate: '', endDate: '', capacity: '', sequentialLearning: false })
       fetchTrainings(); fetchStats()
       success('Training session created successfully.')
     } catch (e) { showError(e.message) }
@@ -417,9 +447,11 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
       title: t.title,
       description: t.description || '',
       trainerId: t.trainerId || '',
+      trainerIds: t.trainerIds || (t.trainerId ? [t.trainerId] : []),
       startDate: t.startDate ? t.startDate.slice(0, 16) : '',
       endDate: t.endDate ? t.endDate.slice(0, 16) : '',
-      capacity: t.capacity || ''
+      capacity: t.capacity || '',
+      sequentialLearning: t.sequentialLearning || false
     })
   }
 
@@ -428,7 +460,16 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
     try {
       const r = await fetch(`${API_BASE}/admin/trainings/${editModal.id}`, {
         method: 'PUT', headers: auth(),
-        body: JSON.stringify({ ...editForm, trainerId: editForm.trainerId ? parseInt(editForm.trainerId) : undefined })
+        body: JSON.stringify({
+          title: editForm.title,
+          description: editForm.description,
+          trainerId: editForm.trainerId ? parseInt(editForm.trainerId) : undefined,
+          trainerIds: (editForm.trainerIds || []).map(id => parseInt(id)),
+          startDate: editForm.startDate,
+          endDate: editForm.endDate,
+          capacity: editForm.capacity ? parseInt(editForm.capacity) : null,
+          sequentialLearning: !!editForm.sequentialLearning
+        })
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
@@ -459,6 +500,7 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
     { key: 'notes', label: 'Notes Management' },
     { key: 'feedback', label: 'Feedback Reports' },
     { key: 'surveys', label: 'Survey Config' },
+    { key: 'reports', label: 'Reports & Analytics' },
   ]
 
   if (!user || !user.token) {
@@ -994,15 +1036,58 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                     onChange={e => setTrainingForm(p => ({ ...p, description: e.target.value }))} placeholder="Training objectives and content overview..." />
                 </div>
                 <div className="form-group">
-                  <AnimatedDropdown
-                    label="Assign Trainer"
-                    options={[
-                      { value: '', label: 'Select a trainer' },
-                      ...trainers.map(t => ({ value: t.id, label: `${t.name} (${t.email})` }))
-                    ]}
-                    value={trainingForm.trainerId}
-                    onChange={(val) => setTrainingForm(p => ({ ...p, trainerId: val }))}
+                  <label className="form-label" style={{ fontWeight: 600, color: 'var(--academic-text)' }}>Assign Trainer(s)</label>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                    gap: '10px',
+                    maxHeight: '160px',
+                    overflowY: 'auto',
+                    border: '1px solid var(--academic-border)',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    marginTop: '6px'
+                  }}>
+                    {trainers.map(t => {
+                      const isChecked = trainingForm.trainerIds?.includes(t.id);
+                      return (
+                        <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: 'var(--academic-text)', padding: '6px', borderRadius: '4px', background: isChecked ? 'rgba(255, 255, 255, 0.07)' : 'transparent', transition: 'background 0.2s' }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const updated = e.target.checked
+                                ? [...(trainingForm.trainerIds || []), t.id]
+                                : (trainingForm.trainerIds || []).filter(id => id !== t.id);
+                              setTrainingForm(p => ({
+                                ...p,
+                                trainerIds: updated,
+                                trainerId: updated[0] || ''
+                              }));
+                            }}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <div>
+                            <span style={{ fontWeight: 550 }}>{t.name}</span>
+                            <div style={{ fontSize: '11px', color: 'var(--academic-text-muted)' }}>{t.email}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '16px', marginBottom: '16px' }}>
+                  <input
+                    type="checkbox"
+                    id="sequentialLearning"
+                    checked={trainingForm.sequentialLearning || false}
+                    onChange={e => setTrainingForm(p => ({ ...p, sequentialLearning: e.target.checked }))}
+                    style={{ width: 'auto', height: 'auto', cursor: 'pointer', margin: 0 }}
                   />
+                  <label htmlFor="sequentialLearning" style={{ fontSize: '13px', fontWeight: 550, color: 'var(--academic-text)', cursor: 'pointer', margin: 0 }}>
+                    Enable Sequential Learning Lock
+                  </label>
                 </div>
                 <div className="form-grid-2">
                   <div className="form-group">
@@ -1183,6 +1268,113 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
         </motion.div>
       )}
 
+      {/* ── REPORTS & ANALYTICS ── */}
+      {tab === 'reports' && (
+        <motion.div variants={itemVariants}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
+            {pageTitle('Reports & Analytics')}
+            <button className="ac-btn ac-btn-secondary" onClick={fetchAdminReport}>Refresh Report</button>
+          </div>
+
+          {!adminReport ? (
+            <div className="ac-card" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+              <div className="loader" style={{ fontSize: 14, color: 'var(--academic-text-muted)' }}>Loading reports data...</div>
+            </div>
+          ) : (
+            <div>
+              {/* Metrics Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: 20,
+                marginBottom: 24
+              }}>
+                <div className="ac-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 13, color: 'var(--academic-text-muted)', fontWeight: 550, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Users</div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-text)', margin: '8px 0 4px', fontFamily: "'Outfit', sans-serif" }}>{adminReport.totalUsers}</div>
+                  <div style={{ fontSize: 12, color: 'var(--academic-text-secondary)' }}>
+                    Admins: {adminReport.usersByRole?.admin || 0} | Trainers: {adminReport.usersByRole?.trainer || 0} | Participants: {adminReport.usersByRole?.participant || 0}
+                  </div>
+                </div>
+
+                <div className="ac-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 13, color: 'var(--academic-text-muted)', fontWeight: 550, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trainings &amp; Lessons</div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-text)', margin: '8px 0 4px', fontFamily: "'Outfit', sans-serif" }}>
+                    {adminReport.totalTrainings} <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--academic-text-muted)' }}>Trainings</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--academic-text-secondary)' }}>
+                    Total Lessons: {adminReport.totalLessons || 0}
+                  </div>
+                </div>
+
+                <div className="ac-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 13, color: 'var(--academic-text-muted)', fontWeight: 550, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Completion Rate</div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-primary)', margin: '8px 0 4px', fontFamily: "'Outfit', sans-serif" }}>
+                    {adminReport.completionRate}%
+                  </div>
+                  <div style={{ width: '100%', height: 6, background: 'rgba(255, 255, 255, 0.1)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${adminReport.completionRate}%`, height: '100%', background: 'var(--academic-primary)' }}></div>
+                  </div>
+                </div>
+
+                <div className="ac-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 13, color: 'var(--academic-text-muted)', fontWeight: 550, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Users (30 Days)</div>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--academic-text)', margin: '8px 0 4px', fontFamily: "'Outfit', sans-serif" }}>{adminReport.activeUsers}</div>
+                  <div style={{ fontSize: 12, color: 'var(--academic-text-secondary)' }}>
+                    Enrollment Rate: {adminReport.enrollmentRate}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Trainer Performance */}
+              <div className="ac-card" style={{ padding: 24 }}>
+                <h3 className="ac-section-title" style={{ fontSize: 18, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Trainer Performance &amp; Feedback</span>
+                </h3>
+                {(!adminReport.trainerPerformance || adminReport.trainerPerformance.length === 0) ? (
+                  <div className="ac-empty">
+                    <p style={{ color: 'var(--academic-text-muted)' }}>No feedback data available for trainers yet.</p>
+                  </div>
+                ) : (
+                  <div className="table-wrapper" style={{ border: 'none' }}>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Trainer Name</th>
+                          <th style={{ textAlign: 'center' }}>Avg Trainer Rating</th>
+                          <th style={{ textAlign: 'center' }}>Avg Subject Rating</th>
+                          <th style={{ textAlign: 'center' }}>Feedback Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adminReport.trainerPerformance.map(tp => (
+                          <tr key={tp.trainerId}>
+                            <td className="font-medium" style={{ color: 'var(--academic-text)' }}>{tp.trainerName}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className="ac-chip ac-chip-success" style={{ fontWeight: 600 }}>
+                                {tp.avgTrainerRating} / 5.0
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className="ac-chip ac-chip-primary" style={{ fontWeight: 600 }}>
+                                {tp.avgSubjectRating} / 5.0
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'center', color: 'var(--academic-text-secondary)' }}>
+                              {tp.feedbackCount} response(s)
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
+
       {/* ── EDIT MODAL ── */}
       {editModal && (
         <div className="modal-overlay" onClick={() => setEditModal(null)}>
@@ -1203,15 +1395,58 @@ function AdminDashboard({ user, onLogout, activeTab, onTabChange }) {
                   onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} />
               </div>
               <div className="form-group">
-                <AnimatedDropdown
-                  label="Trainer"
-                  options={[
-                    { value: '', label: 'No trainer assigned' },
-                    ...trainers.map(t => ({ value: t.id, label: t.name }))
-                  ]}
-                  value={editForm.trainerId}
-                  onChange={(val) => setEditForm(p => ({ ...p, trainerId: val }))}
+                <label className="form-label" style={{ fontWeight: 600, color: 'var(--academic-text)' }}>Assign Trainer(s)</label>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                  gap: '10px',
+                  maxHeight: '160px',
+                  overflowY: 'auto',
+                  border: '1px solid var(--academic-border)',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  marginTop: '6px'
+                }}>
+                  {trainers.map(t => {
+                    const isChecked = editForm.trainerIds?.includes(t.id);
+                    return (
+                      <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: 'var(--academic-text)', padding: '6px', borderRadius: '4px', background: isChecked ? 'rgba(255, 255, 255, 0.07)' : 'transparent', transition: 'background 0.2s' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const updated = e.target.checked
+                              ? [...(editForm.trainerIds || []), t.id]
+                              : (editForm.trainerIds || []).filter(id => id !== t.id);
+                            setEditForm(p => ({
+                              ...p,
+                              trainerIds: updated,
+                              trainerId: updated[0] || ''
+                            }));
+                          }}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <div>
+                          <span style={{ fontWeight: 550 }}>{t.name}</span>
+                          <div style={{ fontSize: '11px', color: 'var(--academic-text-muted)' }}>{t.email}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '16px', marginBottom: '16px' }}>
+                <input
+                  type="checkbox"
+                  id="editSequentialLearning"
+                  checked={editForm.sequentialLearning || false}
+                  onChange={e => setEditForm(p => ({ ...p, sequentialLearning: e.target.checked }))}
+                  style={{ width: 'auto', height: 'auto', cursor: 'pointer', margin: 0 }}
                 />
+                <label htmlFor="editSequentialLearning" style={{ fontSize: '13px', fontWeight: 550, color: 'var(--academic-text)', cursor: 'pointer', margin: 0 }}>
+                  Enable Sequential Learning Lock
+                </label>
               </div>
               <div className="form-grid-2">
                 <div className="form-group">

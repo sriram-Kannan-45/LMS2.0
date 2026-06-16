@@ -1,4 +1,4 @@
-const { Enrollment, Training, User, Feedback, Notification } = require('../models');
+const { Enrollment, Training, User, Feedback, Notification, Course } = require('../models');
 const ActivityService = require('../services/activityService');
 
 const enrollInTraining = async (req, res) => {
@@ -35,33 +35,69 @@ const enrollInTraining = async (req, res) => {
       }
     }
 
+    // Find corresponding Course for the training (or create if missing)
+    let course = await Course.findOne({ where: { trainingProgramId: trainingId } });
+    if (!course) {
+      course = await Course.create({
+        trainingProgramId: trainingId,
+        trainerId: training.trainerId || 0,
+        title: training.title,
+        description: training.description || null,
+        status: 'PUBLISHED'
+      });
+    }
+
     const enrollment = await Enrollment.create({
       participantId,
       trainingId,
-      status: 'ENROLLED'
+      courseId: course.id,
+      status: 'PENDING'
     });
 
     const io = req.app.get('io');
     const user = await User.findByPk(participantId);
 
+    // Get all trainers for this training
+    const { TrainingTrainerAssignment } = require('../models');
+    const assignments = await TrainingTrainerAssignment.findAll({ where: { trainingId } });
+    const trainerIds = new Set(assignments.map(a => a.trainerId));
+    if (training.trainerId) trainerIds.add(training.trainerId);
+
+    const NotificationService = require('../services/notificationService');
+
+    // Notify Trainers
+    for (const tId of trainerIds) {
+      await NotificationService.createNotification({
+        userId: tId,
+        message: `${user?.name || 'A participant'} has requested to enroll in training: ${training.title}`,
+        type: 'ENROLLMENT',
+        actionUrl: `/trainer`,
+        relatedEntityId: enrollment.id,
+        relatedEntityType: 'Enrollment'
+      }, io);
+    }
+
     // Notify Participant
-    await Notification.create({
+    await NotificationService.createNotification({
       userId: participantId,
-      message: `You have successfully enrolled in training: ${training.title}`,
-      isRead: false
-    });
+      message: `Your enrollment request for training: ${training.title} has been submitted to the trainer.`,
+      type: 'ENROLLMENT',
+      actionUrl: `/participant`,
+      relatedEntityId: enrollment.id,
+      relatedEntityType: 'Enrollment'
+    }, io);
 
     // Log activity
     await ActivityService.logActivity({
       userId: participantId,
       userName: user?.name || 'Unknown',
-      action: 'ENROLLMENT_DONE',
+      action: 'ENROLLMENT_REQUESTED',
       entityType: 'Training',
       entityId: trainingId,
       details: { trainingName: training.title }
     }, io);
 
-    res.status(201).json({ message: 'Enrolled successfully', enrollment });
+    res.status(201).json({ message: 'Enrollment request submitted for approval', enrollment });
   } catch (error) {
     console.error('Enroll error:', error.message);
     res.status(500).json({ error: 'Server error during enrollment' });

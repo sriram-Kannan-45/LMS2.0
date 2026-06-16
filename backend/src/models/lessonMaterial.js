@@ -26,7 +26,7 @@ const LessonMaterial = sequelize.define('LessonMaterial', {
     field: 'lesson_id'
   },
   materialType: {
-    type: DataTypes.ENUM('NOTE', 'VIDEO', 'IMAGE', 'LINK', 'PDF', 'PPT'),
+    type: DataTypes.ENUM('NOTE', 'VIDEO', 'IMAGE', 'LINK', 'PDF', 'PPT', 'ATTACHMENT', 'LIVE_SESSION'),
     allowNull: false,
     field: 'material_type'
   },

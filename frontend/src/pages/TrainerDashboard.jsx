@@ -17,15 +17,18 @@ const API = API_BASE
 
 function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
   const { success, error: showError, info } = useToast()
-  const [tab, setTab] = useState(activeTab || 'trainings')
+  const [tab, setTab] = useState(activeTab === 'trainings' ? 'courses' : (activeTab || 'courses'))
 
   useEffect(() => {
-    if (activeTab) setTab(activeTab)
+    if (activeTab) {
+      setTab(activeTab === 'trainings' ? 'courses' : activeTab)
+    }
   }, [activeTab])
 
   const handleTabChange = (newTab) => {
-    setTab(newTab)
-    if (onTabChange) onTabChange(newTab)
+    const targetTab = newTab === 'trainings' ? 'courses' : newTab
+    setTab(targetTab)
+    if (onTabChange) onTabChange(targetTab)
   }
   const [trainings, setTrainings] = useState([])
   const [feedbacks, setFeedbacks] = useState([])
@@ -39,6 +42,85 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
   const [replyModal, setReplyModal] = useState(null)
   const [replyText, setReplyText] = useState('')
   const [viewingParticipant, setViewingParticipant] = useState(null)
+  const [enrollmentRequests, setEnrollmentRequests] = useState([])
+  const [trainerReport, setTrainerReport] = useState(null)
+
+  const fetchEnrollmentRequests = async () => {
+    try {
+      const r = await fetch(`${API}/trainer/enrollment-requests`, { headers: auth() })
+      const d = await r.json()
+      if (r.ok && d.success) {
+        setEnrollmentRequests(d.pendingRequests || [])
+      }
+    } catch (e) {
+      console.error('fetchEnrollmentRequests error:', e.message)
+    }
+  }
+
+  const fetchTrainerReport = async () => {
+    try {
+      const r = await fetch(`${API}/reports/trainer`, { headers: auth() })
+      const d = await r.json()
+      if (r.ok && d.success) {
+        setTrainerReport(d.data)
+      }
+    } catch (e) {
+      console.error('fetchTrainerReport error:', e.message)
+    }
+  }
+
+  const handleApproveEnrollment = async (requestId) => {
+    try {
+      const r = await fetch(`${API}/trainer/enrollment-requests/${requestId}/approve`, {
+        method: 'POST',
+        headers: auth()
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error)
+      success('Enrollment request approved successfully!')
+      fetchEnrollmentRequests()
+    } catch (e) {
+      showError(e.message)
+    }
+  }
+
+  const handleRejectEnrollment = async (requestId) => {
+    try {
+      const r = await fetch(`${API}/trainer/enrollment-requests/${requestId}/reject`, {
+        method: 'POST',
+        headers: auth()
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error)
+      success('Enrollment request rejected.')
+      fetchEnrollmentRequests()
+    } catch (e) {
+      showError(e.message)
+    }
+  }
+
+  const handleRegenerateCertificate = async () => {
+    try {
+      const r = await fetch(`${API}/trainer/certificates/regenerate`, {
+        method: 'POST',
+        headers: auth()
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error)
+      success('Certificate check/regeneration triggered successfully!')
+      fetchTrainerReport()
+    } catch (e) {
+      showError(e.message)
+    }
+  }
+
+  useEffect(() => {
+    if (tab === 'enrollments') {
+      fetchEnrollmentRequests()
+    } else if (tab === 'reports') {
+      fetchTrainerReport()
+    }
+  }, [tab])
 
   useEffect(() => {
     fetchTrainings()
@@ -122,11 +204,12 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
   }
 
   const TABS = [
-    { key: 'courses', label: 'My Courses' },
-    { key: 'trainings', label: 'My Trainings' },
+    { key: 'courses', label: 'Trainings' },
     { key: 'notes', label: 'Notes & Resources' },
     { key: 'ai-quiz', label: 'AI Quiz Generator' },
     { key: 'coding', label: 'Coding Tests' },
+    { key: 'enrollments', label: 'Enrollment Requests' },
+    { key: 'reports', label: 'Trainer Reports' },
     { key: 'feedback', label: 'Feedback Received' },
     { key: 'profile', label: 'My Profile' },
   ]
@@ -164,74 +247,6 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
 
       {tab === 'courses' && (
         <TrainerCourses user={user} />
-      )}
-
-      {tab === 'trainings' && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <div className="section-header">
-            <h3>Assigned Training Programs</h3>
-          </div>
-          {trainings.length === 0 ? (
-            <div className="card">
-              <div className="empty-state">
-                <div className="empty-icon">📚</div>
-                <h3>No Trainings Assigned</h3>
-                <p>You haven't been assigned to any training programs yet.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="training-grid">
-              {trainings.map(t => {
-                const pct = t.capacity ? Math.round((t.enrolledCount / t.capacity) * 100) : null
-                return (
-                  <motion.div 
-                    key={t.id} 
-                    className="training-card card-hover-lift"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    whileHover={{ scale: 1.02 }}
-                  >
-                    <div className="training-card-title">{t.title}</div>
-                    <div className="training-card-desc">{t.description || 'No description provided.'}</div>
-                    <div className="training-meta">
-                      <div className="meta-item">
-                        <Calendar size={14} style={{ color: 'var(--text-muted)' }} />
-                        <span className="meta-key">Dates:</span>
-                        <span>{fmtDate(t.startDate)} - {fmtDate(t.endDate)}</span>
-                      </div>
-                      <div className="meta-item">
-                        <Users size={14} style={{ color: 'var(--text-muted)' }} />
-                        <span className="meta-key">Enrolled:</span>
-                        <span>{t.enrolledCount} {t.capacity ? `/ ${t.capacity}` : ''}</span>
-                      </div>
-                    </div>
-                    {pct !== null && (
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                          <span>Capacity Fill</span>
-                          <span style={{ fontWeight: 600 }}>{pct}%</span>
-                        </div>
-                        <div className="progress-bar progress-bar-animated">
-                          <motion.div 
-                            className="progress-fill"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${pct}%` }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
-                )
-              })}
-            </div>
-          )}
-        </motion.div>
       )}
 
       {tab === 'feedback' && (
@@ -337,6 +352,272 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
 
       {tab === 'coding' && (
         <TrainerCodingAssessments />
+      )}
+
+      {tab === 'enrollments' && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3>Enrollment Requests</h3>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Review and approve participant access requests</span>
+              </div>
+              <button className="btn btn-sm" onClick={fetchEnrollmentRequests}>Refresh</button>
+            </div>
+            
+            {enrollmentRequests.length === 0 ? (
+              <div className="empty-state" style={{ padding: '40px 0', textAlign: 'center' }}>
+                <Users size={48} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+                <p style={{ color: 'var(--text-muted)' }}>No pending enrollment requests.</p>
+              </div>
+            ) : (
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Participant</th>
+                      <th>Target Training</th>
+                      <th>Type</th>
+                      <th style={{ textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {enrollmentRequests.map(req => (
+                      <tr key={req.id}>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{req.participant?.name || 'Unknown'}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{req.participant?.email}</div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 550 }}>{req.course?.title || req.training?.title || 'Unknown'}</div>
+                        </td>
+                        <td>
+                          <span className="ac-chip ac-chip-success">
+                            Training
+                          </span>
+                        </td>
+                        <td style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                          <button className="btn btn-sm btn-primary" style={{ background: '#10b981', borderColor: '#10b981' }} onClick={() => handleApproveEnrollment(req.id)}>
+                            Approve
+                          </button>
+                          <button className="btn btn-sm btn-danger" onClick={() => handleRejectEnrollment(req.id)}>
+                            Reject
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {tab === 'reports' && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div>
+              <h3 style={{ margin: 0, fontFamily: "'Outfit', sans-serif" }}>Trainer Reports &amp; Analytics</h3>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>View participant progress, quiz results, and review submissions</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-sm btn-secondary" onClick={handleRegenerateCertificate}>Check/Issue Certificates</button>
+              <button className="btn btn-sm btn-primary" onClick={fetchTrainerReport}>Refresh Data</button>
+            </div>
+          </div>
+
+          {!trainerReport ? (
+            <div className="card" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Loading report data...</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              {/* Stats Card */}
+              <div className="card" style={{ padding: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <TrendingUp style={{ color: '#4f46e5' }} />
+                  <div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 550 }}>Average Progress Rate</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>{trainerReport.averageCompletion}%</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Participant Progress Grid */}
+              <div className="card">
+                <div className="card-header">
+                  <h3>Participant Progress</h3>
+                </div>
+                {(!trainerReport.participantProgress || trainerReport.participantProgress.length === 0) ? (
+                  <div className="empty-state" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No participants enrolled yet.</div>
+                ) : (
+                  <div className="table-wrapper">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Participant</th>
+                          <th>Training</th>
+                          <th>Type</th>
+                          <th>Lessons Completed</th>
+                          <th>Progress</th>
+                          <th>Avg Quiz Score</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {trainerReport.participantProgress.map((p, idx) => (
+                          <tr key={idx}>
+                            <td>
+                              <div style={{ fontWeight: 600 }}>{p.participantName}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{p.participantEmail}</div>
+                            </td>
+                            <td>{p.title}</td>
+                            <td>
+                              <span className="ac-chip ac-chip-success">
+                                Training
+                              </span>
+                            </td>
+                            <td>{p.completedLessons} / {p.totalLessons}</td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ flex: 1, height: 6, background: 'rgba(0,0,0,0.1)', borderRadius: 3, overflow: 'hidden', minWidth: 60 }}>
+                                  <div style={{ width: `${p.progressPercent}%`, height: '100%', background: '#4f46e5' }}></div>
+                                </div>
+                                <span style={{ fontSize: 12, fontWeight: 600 }}>{p.progressPercent}%</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="ac-chip ac-chip-success" style={{ fontWeight: 600 }}>
+                                {p.avgQuizScore}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Pending Reviews */}
+              <div className="card">
+                <div className="card-header">
+                  <h3>Pending Assessment Reviews</h3>
+                </div>
+                {(!trainerReport.pendingReviews || trainerReport.pendingReviews.length === 0) ? (
+                  <div className="empty-state" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No pending reviews. All submissions graded!</div>
+                ) : (
+                  <div className="table-wrapper">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Participant</th>
+                          <th>Assessment</th>
+                          <th>Max Score</th>
+                          <th>Submitted At</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {trainerReport.pendingReviews.map((pr, idx) => (
+                          <tr key={idx}>
+                            <td style={{ fontWeight: 600 }}>{pr.participantName}</td>
+                            <td>{pr.assessmentTitle}</td>
+                            <td>{pr.maxScore}</td>
+                            <td>{fmtDate(pr.date)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Quiz History */}
+              <div className="card">
+                <div className="card-header">
+                  <h3>Recent Quiz Results</h3>
+                </div>
+                {(!trainerReport.quizScores || trainerReport.quizScores.length === 0) ? (
+                  <div className="empty-state" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No quiz submissions yet.</div>
+                ) : (
+                  <div className="table-wrapper">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Participant</th>
+                          <th>Quiz</th>
+                          <th>Score</th>
+                          <th>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {trainerReport.quizScores.map((qs, idx) => (
+                          <tr key={idx}>
+                            <td style={{ fontWeight: 600 }}>{qs.participantName}</td>
+                            <td>{qs.quizTitle}</td>
+                            <td>
+                              <span className="ac-chip ac-chip-success" style={{ fontWeight: 600 }}>
+                                {qs.score}%
+                              </span>
+                            </td>
+                            <td>{fmtDate(qs.date)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Assessment Scores */}
+              <div className="card">
+                <div className="card-header">
+                  <h3>Graded Assessments</h3>
+                </div>
+                {(!trainerReport.assessmentScores || trainerReport.assessmentScores.length === 0) ? (
+                  <div className="empty-state" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No graded submissions yet.</div>
+                ) : (
+                  <div className="table-wrapper">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Participant</th>
+                          <th>Assessment</th>
+                          <th>Score</th>
+                          <th>Status</th>
+                          <th>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {trainerReport.assessmentScores.map((as, idx) => (
+                          <tr key={idx}>
+                            <td style={{ fontWeight: 600 }}>{as.participantName}</td>
+                            <td>{as.assessmentTitle}</td>
+                            <td>{as.score} / {as.maxScore}</td>
+                            <td>
+                              <span className={`ac-chip ${as.status === 'PUBLISHED' ? 'ac-chip-success' : 'ac-chip-primary'}`}>
+                                {as.status}
+                              </span>
+                            </td>
+                            <td>{fmtDate(as.date)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </motion.div>
       )}
 
       {tab === 'profile' && (

@@ -46,4 +46,10 @@ router.get(   '/quizzes/:quizId/result',          participant, c.getQuizResult);
 router.post(  '/assessments/:assessmentId/submit', participant, c.submitAssessment);
 router.get(   '/assessments/:assessmentId/result', participant, c.getAssessmentResult);
 
+// ── Certificates ────────────────────────────────────────────────────────────
+router.get(   '/certificates',                    participant, c.listMyCertificates);
+
+// ── Tracking ────────────────────────────────────────────────────────────────
+router.post(  '/track-activity',                  participant, c.trackActivity);
+
 module.exports = router;

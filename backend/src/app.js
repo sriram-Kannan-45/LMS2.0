@@ -32,6 +32,8 @@ const participantProfileRoutes = require('./routes/participantProfileRoutes');
 const proctoringRoutes = require('./routes/proctoringRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
 const codingAssessmentRoutes = require('./routes/codingAssessmentRoutes');
+const discussionRoutes = require('./routes/discussionRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -95,6 +97,8 @@ app.use('/api/participant-profile', participantProfileRoutes);
 app.use('/api/proctor', proctoringRoutes);
 app.use('/api/lessons', lessonRoutes);
 app.use('/api/coding', codingAssessmentRoutes);
+app.use('/api/discussion', discussionRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Health check for AI service (separate path to avoid conflict with router)
 app.get('/api/ai/health', async (req, res) => {
@@ -221,6 +225,42 @@ const startServer = async () => {
       logger.info('assessment_sessions table ready');
     } catch (e) {
       logger.error('Could not sync assessment_sessions', { error: e.message });
+    }
+
+    // Sync TrainingTrainerAssignment table
+    try {
+      const { TrainingTrainerAssignment } = require('./models');
+      await TrainingTrainerAssignment.sync({ alter: true });
+      logger.info('training_trainer_assignments table ready');
+    } catch (e) {
+      logger.error('Could not sync training_trainer_assignments', { error: e.message });
+    }
+
+    // Sync DiscussionPost table
+    try {
+      const { DiscussionPost } = require('./models');
+      await DiscussionPost.sync({ alter: true });
+      logger.info('discussion_posts table ready');
+    } catch (e) {
+      logger.error('Could not sync discussion_posts', { error: e.message });
+    }
+
+    // Sync Certificate table
+    try {
+      const { Certificate } = require('./models');
+      await Certificate.sync({ alter: true });
+      logger.info('certificates table ready');
+    } catch (e) {
+      logger.error('Could not sync certificates', { error: e.message });
+    }
+
+    // Sync ParticipantTracking table
+    try {
+      const { ParticipantTracking } = require('./models');
+      await ParticipantTracking.sync({ alter: true });
+      logger.info('participant_trackings table ready');
+    } catch (e) {
+      logger.error('Could not sync participant_trackings', { error: e.message });
     }
 
     // Course-centric architecture — must run BEFORE lesson/quiz/enrollment

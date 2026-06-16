@@ -4,10 +4,11 @@ import {
   ArrowLeft, BookOpen, FileText, Sparkles, ClipboardList, Folder,
   PlayCircle, CheckCircle2, Clock, ExternalLink, Send, X, Eye,
   Image as ImageIcon, Video, Link as LinkIcon, FilePenLine, Presentation,
-  Trophy, AlertCircle, User,
+  Trophy, AlertCircle, User, Lock, MessageSquare,
 } from 'lucide-react'
 import { API, assetUrl } from '../api/api'
 import { useToast } from '../components/Toast'
+import DiscussionBoard from '../components/shared/DiscussionBoard'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -74,9 +75,9 @@ function MyCoursesList({ user, onOpen }) {
 
   return (
     <div style={{ padding: '20px 0' }}>
-      <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: '#0f172a' }}>My Courses</h1>
+      <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: '#0f172a' }}>My Trainings</h1>
       <p style={{ marginTop: 4, color: '#64748b', fontSize: 14 }}>
-        Continue where you left off, or jump into any of your enrolled courses.
+        Continue where you left off, or jump into any of your enrolled trainings.
       </p>
 
       {loading ? (
@@ -90,10 +91,10 @@ function MyCoursesList({ user, onOpen }) {
         }}>
           <BookOpen size={48} color="#cbd5e1" style={{ margin: '0 auto 12px' }} />
           <h3 style={{ margin: '0 0 6px', color: '#475569', fontSize: 18, fontWeight: 600 }}>
-            No courses yet
+            No trainings yet
           </h3>
           <p style={{ margin: 0, color: '#94a3b8', fontSize: 14 }}>
-            Browse the Courses tab to find programs you can enroll in.
+            Browse the Explore Trainings tab to find programs you can enroll in.
           </p>
         </div>
       ) : (
@@ -216,6 +217,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
     { key: 'lessons',   label: 'Lessons',   icon: <FileText size={14} /> },
     { key: 'resources', label: 'Resources', icon: <Folder size={14} /> },
     { key: 'quizzes',   label: 'Quizzes',   icon: <Sparkles size={14} /> },
+    { key: 'discussions', label: 'Discussions', icon: <MessageSquare size={14} /> },
   ]
 
   return (
@@ -228,7 +230,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
           fontSize: 13, color: '#475569', cursor: 'pointer', marginBottom: 16,
         }}
       >
-        <ArrowLeft size={14} /> My Courses
+        <ArrowLeft size={14} /> My Trainings
       </button>
 
       {/* Header */}
@@ -253,7 +255,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
           </div>
           <div style={{ marginTop: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
-              <span>Course progress</span>
+              <span>Training progress</span>
               <span style={{ fontWeight: 700, color: '#4f46e5' }}>
                 {overview.stats.completedLessons} / {overview.stats.totalLessons} lessons · {Math.round(overview.enrollment.progressPercent)}%
               </span>
@@ -296,12 +298,15 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
           initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.2 }}
         >
-          {tab === 'overview' && <OverviewView course={overview.course} stats={overview.stats} />}
+           {tab === 'overview' && <OverviewView course={overview.course} stats={overview.stats} />}
           {tab === 'lessons' && (
             <LessonsView user={user} courseId={courseId} onOpenLesson={onOpenLesson} />
           )}
           {tab === 'resources' && <ResourcesView user={user} courseId={courseId} />}
           {tab === 'quizzes' && <QuizzesView user={user} courseId={courseId} />}
+          {tab === 'discussions' && (
+            <DiscussionBoard user={user} trainingId={overview.course.trainingProgramId} />
+          )}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -320,7 +325,7 @@ function Stat({ label, value }) {
 function OverviewView({ course, stats }) {
   return (
     <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 20 }}>
-      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>About this course</h3>
+      <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>About this training</h3>
       <p style={{ margin: 0, color: '#475569', fontSize: 14, lineHeight: 1.6 }}>
         {course.description || 'No description provided yet.'}
       </p>
@@ -337,8 +342,8 @@ function OverviewView({ course, stats }) {
             {course.trainer.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
           </div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{course.trainer.name}</div>
-            <div style={{ fontSize: 11, color: '#64748b' }}>Course trainer</div>
+             <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{course.trainer.name}</div>
+            <div style={{ fontSize: 11, color: '#64748b' }}>Training trainer</div>
           </div>
         </div>
       )}
@@ -373,7 +378,7 @@ function LessonsView({ user, courseId, onOpenLesson }) {
     return (
       <div style={emptyCard}>
         <FileText size={36} color="#cbd5e1" />
-        <p>No lessons published yet for this course.</p>
+        <p>No lessons published yet for this training.</p>
       </div>
     )
   }
@@ -384,22 +389,35 @@ function LessonsView({ user, courseId, onOpenLesson }) {
           key={l.lessonId}
           initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
           transition={{ delay: i * 0.03 }}
-          onClick={() => onOpenLesson(l.lessonId)}
+          onClick={() => {
+            if (l.isLocked) {
+              showError('This lesson is locked. Please complete the previous lesson first.');
+              return;
+            }
+            onOpenLesson(l.lessonId);
+          }}
           style={{
-            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
-            padding: 14, display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer',
+            background: l.isLocked ? '#f8fafc' : '#fff',
+            border: '1px solid #e2e8f0',
+            borderRadius: 10,
+            padding: 14,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            cursor: l.isLocked ? 'not-allowed' : 'pointer',
+            opacity: l.isLocked ? 0.6 : 1,
           }}
         >
           <div style={{
             width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-            background: l.progress.status === 'COMPLETED' ? '#dcfce7' : l.progress.status === 'IN_PROGRESS' ? '#fef3c7' : '#eef2ff',
-            color: l.progress.status === 'COMPLETED' ? '#15803d' : l.progress.status === 'IN_PROGRESS' ? '#92400e' : '#4f46e5',
+            background: l.isLocked ? '#e2e8f0' : l.progress.status === 'COMPLETED' ? '#dcfce7' : l.progress.status === 'IN_PROGRESS' ? '#fef3c7' : '#eef2ff',
+            color: l.isLocked ? '#64748b' : l.progress.status === 'COMPLETED' ? '#15803d' : l.progress.status === 'IN_PROGRESS' ? '#92400e' : '#4f46e5',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
           }}>
-            {l.progress.status === 'COMPLETED' ? <CheckCircle2 size={16} /> : (l.orderIndex + 1)}
+            {l.isLocked ? <Lock size={14} /> : l.progress.status === 'COMPLETED' ? <CheckCircle2 size={16} /> : (l.orderIndex + 1)}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{l.title}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: l.isLocked ? '#64748b' : '#0f172a' }}>{l.title}</div>
             {l.description && (
               <div style={{
                 fontSize: 12, color: '#64748b', marginTop: 2,
@@ -407,7 +425,7 @@ function LessonsView({ user, courseId, onOpenLesson }) {
               }}>{l.description}</div>
             )}
             <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-              <StatusPill status={l.progress.status} />
+              <StatusPill status={l.isLocked ? 'LOCKED' : l.progress.status} />
               {Object.entries(l.materialCounts || {}).filter(([_, n]) => n > 0).map(([t, n]) => (
                 <span key={t} style={{ fontSize: 10, color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
                   {MAT_ICON[t]} {n}
@@ -416,7 +434,11 @@ function LessonsView({ user, courseId, onOpenLesson }) {
               {l.hasAssessment && <span style={{ fontSize: 10, color: '#dc2626' }}>· Assessment</span>}
             </div>
           </div>
-          <ArrowLeft size={14} color="#94a3b8" style={{ transform: 'rotate(180deg)' }} />
+          {l.isLocked ? (
+            <Lock size={14} color="#94a3b8" />
+          ) : (
+            <ArrowLeft size={14} color="#94a3b8" style={{ transform: 'rotate(180deg)' }} />
+          )}
         </motion.div>
       ))}
     </div>
@@ -528,7 +550,7 @@ function QuizzesView({ user, courseId }) {
     return (
       <div style={emptyCard}>
         <Sparkles size={36} color="#cbd5e1" />
-        <p>No quizzes published yet for this course.</p>
+        <p>No quizzes published yet for this training.</p>
       </div>
     )
   }
@@ -1232,9 +1254,9 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
 
   return (
     <div style={{ padding: '20px 0' }}>
-      <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>Explore Courses</h2>
+      <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>Explore Trainings</h2>
       <p style={{ marginTop: 4, color: '#64748b', fontSize: 14 }}>
-        Discover and request enrollment in published courses.
+        Discover and request enrollment in published trainings.
       </p>
 
       {loading ? (
@@ -1245,10 +1267,10 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
         <div style={emptyCard}>
           <BookOpen size={48} color="#cbd5e1" style={{ margin: '0 auto 12px' }} />
           <h3 style={{ margin: '0 0 6px', color: '#475569', fontSize: 16, fontWeight: 600 }}>
-            No new courses to explore
+            No new trainings to explore
           </h3>
           <p style={{ margin: 0, color: '#94a3b8', fontSize: 13 }}>
-            You've requested enrollment in all published courses!
+            You've requested enrollment in all published trainings!
           </p>
         </div>
       ) : (

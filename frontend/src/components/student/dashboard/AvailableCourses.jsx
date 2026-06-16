@@ -44,20 +44,20 @@ export default function AvailableCourses({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="ac-section-title">Browse Courses</h2>
-          <p className="ac-section-subtitle">Discover courses created by your instructors</p>
+          <h2 className="ac-section-title">Explore Trainings</h2>
+          <p className="ac-section-subtitle">Discover trainings created by your instructors</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative" style={{ minWidth: 220 }}>
             <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--academic-text-muted)' }} />
             <input
               type="search"
-              placeholder="Search courses…"
+              placeholder="Search trainings…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="ac-input ac-focus"
               style={{ paddingLeft: 36, height: 38, fontSize: 13 }}
-              aria-label="Search courses"
+              aria-label="Search trainings"
             />
           </div>
           <div className="flex items-center gap-1 p-1 rounded-xl" style={{ background: 'var(--academic-bg-soft)', border: '1px solid var(--academic-border)' }}>
@@ -118,11 +118,11 @@ export default function AvailableCourses({
             <BookOpen size={28} />
           </div>
           <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--academic-text)', marginBottom: 6 }}>
-            {trainings.length === 0 ? 'No courses available yet' : 'No matches'}
+            {trainings.length === 0 ? 'No trainings available yet' : 'No matches'}
           </h3>
           <p style={{ fontSize: 14, color: 'var(--academic-text-muted)' }}>
             {trainings.length === 0
-              ? 'Your instructor will publish courses here. Check back soon!'
+              ? 'Your instructor will publish trainings here. Check back soon!'
               : 'Try adjusting your search or filter.'}
           </p>
         </div>
@@ -229,7 +229,7 @@ export default function AvailableCourses({
                     className="ac-btn ac-btn-primary ac-focus-ring"
                     style={{ width: '100%' }}
                   >
-                    Join Course
+                    Join Training
                   </button>
                 )}
                 {enrolled && (
@@ -239,7 +239,7 @@ export default function AvailableCourses({
                 )}
                 {full && !enrolled && (
                   <button type="button" disabled className="ac-btn" style={{ width: '100%', opacity: 0.55 }}>
-                    <AlertCircle size={14} /> Course is full
+                    <AlertCircle size={14} /> Training is full
                   </button>
                 )}
               </motion.article>

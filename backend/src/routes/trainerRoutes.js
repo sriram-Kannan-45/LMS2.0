@@ -16,9 +16,22 @@ router.get(
   async (req, res) => {
     try {
       const trainerId = req.user.id;
+      const { TrainingTrainerAssignment } = require('../models');
+      const { Op } = require('sequelize');
+
+      const assignments = await TrainingTrainerAssignment.findAll({
+        where: { trainerId },
+        attributes: ['trainingId']
+      });
+      const assignedTrainingIds = assignments.map(a => a.trainingId);
 
       const trainings = await Training.findAll({
-        where: { trainerId },
+        where: {
+          [Op.or]: [
+            { trainerId },
+            { id: { [Op.in]: assignedTrainingIds } }
+          ]
+        },
         order: [['startDate', 'ASC']]
       });
 
@@ -32,7 +45,8 @@ router.get(
           endDate: t.endDate,
           capacity: t.capacity,
           enrolledCount,
-          availableSeats: t.capacity ? (t.capacity - enrolledCount) : null
+          availableSeats: t.capacity ? (t.capacity - enrolledCount) : null,
+          sequentialLearning: t.sequentialLearning || false
         };
       }));
 
@@ -40,6 +54,149 @@ router.get(
     } catch (error) {
       console.error('Trainer get trainings error:', error.message);
       res.status(500).json({ error: 'Server error fetching trainings' });
+    }
+  }
+);
+
+// GET /api/trainer/enrollment-requests - list pending requests
+router.get(
+  '/enrollment-requests',
+  authenticateToken,
+  roleMiddleware('TRAINER'),
+  async (req, res) => {
+    try {
+      const trainerId = req.user.id;
+      const { TrainingTrainerAssignment, Course } = require('../models');
+      const { Op } = require('sequelize');
+
+      const assignments = await TrainingTrainerAssignment.findAll({
+        where: { trainerId },
+        attributes: ['trainingId']
+      });
+      const assignedTrainingIds = assignments.map(a => a.trainingId);
+
+      const trainings = await Training.findAll({
+        where: {
+          [Op.or]: [
+            { trainerId },
+            { id: { [Op.in]: assignedTrainingIds } }
+          ]
+        },
+        attributes: ['id']
+      });
+      const trainingIds = trainings.map(t => t.id);
+
+      const courses = await Course.findAll({
+        where: { trainerId },
+        attributes: ['id']
+      });
+      const courseIds = courses.map(c => c.id);
+
+      const pendingEnrollments = await Enrollment.findAll({
+        where: {
+          status: 'PENDING',
+          [Op.or]: [
+            { trainingId: { [Op.in]: trainingIds } },
+            { courseId: { [Op.in]: courseIds } }
+          ]
+        },
+        include: [
+          { model: User, as: 'participant', attributes: ['id', 'name', 'email', 'phone'] },
+          { model: Course, as: 'course', attributes: ['id', 'title'] },
+          { model: Training, as: 'training', attributes: ['id', 'title'] }
+        ]
+      });
+
+      res.json({ success: true, pendingRequests: pendingEnrollments });
+    } catch (error) {
+      console.error('Trainer pending requests error:', error.message);
+      res.status(500).json({ error: 'Server error fetching pending requests' });
+    }
+  }
+);
+
+// POST /api/trainer/enrollment-requests/:id/approve
+router.post(
+  '/enrollment-requests/:id/approve',
+  authenticateToken,
+  roleMiddleware('TRAINER'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const enrollment = await Enrollment.findByPk(id, {
+        include: [
+          { model: Course, as: 'course', attributes: ['id', 'title'] },
+          { model: Training, as: 'training', attributes: ['id', 'title'] }
+        ]
+      });
+      if (!enrollment) return res.status(404).json({ error: 'Enrollment request not found' });
+      if (enrollment.status !== 'PENDING') {
+        return res.status(400).json({ error: 'Enrollment request is not pending' });
+      }
+
+      enrollment.status = 'ENROLLED';
+      await enrollment.save();
+
+      const io = req.app.get('io');
+      const NotificationService = require('../services/notificationService');
+      const title = enrollment.course?.title || enrollment.training?.title || 'Training';
+
+      await NotificationService.createNotification({
+        userId: enrollment.participantId,
+        message: `Your enrollment request for "${title}" has been approved!`,
+        type: 'APPROVAL',
+        actionUrl: `/participant`,
+        relatedEntityId: enrollment.id,
+        relatedEntityType: 'Enrollment'
+      }, io);
+
+      res.json({ success: true, message: 'Enrollment request approved' });
+    } catch (error) {
+      console.error('Approve request error:', error.message);
+      res.status(500).json({ error: 'Server error approving request' });
+    }
+  }
+);
+
+// POST /api/trainer/enrollment-requests/:id/reject
+router.post(
+  '/enrollment-requests/:id/reject',
+  authenticateToken,
+  roleMiddleware('TRAINER'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const enrollment = await Enrollment.findByPk(id, {
+        include: [
+          { model: Course, as: 'course', attributes: ['id', 'title'] },
+          { model: Training, as: 'training', attributes: ['id', 'title'] }
+        ]
+      });
+      if (!enrollment) return res.status(404).json({ error: 'Enrollment request not found' });
+      if (enrollment.status !== 'PENDING') {
+        return res.status(400).json({ error: 'Enrollment request is not pending' });
+      }
+
+      enrollment.status = 'CANCELLED';
+      await enrollment.save();
+
+      const io = req.app.get('io');
+      const NotificationService = require('../services/notificationService');
+      const title = enrollment.course?.title || enrollment.training?.title || 'Training';
+
+      await NotificationService.createNotification({
+        userId: enrollment.participantId,
+        message: `Your enrollment request for "${title}" has been rejected.`,
+        type: 'APPROVAL',
+        actionUrl: `/participant`,
+        relatedEntityId: enrollment.id,
+        relatedEntityType: 'Enrollment'
+      }, io);
+
+      res.json({ success: true, message: 'Enrollment request rejected' });
+    } catch (error) {
+      console.error('Reject request error:', error.message);
+      res.status(500).json({ error: 'Server error rejecting request' });
     }
   }
 );
@@ -52,9 +209,22 @@ router.get(
   async (req, res) => {
     try {
       const trainerId = req.user.id;
+      const { TrainingTrainerAssignment } = require('../models');
+      const { Op } = require('sequelize');
+
+      const assignments = await TrainingTrainerAssignment.findAll({
+        where: { trainerId },
+        attributes: ['trainingId']
+      });
+      const assignedTrainingIds = assignments.map(a => a.trainingId);
 
       const trainings = await Training.findAll({
-        where: { trainerId },
+        where: {
+          [Op.or]: [
+            { trainerId },
+            { id: { [Op.in]: assignedTrainingIds } }
+          ]
+        },
         attributes: ['id']
       });
       const trainingIds = trainings.map(t => t.id);
@@ -539,5 +709,11 @@ router.put(
     }
   }
 );
+
+// Reports and Certificates
+const reportController = require('../controllers/reportController');
+const participantCourseController = require('../controllers/participantCourseController');
+router.get('/reports', authenticateToken, roleMiddleware('TRAINER', 'ADMIN'), reportController.getTrainerReport);
+router.post('/certificates/regenerate', authenticateToken, roleMiddleware('TRAINER', 'ADMIN'), participantCourseController.forceRegenerateCertificate);
 
 module.exports = router;

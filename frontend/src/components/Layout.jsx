@@ -35,7 +35,6 @@ const iconMap = {
 const navItems = {
   ADMIN: [
     { key: 'overview', label: 'Dashboard', icon: 'Dashboard' },
-    { key: 'programs', label: 'Programs & Courses', icon: 'Courses' },
     { key: 'pending', label: 'Pending Approval', icon: 'Overview' },
     { key: 'trainings', label: 'Trainings', icon: 'Trainings' },
     { key: 'trainers', label: 'Trainers', icon: 'Trainers' },
@@ -47,20 +46,21 @@ const navItems = {
     { key: 'createTraining', label: 'Add Training', icon: 'Add Training' },
   ],
   TRAINER: [
-    { key: 'courses', label: 'My Courses', icon: 'My Courses' },
-    { key: 'trainings', label: 'My Trainings', icon: 'My Trainings' },
+    { key: 'courses', label: 'Trainings', icon: 'Trainings' },
     { key: 'coding', label: 'Coding Tests', icon: 'Coding' },
     { key: 'feedback', label: 'Feedback', icon: 'Feedback' },
     { key: 'profile', label: 'My Profile', icon: 'My Profile' },
   ],
   PARTICIPANT: [
     { key: 'overview', label: 'Overview', icon: 'Overview' },
-    { key: 'myEnrollments', label: 'My Courses', icon: 'Enrollments' },
+    { key: 'myEnrollments', label: 'My Trainings', icon: 'Trainings' },
     { key: 'lessons', label: 'Lessons', icon: 'Lessons' },
     { key: 'ai-quizzes', label: 'Quizzes', icon: 'AI Quizzes' },
     { key: 'coding', label: 'Coding Tests', icon: 'Coding' },
     { key: 'leaderboard', label: 'Leaderboard', icon: 'Leaderboard' },
     { key: 'achievements', label: 'Achievements', icon: 'Achievements' },
+    { key: 'reports', label: 'My Reports', icon: 'Feedback' },
+    { key: 'certificates', label: 'Certificates', icon: 'Achievements' },
     { key: 'feedback', label: 'Give Feedback', icon: 'Give Feedback' },
     { key: 'myFeedbacks', label: 'My Feedbacks', icon: 'My Feedbacks' },
     { key: 'profile', label: 'Profile', icon: 'Profile' },

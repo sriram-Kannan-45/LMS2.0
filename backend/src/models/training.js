@@ -60,6 +60,12 @@ const Training = sequelize.define('Training', {
     type: DataTypes.BIGINT.UNSIGNED,
     allowNull: false,
     field: 'created_by'
+  },
+  sequentialLearning: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'sequential_learning'
   }
 }, {
   tableName: 'training_programs',

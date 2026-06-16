@@ -69,6 +69,20 @@ const login = async (req, res) => {
 
     console.log(`✅ Login success: ${user.email} as ${user.role}`);
 
+    // Track login activity
+    try {
+      const { ParticipantTracking } = require('../models');
+      if (user.role === 'PARTICIPANT') {
+        await ParticipantTracking.create({
+          userId: user.id,
+          loginTime: new Date(),
+          lastActivity: new Date()
+        });
+      }
+    } catch (e) {
+      console.error('Participant tracking login log failed:', e.message);
+    }
+
     res.json({
       id: user.id,
       name: user.name,
@@ -226,10 +240,34 @@ const getTrainers = async (req, res) => {
   }
 };
 
+const logout = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (userId) {
+      const { ParticipantTracking } = require('../models');
+      const lastRecord = await ParticipantTracking.findOne({
+        where: { userId, logoutTime: null },
+        order: [['created_at', 'DESC']]
+      });
+      if (lastRecord) {
+        await lastRecord.update({
+          logoutTime: new Date(),
+          lastActivity: new Date()
+        });
+      }
+    }
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error.message);
+    res.status(500).json({ error: 'Server error during logout' });
+  }
+};
+
 module.exports = {
   login,
   register,
   createTrainer,
   changePassword,
-  getTrainers
+  getTrainers,
+  logout
 };

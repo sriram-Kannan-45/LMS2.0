@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Search, Plus, Pencil, Trash2, GripVertical,
   BookOpen, FileText, Users, BarChart3, Layers, Sparkles,
-  CheckCircle2, AlertCircle, Calendar, Folder
+  CheckCircle2, AlertCircle, Calendar, Folder, MessageSquare
 } from 'lucide-react'
 import { API, assetUrl } from '../api/api'
 import { useToast } from '../components/Toast'
@@ -11,6 +11,7 @@ import MaterialManager from '../components/trainer/MaterialManager'
 import CourseQuizzesTab from '../components/trainer/CourseQuizzesTab'
 import CourseParticipantsTab from '../components/trainer/CourseParticipantsTab'
 import CourseAnalyticsTab from '../components/trainer/CourseAnalyticsTab'
+import DiscussionBoard from '../components/shared/DiscussionBoard'
 
 const STATUS_BADGE = {
   DRAFT:     { bg: '#f1f5f9', fg: '#475569', label: 'Draft' },
@@ -128,22 +129,11 @@ function CoursesList({ user, onOpenCourse }) {
     <div style={{ padding: '24px 0' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: '#0f172a' }}>My Courses</h1>
+          <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: '#0f172a' }}>My Trainings</h1>
           <p style={{ marginTop: 4, color: '#64748b', fontSize: 14 }}>
-            All courses assigned to you. Open one to manage lessons, materials, quizzes, and analytics.
+            All trainings assigned to you. Open one to manage lessons, materials, quizzes, and analytics.
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '10px 16px', background: '#4f46e5', color: '#fff',
-            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          <Plus size={14} /> Create Course
-        </button>
       </div>
 
       {/* Search + filter row */}
@@ -276,91 +266,7 @@ function CoursesList({ user, onOpenCourse }) {
         </div>
       )}
 
-      {/* Create Course Modal */}
-      <AnimatePresence>
-        {showCreateModal && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => setShowCreateModal(false)}
-            style={{
-              position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16,
-            }}
-          >
-            <motion.form
-              onClick={(e) => e.stopPropagation()}
-              onSubmit={handleCreateCourse}
-              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              style={{
-                background: '#fff', borderRadius: 14, padding: 24, width: '100%', maxWidth: 540,
-                boxShadow: '0 25px 60px -10px rgba(0,0,0,0.25)',
-              }}
-            >
-              <h2 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
-                Create New Course
-              </h2>
 
-              <label style={lblStyle}>Title <span style={{ color: '#dc2626' }}>*</span></label>
-              <input
-                value={newCourse.title}
-                onChange={(e) => setNewCourse({ ...newCourse, title: e.target.value })}
-                placeholder="e.g. Advanced JavaScript Patterns"
-                style={inputStyle}
-                autoFocus
-              />
-
-              <label style={lblStyle}>Training Program <span style={{ color: '#dc2626' }}>*</span></label>
-              <select
-                value={newCourse.trainingProgramId}
-                onChange={(e) => setNewCourse({ ...newCourse, trainingProgramId: e.target.value })}
-                style={inputStyle}
-              >
-                <option value="">-- Select Training Program --</option>
-                {programs.map(p => (
-                  <option key={p.id} value={p.id}>{p.title}</option>
-                ))}
-              </select>
-
-              <label style={lblStyle}>Description</label>
-              <textarea
-                value={newCourse.description}
-                onChange={(e) => setNewCourse({ ...newCourse, description: e.target.value })}
-                placeholder="Brief course description..."
-                rows={3}
-                style={{ ...inputStyle, resize: 'vertical' }}
-              />
-
-              <label style={lblStyle}>Status</label>
-              <select
-                value={newCourse.status}
-                onChange={(e) => setNewCourse({ ...newCourse, status: e.target.value })}
-                style={inputStyle}
-              >
-                <option value="DRAFT">Draft</option>
-                <option value="PUBLISHED">Published</option>
-                <option value="ARCHIVED">Archived</option>
-              </select>
-
-              <label style={lblStyle}>Thumbnail URL (optional)</label>
-              <input
-                value={newCourse.thumbnailUrl}
-                onChange={(e) => setNewCourse({ ...newCourse, thumbnailUrl: e.target.value })}
-                placeholder="e.g. /uploads/image.jpg"
-                style={inputStyle}
-              />
-
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 }}>
-                <button type="button" onClick={() => setShowCreateModal(false)} style={btnSecondary}>
-                  Cancel
-                </button>
-                <button type="submit" style={btnPrimary}>
-                  Create Course
-                </button>
-              </div>
-            </motion.form>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
@@ -402,6 +308,7 @@ function CourseDetail({ user, courseId, onBack }) {
     { key: 'quizzes',      label: 'AI Quiz',      icon: <Sparkles size={16} /> },
     { key: 'participants', label: 'Participants', icon: <Users size={16} /> },
     { key: 'analytics',    label: 'Analytics',    icon: <BarChart3 size={16} /> },
+    { key: 'discussions',  label: 'Discussions',  icon: <MessageSquare size={16} /> },
   ]
 
   return (
@@ -415,7 +322,7 @@ function CourseDetail({ user, courseId, onBack }) {
           fontSize: 13, color: '#475569', cursor: 'pointer', marginBottom: 16,
         }}
       >
-        <ArrowLeft size={14} /> My Courses
+        <ArrowLeft size={14} /> My Trainings
       </button>
 
       {/* Header card */}
@@ -489,6 +396,7 @@ function CourseDetail({ user, courseId, onBack }) {
           {tab === 'quizzes'      && <CourseQuizzesTab user={user} courseId={courseId} onCountChange={fetchCourse} />}
           {tab === 'participants' && <CourseParticipantsTab user={user} courseId={courseId} />}
           {tab === 'analytics'    && <CourseAnalyticsTab user={user} courseId={courseId} />}
+          {tab === 'discussions'  && <DiscussionBoard user={user} trainingId={course.trainingProgramId} />}
         </motion.div>
       </AnimatePresence>
     </div>
