@@ -896,9 +896,22 @@ async function submitQuiz(req, res) {
 
       for (const a of answers) {
         const qid = String(a.questionId);
-        const expected = correctByQ[qid];
         const submittedText = String(a.answer ?? '').trim();
-        const isCorrect = expected != null && submittedText === String(expected).trim();
+        
+        let isCorrect = false;
+        if (expected != null) {
+          const expectedStr = String(expected).trim();
+          if (submittedText.toLowerCase() === expectedStr.toLowerCase()) {
+            isCorrect = true;
+          } else if (['0', '1', '2', '3'].includes(expectedStr)) {
+            const idx = parseInt(expectedStr, 10);
+            const opts = optionsByQ[qid] || [];
+            if (opts[idx] && String(opts[idx]).trim().toLowerCase() === submittedText.toLowerCase()) {
+              isCorrect = true;
+            }
+          }
+        }
+        
         if (isCorrect) correct++;
         const optionIdx = optionsByQ[qid] ? optionsByQ[qid].findIndex(o => String(o).trim() === submittedText) : -1;
         await QuizAnswer.create({

@@ -1,6 +1,6 @@
 b"""
 AI Quiz Generator Microservice - Enterprise Edition
-Uses LangChain + Gemini (with Groq fallback) to generate quizzes from documents.
+Uses LangChain + Gemini to generate quizzes from documents.
 
 Enhanced with:
 - Advanced prompt engineering with Bloom's taxonomy
@@ -21,23 +21,53 @@ from dotenv import load_dotenv
 load_dotenv()  # Load .env file
 
 import json
+import random
 import tempfile
 import time
 from typing import List, Dict, Any, Optional, Tuple
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 import PyPDF2
 import docx
 
 # ── Logging Setup ──────────────────────────────────────
+class ColoredFormatter(logging.Formatter):
+    """Custom logging formatter that adds ANSI colors to logs."""
+    GREY = "\x1b[38;20m"
+    YELLOW = "\x1b[33;20m"
+    RED = "\x1b[31;20m"
+    BOLD_RED = "\x1b[31;1m"
+    GREEN = "\x1b[32;20m"
+    CYAN = "\x1b[36;20m"
+    RESET = "\x1b[0m"
+    
+    FORMAT = "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s"
+    
+    COLORS = {
+        logging.DEBUG: GREY,
+        logging.INFO: CYAN,
+        logging.WARNING: YELLOW,
+        logging.ERROR: RED,
+        logging.CRITICAL: BOLD_RED
+    }
+    
+    def format(self, record):
+        log_fmt = self.COLORS.get(record.levelno, self.RESET) + self.FORMAT + self.RESET
+        formatter = logging.Formatter(log_fmt, datefmt="%H:%M:%S")
+        return formatter.format(record)
+
+handler = logging.StreamHandler()
+handler.setFormatter(ColoredFormatter())
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
-    datefmt="%H:%M:%S",
+    handlers=[handler]
 )
 log = logging.getLogger("ai-quiz")
+
+# Global port state for health checking and dynamic binding
+current_port = int(os.getenv("AI_SERVICE_PORT", 8000))
 
 # ── Application Setup ──────────────────────────────────
 app = FastAPI(
@@ -129,55 +159,118 @@ DIFFICULTY_CONFIGS = {
     }
 }
 
-ENHANCED_QUIZ_PROMPT = """You are an expert educational assessment designer with deep knowledge of Bloom's Taxonomy and pedagogical best practices.
+STAGE_1_DOCUMENT_UNDERSTANDING_PROMPT = """You are an expert educational content researcher and knowledge engineer.
 
-## DOCUMENT CONTENT
+Analyze the following document and extract its core knowledge structure. 
+Your goal is to build a high-quality, structured summary of the educational content, ignoring repeated content, formatting noise, and low-value paragraphs.
+
+## UPLOADED DOCUMENT:
 {text}
 
-## TASK
-Generate exactly {num_questions} high-quality multiple-choice questions (MCQs) based STRICTLY on the document content above.
+## EXTRACTION INSTRUCTIONS:
+Carefully extract and organize:
+1. **Main Topics & Subtopics**: The primary themes of the document.
+2. **Important Concepts & Definitions**: Key technical concepts and their precise, clear definitions.
+3. **Keywords & Terminology**: Crucial industry/domain-specific terms.
+4. **Examples & Scenarios**: Concrete examples or use-cases used to explain concepts.
+5. **Procedures & Steps**: Sequential lists of instructions, processes, or workflows.
+6. **Advantages & Disadvantages**: Comparisons, benefits, drawbacks, trade-offs.
+7. **Programming Syntax (if present)**: Code blocks, functions, parameters, APIs, variables, loops, conditionals, and their expected outcomes.
 
-## DIFFICULTY CONFIGURATION
-Level: {difficulty}
-{difficulty_instruction}
-
-## QUESTION QUALITY REQUIREMENTS
-1. **Content Accuracy**: Every question must be directly answerable from the document. Do NOT introduce external information.
-2. **Cognitive Depth**: Questions should test understanding, not just rote memorization. Use real-world scenarios when appropriate.
-3. **Option Quality**:
-   - Exactly 4 options (A, B, C, D)
-   - One clearly correct answer
-   - Distractors should be plausible but definitively incorrect
-   - Avoid "all of the above" or "none of the above"
-   - Options should be similar in length and complexity
-4. **Question Diversity**: Cover different sections and concepts from the document. Avoid repetitive question patterns.
-5. **Clarity**: Questions must be unambiguous with precise wording.
-
-## OUTPUT FORMAT
-Return ONLY a valid JSON object with a single key "questions" whose value is an array of question objects. No markdown, no explanations, no preamble.
-
+## FORMATTING RULES:
+- Rephrase the content naturally in clear English. Do NOT copy full sentences directly from the document.
+- Do NOT use phrases referring to the document like "According to the document", "The document states", etc.
+- Ignore repeated content or unnecessary filler paragraphs.
+- Keep the output highly structured, concise, and focused on educational/testable concepts.
+- Return the results as a clean, structured JSON object:
 {{
-  "questions": [
+  "mainTopics": [
     {{
-      "question": "Clear, well-formed question text?",
-      "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
-      "correct_answer": "A",
-      "explanation": "Brief explanation (1-2 sentences) referencing the document content",
-      "difficulty": "EASY or MEDIUM or HARD",
-      "bloom_level": "Remember/Understand/Apply/Analyze/Evaluate/Create"
+      "topic": "Topic Name",
+      "concepts": [
+        {{
+          "name": "Concept/Term",
+          "definition": "Clear explanation of the concept/term",
+          "keywords": ["keyword1", "keyword2"],
+          "examples": ["Example or scenario of this concept"],
+          "procedures": ["Step 1", "Step 2"],
+          "advantages": ["Advantage 1"],
+          "disadvantages": ["Disadvantage 1"],
+          "syntax": "Syntax code or explanation (if applicable)"
+        }}
+      ]
     }}
   ]
 }}
-
-## IMPORTANT
-- Return ONLY the JSON object — no markdown fences, no commentary
-- Ensure valid JSON syntax. Escape any double-quote characters inside string values as \\"
-- Do not use line breaks inside string values
-- All {num_questions} questions must be unique and cover different aspects of the document
-- The correct_answer field must be exactly "A", "B", "C", or "D"
-
-Generate the JSON now:
 """
+
+STAGE_2_QUIZ_GENERATION_PROMPT = """You are an expert university professor and professional certification exam paper setter (like AWS, Microsoft, Coursera, or Udemy).
+
+Your task is to generate high-quality Multiple-Choice Questions (MCQs) based ONLY on the provided structured knowledge representation from Stage 1.
+
+## STRUCTURED KNOWLEDGE REPRESENTATION:
+{knowledge_representation}
+
+## DIFFICULTY LEVEL: {difficulty}
+Difficulty Guidelines:
+- EASY: Focus on basic definitions, key terminology, and simple programming syntax.
+- MEDIUM: Focus on core concepts, practical usage, and relationships between concepts.
+- HARD: Focus on complex scenario-based, analytical, and problem-solving questions.
+
+## QUESTION DISTRIBUTION:
+Generate exactly {num_questions} questions.
+Try to target the following distribution of question types:
+- 40% Concept questions
+- 20% Definition questions
+- 20% Application questions
+- 20% Scenario questions (where a real-world scenario is given and the correct response/solution must be selected)
+* Note: If the topic is programming-related, generate code output questions and best-practice questions.
+
+## STRICT QUESTION RULES:
+1. **Never** use phrases like:
+   - "According to the document"
+   - "Based on the document"
+   - "Which statement correctly describes"
+   - "What does the document say"
+2. **Never** copy sentences from the source document. Rephrase everything naturally.
+3. Test understanding instead of memorization.
+4. Each question must be **maximum 20 words**, in clear English, containing exactly **one idea**.
+5. Do NOT include markdown symbols (like bolding **, backticks `, or bullet points).
+6. Do NOT expose internal document wording or jargon that isn't commonly known in the domain.
+
+## STRICT OPTION RULES:
+1. Generate exactly **4 options** for each question.
+2. Each option must be **maximum 8 words** (short and meaningful, never long paragraphs).
+3. Only **one option** must be correct.
+4. Distractors must be highly believable, relevant, and not obvious.
+5. Randomize the position of the correct answer across the options.
+
+## OTHER RULES:
+1. Provide a **one-line explanation** for every question's correct answer.
+2. Ensure there are no duplicate questions or options.
+
+## JSON OUTPUT FORMAT:
+You MUST return a valid JSON object matching the following structure. Do NOT wrap the JSON in markdown blocks (e.g. do NOT use ```json). Return ONLY the raw JSON string.
+
+{{
+  "quizTitle": "A concise, appropriate title for the quiz",
+  "difficulty": "{difficulty}",
+  "questions": [
+    {{
+      "question": "Question text here (max 20 words)",
+      "options": [
+        "Option A text (max 8 words)",
+        "Option B text (max 8 words)",
+        "Option C text (max 8 words)",
+        "Option D text (max 8 words)"
+      ],
+      "correctAnswer": "The exact string of the correct option (must match one of the options above)",
+      "explanation": "A one-line explanation of why this option is correct."
+    }}
+  ]
+}}
+"""
+
 
 # ── Similarity Detection ───────────────────────────────
 def simple_text_similarity(text1: str, text2: str) -> float:
@@ -255,6 +348,19 @@ def validate_question_structure(question: Dict) -> bool:
     for opt in question["options"]:
         if not isinstance(opt, str) or not opt.strip():
             return False
+
+    # Ensure option values are unique
+    opts_stripped = [str(opt).strip().lower() for opt in question["options"]]
+    if len(set(opts_stripped)) < 4:
+        return False
+
+    # Ensure question ends with a question mark
+    if not str(question["question"]).strip().endswith("?"):
+        return False
+
+    # Ensure explanation is present
+    if not question.get("explanation") or not str(question.get("explanation")).strip():
+        return False
     
     return True
 
@@ -269,10 +375,14 @@ def repair_question(question: Dict, index: int) -> Dict:
         "bloom_level": question.get("bloom_level", "Understand")
     }
     
+    # Fix question ending
+    if not repaired["question"].strip().endswith("?"):
+        repaired["question"] = repaired["question"].strip() + "?"
+    
     # Fix options
     raw_options = question.get("options", [])
     if isinstance(raw_options, list):
-        repaired["options"] = [str(o) for o in raw_options[:4]]
+        repaired["options"] = [str(o).strip() for o in raw_options[:4]]
         # Pad with placeholder if less than 4
         opt_count = len(repaired["options"])
         while opt_count < 4:
@@ -280,6 +390,20 @@ def repair_question(question: Dict, index: int) -> Dict:
             opt_count += 1
     else:
         repaired["options"] = ["Option A", "Option B", "Option C", "Option D"]
+        
+    # De-duplicate options if any are identical
+    unique_opts = []
+    seen = set()
+    for opt in repaired["options"]:
+        opt_lower = opt.lower()
+        if opt_lower not in seen:
+            seen.add(opt_lower)
+            unique_opts.append(opt)
+        else:
+            placeholder = f"{opt} (Alt)"
+            unique_opts.append(placeholder)
+            seen.add(placeholder.lower())
+    repaired["options"] = unique_opts
     
     # Fix correct_answer
     ca = repaired["correct_answer"]
@@ -287,6 +411,159 @@ def repair_question(question: Dict, index: int) -> Dict:
         repaired["correct_answer"] = "A"
     
     return repaired
+
+def validate_and_filter_prompt_questions(raw_questions: List[Dict], requested_count: int) -> List[Dict]:
+    """
+    Validates and filters prompt-based generated questions.
+    Ensures:
+    - No duplicate questions.
+    - No duplicate options within a question.
+    - Exactly 4 options exist.
+    - Correct answer matches one option text.
+    - Explanation is present and non-empty.
+    - Question is a complete sentence ending with '?'.
+    - Returns a list of formatted, valid questions.
+    Raises ValueError if the number of valid questions is less than requested_count.
+    """
+    if not isinstance(raw_questions, list):
+        raise ValueError("Raw questions is not a list")
+
+    valid_questions = []
+    seen_questions = set()
+
+    for i, q in enumerate(raw_questions):
+        if not isinstance(q, dict):
+            continue
+
+        q_text = (q.get("question") or q.get("questionText") or "").strip()
+        if not q_text:
+            log.warning("Validation failure: question text is empty in question %d", i)
+            continue
+        if not q_text.endswith("?"):
+            log.warning("Validation failure: question does not end with '?' in question %d: '%s'", i, q_text)
+            continue
+
+        opt_a = str(q.get("optionA") or q.get("option_a") or "").strip()
+        opt_b = str(q.get("optionB") or q.get("option_b") or "").strip()
+        opt_c = str(q.get("optionC") or q.get("option_c") or "").strip()
+        opt_d = str(q.get("optionD") or q.get("option_d") or "").strip()
+
+        options = [opt_a, opt_b, opt_c, opt_d]
+
+        # Ensure exactly 4 options exist and they are all non-empty
+        if any(not opt for opt in options):
+            log.warning("Validation failure: one or more options are empty in question %d: %s", i, options)
+            continue
+
+        # Remove duplicate options: check if unique options count is less than 4
+        if len(set(options)) < 4:
+            log.warning("Validation failure: duplicate options found in question %d: %s", i, options)
+            continue
+
+        correct = str(q.get("correctAnswer") or q.get("correct_answer") or "").strip()
+        if not correct:
+            log.warning("Validation failure: correctAnswer is empty in question %d", i)
+            continue
+
+        explanation = str(q.get("explanation") or "").strip()
+        if not explanation:
+            log.warning("Validation failure: explanation is empty in question %d", i)
+            continue
+
+        # Map correct answer to option values
+        # If correct answer is a letter or index, resolve it to option text
+        c_lower = correct.lower()
+        correct_val = ""
+        if c_lower in ["optiona", "option_a", "opt_a", "a", "option a", "0"]:
+            correct_val = opt_a
+        elif c_lower in ["optionb", "option_b", "opt_b", "b", "option b", "1"]:
+            correct_val = opt_b
+        elif c_lower in ["optionc", "option_c", "opt_c", "c", "option c", "2"]:
+            correct_val = opt_c
+        elif c_lower in ["optiond", "option_d", "opt_d", "d", "option d", "3"]:
+            correct_val = opt_d
+        else:
+            # Check if correct answer matches any option value directly
+            if correct in options:
+                correct_val = correct
+            elif c_lower in [o.lower() for o in options]:
+                # find the correct case match
+                for o in options:
+                    if o.lower() == c_lower:
+                        correct_val = o
+                        break
+            else:
+                log.warning("Validation failure: correctAnswer '%s' does not match any option in question %d", correct, i)
+                continue
+
+        # Remove duplicate questions (case-insensitive and whitespace-stripped)
+        q_norm = q_text.lower()
+        if q_norm in seen_questions:
+            log.warning("Validation failure: duplicate question text found in question %d: '%s'", i, q_text)
+            continue
+        seen_questions.add(q_norm)
+
+        # Clean markdown formatting (bold, headers, bullets, backticks)
+        def clean_md(t: str) -> str:
+            t = re.sub(r"\*\*|##|`", "", t)
+            t = re.sub(r"^[•\-\*\+]\s*", "", t)
+            return t.strip()
+
+        q_clean = clean_md(q_text)
+        opt_a_clean = clean_md(opt_a)
+        opt_b_clean = clean_md(opt_b)
+        opt_c_clean = clean_md(opt_c)
+        opt_d_clean = clean_md(opt_d)
+        explanation_clean = clean_md(explanation)
+        correct_clean = clean_md(correct_val)
+
+        # Enforce question length limit (max 20 words)
+        q_words = q_clean.split()
+        if len(q_words) > 20:
+            q_clean = " ".join(q_words[:20])
+            if not q_clean.endswith("?"):
+                q_clean += "?"
+
+        # Put options in a list to shuffle
+        options_clean = [opt_a_clean, opt_b_clean, opt_c_clean, opt_d_clean]
+        
+        # Enforce option length limit (max 8 words)
+        for idx, opt in enumerate(options_clean):
+            opt_words = opt.split()
+            if len(opt_words) > 8:
+                options_clean[idx] = " ".join(opt_words[:8])
+        
+        # Make sure correct_clean value is updated if its corresponding option was truncated
+        # We find which index matched the original correct_val, and use that index's clean/truncated version
+        orig_options = [opt_a, opt_b, opt_c, opt_d]
+        try:
+            matched_idx = orig_options.index(correct_val)
+            correct_clean = options_clean[matched_idx]
+        except ValueError:
+            pass
+
+        # Shuffle correct answer position (Shuffle Options)
+        random.shuffle(options_clean)
+
+        # Ensure correct answer is still present in options
+        if correct_clean not in options_clean:
+            options_clean[0] = correct_clean
+            random.shuffle(options_clean)
+
+        valid_questions.append({
+            "question": q_clean,
+            "optionA": options_clean[0],
+            "optionB": options_clean[1],
+            "optionC": options_clean[2],
+            "optionD": options_clean[3],
+            "correctAnswer": correct_clean,
+            "explanation": explanation_clean
+        })
+
+    if len(valid_questions) < requested_count:
+        raise ValueError(f"Only generated {len(valid_questions)} valid questions out of {requested_count} requested.")
+
+    return valid_questions[:requested_count]
 
 def _try_json_repair(text: str) -> Tuple[Optional[Any], Optional[str]]:
     """Try to repair malformed JSON using the json-repair library if available."""
@@ -370,7 +647,7 @@ def safe_json_parse(text: str) -> Tuple[List[Dict], List[str]]:
         cleaned = fence_match.group(1).strip()
 
     # Locate JSON payload. Prefer an array; fall back to a top-level object
-    # that contains a "questions" array (Groq JSON mode wraps things this way).
+    # that contains a "questions" array (JSON mode wraps things this way).
     array_start = cleaned.find('[')
     array_end = cleaned.rfind(']')
     obj_start = cleaned.find('{')
@@ -443,14 +720,12 @@ def safe_json_parse(text: str) -> Tuple[List[Dict], List[str]]:
 
     return valid_questions, warnings
 
-# ── LLM Setup (Gemini primary, Groq fallback) ──────────
+# ── LLM Setup (Gemini only — Groq removed) ────────────
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 llm = None
 llm_type = "None"
 
-# Try Gemini first (preferred for higher accuracy)
 if GEMINI_API_KEY and GEMINI_API_KEY not in ("", "your-gemini-api-key-here"):
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
@@ -462,10 +737,10 @@ if GEMINI_API_KEY and GEMINI_API_KEY not in ("", "your-gemini-api-key-here"):
         llm = ChatGoogleGenerativeAI(
             google_api_key=GEMINI_API_KEY,
             model=GEMINI_MODEL,
-            temperature=0.2,            # Lower = more deterministic / accurate
-            max_output_tokens=8192,     # Gemini supports much larger outputs than Groq
+            temperature=0.2,
+            max_output_tokens=8192,
             timeout=120,
-            max_retries=2,
+            max_retries=3,
             response_mime_type="application/json",
         )
         llm_type = f"Gemini ({GEMINI_MODEL})"
@@ -475,43 +750,33 @@ if GEMINI_API_KEY and GEMINI_API_KEY not in ("", "your-gemini-api-key-here"):
     except Exception as e:
         log.error("❌ Gemini initialization failed: %s", e)
 
-# Fall back to Groq if Gemini wasn't available
-if llm is None and GROQ_API_KEY and GROQ_API_KEY not in ("", "your-groq-api-key-here"):
-    try:
-        from langchain_openai import ChatOpenAI
-        from langchain_core.prompts import PromptTemplate
-        from langchain_text_splitters import RecursiveCharacterTextSplitter
-
-        # Groq uses OpenAI-compatible API
-        llm = ChatOpenAI(
-            openai_api_key=GROQ_API_KEY,
-            base_url="https://api.groq.com/openai/v1",
-            model="llama-3.3-70b-versatile",
-            temperature=0.3,
-            max_tokens=4000,
-            request_timeout=60,
-        )
-        # Force valid JSON output via OpenAI-compatible response_format
-        try:
-            llm = llm.bind(response_format={"type": "json_object"})
-            log.info("✅ Groq JSON mode enabled (response_format=json_object)")
-        except Exception as e:
-            log.warning("Could not enable JSON mode on Groq client: %s", e)
-        llm_type = "Groq (llama-3.3-70b-versatile)"
-        log.info("✅ LLM initialized with %s (fallback)", llm_type)
-    except ImportError as e:
-        log.error("❌ Missing dependency: %s — run: pip install langchain-openai", e)
-    except Exception as e:
-        log.error("❌ Groq initialization failed: %s", e)
-
 if llm is None:
-    log.warning("⚠️ No LLM available (neither GEMINI_API_KEY nor GROQ_API_KEY set) — using text-based fallback")
+    log.warning("⚠️ No Gemini LLM available (GEMINI_API_KEY not set) — using text-based fallback")
 
 # ── Request / Response Models ─────────────────────────
 class QuizRequest(BaseModel):
     text: str
     num_questions: int = 10
     difficulty: str = "MIXED"  # EASY, MEDIUM, HARD, MIXED
+
+class PromptQuizRequest(BaseModel):
+    prompt: str
+    questionCount: int = 10
+    difficulty: str = "Medium"
+
+    @field_validator('questionCount')
+    @classmethod
+    def validate_count(cls, v):
+        if v < 1 or v > 50:
+            raise ValueError('Number of questions must be between 1 and 50.')
+        return v
+
+    @field_validator('prompt')
+    @classmethod
+    def validate_prompt(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Prompt/Topic cannot be empty.')
+        return v
 
 class Question(BaseModel):
     questionText: str
@@ -662,16 +927,12 @@ def generate_cache_key(text: str, num_questions: int, difficulty: str) -> str:
     content_hash = hashlib.md5(text.encode("utf-8", errors="ignore")).hexdigest()
     return f"quiz:{content_hash}:{num_questions}:{difficulty}"
 
-def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty: str = "MIXED") -> List[Dict]:
+def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty: str = "MIXED") -> Any:
     """
-    Generate quiz using LangChain + LLM (Gemini primary, Groq fallback) with enhanced prompt engineering.
+    Generate quiz using a Two-Stage LangChain + Gemini pipeline.
     
-    Features:
-    - Cache lookup for identical requests
-    - Enhanced Bloom's taxonomy-based prompts
-    - Robust JSON parsing with auto-repair
-    - Duplicate question filtering
-    - Exponential backoff retry logic
+    Stage 1: Document Understanding (Extract core knowledge structure, rephrase, no copying)
+    Stage 2: Quiz Generation (Generate high quality questions from structured representation)
     """
     
     if llm is None:
@@ -688,7 +949,7 @@ def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty:
     cache_key = generate_cache_key(text, num_questions, difficulty)
     cached_result = quiz_cache.get(cache_key)
     if cached_result:
-        log.info("✅ Cache hit! Returning cached quiz questions")
+        log.info("✅ Cache hit! Returning cached quiz questions and title")
         return cached_result
     
     # Split text if too long
@@ -715,31 +976,56 @@ def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty:
         len(chunks), len(selected_chunks)
     )
     
-    # Build enhanced prompt with difficulty-specific instructions
-    from langchain_core.prompts import PromptTemplate
+    # --- STAGE 1: DOCUMENT UNDERSTANDING ---
+    log.info("Running Stage 1: Document Understanding...")
+    stage_1_prompt = STAGE_1_DOCUMENT_UNDERSTANDING_PROMPT.format(text=combined_text)
     
-    diff_config = DIFFICULTY_CONFIGS.get(difficulty, DIFFICULTY_CONFIGS["MIXED"])
-    difficulty_instruction = diff_config["instruction"]
-    
-    prompt = PromptTemplate(
-        template=ENHANCED_QUIZ_PROMPT,
-        input_variables=["text", "num_questions", "difficulty", "difficulty_instruction"]
+    knowledge_representation = combined_text  # Default fallback
+    try:
+        # We invoke the Chat model to understand the document and output JSON
+        response = llm.invoke(stage_1_prompt)
+        knowledge_representation = response.content
+        log.info("Stage 1 complete. Extract length: %d characters", len(knowledge_representation))
+    except Exception as e:
+        log.error("Stage 1 failed: %s. Falling back to using raw text content.", e)
+        
+    # --- STAGE 2: QUIZ GENERATION ---
+    log.info("Running Stage 2: Quiz Generation...")
+    stage_2_prompt = STAGE_2_QUIZ_GENERATION_PROMPT.format(
+        knowledge_representation=knowledge_representation,
+        difficulty=difficulty,
+        num_questions=num_questions
     )
-    
-    chain = prompt | llm
     
     last_error = None
     for attempt in range(1, Config.MAX_RETRIES + 1):
         try:
             log.info("Generation attempt %d/%d...", attempt, Config.MAX_RETRIES)
-            response = chain.invoke({
-                "text": combined_text,
-                "num_questions": num_questions,
-                "difficulty": difficulty,
-                "difficulty_instruction": difficulty_instruction
-            })
+            response = llm.invoke(stage_2_prompt)
             result = response.content
             
+            # Parse the full JSON structure to retrieve questions list and quizTitle
+            quiz_title = "AI Generated Quiz"
+            try:
+                # Clean markdown fences from result
+                cleaned_result = result.strip()
+                fence_match = re.search(r"```(?:json)?\s*(.*?)```", cleaned_result, re.DOTALL | re.IGNORECASE)
+                if fence_match:
+                    cleaned_result = fence_match.group(1).strip()
+                
+                parsed_full = json.loads(cleaned_result)
+                if isinstance(parsed_full, dict):
+                    quiz_title = parsed_full.get("quizTitle", "AI Generated Quiz")
+            except Exception:
+                # Fallback to trying json-repair
+                try:
+                    import json_repair
+                    parsed_full = json_repair.repair_json(cleaned_result, return_objects=True)
+                    if isinstance(parsed_full, dict):
+                        quiz_title = parsed_full.get("quizTitle", "AI Generated Quiz")
+                except Exception:
+                    pass
+
             # Parse JSON with auto-repair capabilities
             questions, warnings = safe_json_parse(result)
             
@@ -757,53 +1043,130 @@ def generate_quiz_with_langchain(text: str, num_questions: int = 10, difficulty:
                 log.info("Filtered %d duplicate questions (%d -> %d)", 
                         original_count - len(questions), original_count, len(questions))
 
-            # Filter ungrounded questions (those that don't reference any
-            # vocabulary from the source document — likely LLM hallucinations).
-            before_ground = len(questions)
-            questions = filter_grounded_questions(questions, combined_text)
-            if len(questions) < before_ground:
-                log.info("Grounding filter: kept %d / %d questions",
-                         len(questions), before_ground)
-
-            if not questions:
-                raise ValueError("All generated questions failed grounding validation — none referenced the document content")
-
             # Limit to requested number
             questions = questions[:num_questions]
             
-            # Format for compatibility with existing system
+            # Format and clean/shuffle for compatibility with existing system
             formatted = []
             for i, q in enumerate(questions):
+                # Clean up any potential markdown formatting in question, options, and explanation
+                question_text = q.get("question", f"Question {i+1}")
+                options = q.get("options", ["Option A", "Option B", "Option C", "Option D"])
+                correct_val = q.get("correctAnswer", q.get("correct_answer", ""))
+                explanation = q.get("explanation", "Based on document content.")
+                difficulty_val = q.get("difficulty", difficulty if difficulty != "MIXED" else "MEDIUM")
+                bloom_level = q.get("bloom_level", "Understand")
+
+                # Remove markdown formatting (bold, headers, bullets, backticks)
+                def clean_md(t: str) -> str:
+                    t = re.sub(r"\*\*|##|`", "", t)
+                    t = re.sub(r"^[•\-\*\+]\s*", "", t)
+                    return t.strip()
+
+                question_text = clean_md(question_text)
+                explanation = clean_md(explanation)
+                
+                # Ensure options are a list of exactly 4 strings
+                if not isinstance(options, list) or len(options) != 4:
+                    options = (options + ["Option A", "Option B", "Option C", "Option D"])[:4]
+                options = [str(o) for o in options]
+
+                # Find which option is correct
+                correct_index = 0
+                correct_letter_map = {"A": 0, "B": 1, "C": 2, "D": 3}
+                correct_val_str = str(correct_val).strip()
+                
+                if correct_val_str in correct_letter_map:
+                    correct_index = correct_letter_map[correct_val_str]
+                elif correct_val_str in ("0", "1", "2", "3"):
+                    correct_index = int(correct_val_str)
+                else:
+                    # Search options for matching text
+                    try:
+                        match_idx = [o.lower().strip() for o in options].index(correct_val_str.lower())
+                        correct_index = match_idx
+                    except ValueError:
+                        correct_index = 0
+                
+                if correct_index >= len(options):
+                    correct_index = 0
+                
+                correct_option_text = options[correct_index]
+
+                # Shuffle options
+                options_shuffled = list(options)
+                random.shuffle(options_shuffled)
+
+                # Find correct option index after shuffle
+                try:
+                    new_correct_index = options_shuffled.index(correct_option_text)
+                except ValueError:
+                    new_correct_index = 0
+                    options_shuffled[0] = correct_option_text
+                    random.shuffle(options_shuffled)
+                    new_correct_index = options_shuffled.index(correct_option_text)
+                
+                new_correct_letter = chr(65 + new_correct_index)
+                
+                options_shuffled = [clean_md(o) for o in options_shuffled]
+
+                # Enforce word limits
+                # Question length: Max 20 words
+                q_words = question_text.split()
+                if len(q_words) > 20:
+                    question_text = " ".join(q_words[:20])
+                    if not question_text.endswith("?"):
+                        question_text += "?"
+                
+                # Option length: Max 8 words
+                for idx, opt in enumerate(options_shuffled):
+                    opt_words = opt.split()
+                    if len(opt_words) > 8:
+                        options_shuffled[idx] = " ".join(opt_words[:8])
+                
+                # Also resolve the new correct answer text after word-limit truncation
+                final_correct_answer_text = options_shuffled[new_correct_index]
+
                 formatted.append({
-                    "question": q.get("question", f"Question {i+1}"),
-                    "options": q.get("options", ["Option A", "Option B", "Option C", "Option D"]),
-                    "correct_answer": q.get("correct_answer", "A"),
-                    "explanation": q.get("explanation", "Based on document content."),
-                    "difficulty": q.get("difficulty", difficulty if difficulty != "MIXED" else "MEDIUM"),
-                    "bloom_level": q.get("bloom_level", "Understand")
+                    "question": question_text,
+                    "options": options_shuffled,
+                    "correct_answer": new_correct_letter,  # Backwards compatible letter
+                    "correctAnswer": final_correct_answer_text,  # Actual correct option text (per user request)
+                    "explanation": explanation,
+                    "difficulty": difficulty_val,
+                    "bloom_level": bloom_level
                 })
             
-            # Cache the result
-            quiz_cache.set(cache_key, formatted)
+            # Cache the result as a tuple
+            cache_val = (formatted, quiz_title)
+            quiz_cache.set(cache_key, cache_val)
             
             log.info("✅ Generated %d questions successfully on attempt %d", len(formatted), attempt)
-            return formatted
+            return formatted, quiz_title
             
         except (json.JSONDecodeError, ValueError) as e:
             last_error = e
             log.warning("Parse error on attempt %d: %s", attempt, e)
         except Exception as e:
             last_error = e
+            error_str = str(e).lower()
+            # Gemini rate limit (429 RESOURCE_EXHAUSTED) — sleep longer
+            if "429" in error_str or "resource_exhausted" in error_str or "quota" in error_str or "rate" in error_str:
+                delay = min(30 * attempt, 120)  # 30s, 60s, 90s
+                log.warning("Gemini rate limit hit on attempt %d — backing off %ds", attempt, delay)
+                time.sleep(delay)
+                continue
             log.warning("Generation error on attempt %d: %s", attempt, e)
         
-        # Exponential backoff
+        # Default exponential backoff
         if attempt < Config.MAX_RETRIES:
             delay = Config.RETRY_DELAY * attempt
             log.info("Retrying in %d seconds...", delay)
             time.sleep(delay)
     
     log.error("❌ All %d attempts failed. Last error: %s. Falling back to text-based.", Config.MAX_RETRIES, last_error)
-    return generate_text_based_questions(text, num_questions, difficulty)
+    fallback_questions = generate_text_based_questions(text, num_questions, difficulty)
+    return fallback_questions, "Fallback Quiz"
 
 def _split_into_sentences(text: str) -> List[str]:
     """Split document text into clean, usable sentences."""
@@ -1041,19 +1404,26 @@ Return ONLY the JSON:
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    provider = "None"
+    model = "None"
+    if llm is not None:
+        provider = "Gemini"
+        model = GEMINI_MODEL
+
     return {
-        "status": "healthy",
+        "status": "UP" if llm is not None else "DEGRADED",
+        "provider": provider,
+        "model": model,
+        "port": current_port,
         "service": "ai-quiz-generator",
         "llm": llm_type,
         "gemini_key_set": bool(GEMINI_API_KEY and GEMINI_API_KEY != "your-gemini-api-key-here"),
-        "groq_key_set": bool(GROQ_API_KEY and GROQ_API_KEY != "your-groq-api-key-here"),
     }
 
 @app.post("/generate-quiz")
 async def generate_quiz(request: QuizRequest):
     """
-    Generate quiz from provided text content.
-    Uses Gemini (primary) or Groq (fallback) to create MCQ questions.
+    Generate quiz from provided text content using Gemini AI.
     """
     try:
         if not request.text or len(request.text.strip()) < 50:
@@ -1068,20 +1438,221 @@ async def generate_quiz(request: QuizRequest):
                 detail="Number of questions must be between 1 and 50."
             )
 
-        questions = generate_quiz_with_langchain(
+        res = generate_quiz_with_langchain(
             text=request.text,
             num_questions=request.num_questions,
             difficulty=request.difficulty
         )
+        if isinstance(res, tuple):
+            questions, quiz_title = res
+        else:
+            questions = res
+            quiz_title = "AI Generated Quiz"
+            
         return {
             "questions": questions,
-            "quiz_title": "AI Generated Quiz"
+            "quiz_title": quiz_title
         }
     except HTTPException:
         raise
     except Exception as e:
         log.error("Quiz generation failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Quiz generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def generate_mock_prompt_quiz(prompt: str, count: int, difficulty: str) -> List[Dict[str, str]]:
+    """Generate mock/fallback MCQ questions when the LLM is unavailable or fails."""
+    log.warning("⚠️ Using mock prompt-to-quiz generator fallback for: '%s'", prompt)
+    mock_questions = []
+    templates = [
+        {
+            "question": "What is the primary purpose or concept of {prompt}?",
+            "optionA": "To streamline and organize core structures in {prompt}.",
+            "optionB": "To bypass traditional database models entirely.",
+            "optionC": "To compile hardware register values.",
+            "optionD": "To host web applications on a local development server.",
+            "correctAnswer": "To streamline and organize core structures in {prompt}.",
+            "explanation": "The primary objective of {prompt} is to define and streamline its core structures and logical components."
+        },
+        {
+            "question": "Which of the following represents a key benefit of using {prompt}?",
+            "optionA": "It increases system latency and memory consumption.",
+            "optionB": "It reduces development complexity and enhances modularity.",
+            "optionC": "It removes all compiler optimization settings.",
+            "optionD": "It mandates the use of proprietary hardware interfaces.",
+            "correctAnswer": "It reduces development complexity and enhances modularity.",
+            "explanation": "A key advantage of {prompt} is that it modularizes code or systems, leading to lower complexity and better maintainability."
+        },
+        {
+            "question": "When implementing {prompt}, which practice is highly recommended?",
+            "optionA": "Writing monolithic routines without error validation.",
+            "optionB": "Applying consistent conventions and documenting design patterns.",
+            "optionC": "Storing credentials directly in public source code.",
+            "optionD": "Hardcoding all runtime parameters and values.",
+            "correctAnswer": "Applying consistent conventions and documenting design patterns.",
+            "explanation": "For any project involving {prompt}, maintaining code documentation and using clear naming conventions is a best practice."
+        },
+        {
+            "question": "In the context of {prompt}, how is error handling typically managed?",
+            "optionA": "By ignoring errors and letting the runtime environment crash.",
+            "optionB": "Using standard exception handling mechanisms to catch and log failures.",
+            "optionC": "By delegating all exception catching to operating system utilities.",
+            "optionD": "By deleting logs to free up local disk space.",
+            "correctAnswer": "Using standard exception handling mechanisms to catch and log failures.",
+            "explanation": "Robust implementation of {prompt} utilizes try-catch or equivalent conditional error handling blocks to catch and recover from failures."
+        },
+        {
+            "question": "Which of the following is a common pitfall when working with {prompt}?",
+            "optionA": "Failing to validate inputs, leading to potential security vulnerabilities or unexpected behavior.",
+            "optionB": "Writing clean, commented, and self-documenting code.",
+            "optionC": "Optimizing database queries and system queries.",
+            "optionD": "Using modern source control systems to track changes.",
+            "correctAnswer": "Failing to validate inputs, leading to potential security vulnerabilities or unexpected behavior.",
+            "explanation": "Neglecting input validation or proper bounds checking when handling {prompt} can introduce bugs, crashes, or security risks."
+        }
+    ]
+    for i in range(count):
+        tpl = templates[i % len(templates)]
+        mock_questions.append({
+            "question": tpl["question"].format(prompt=prompt),
+            "optionA": tpl["optionA"].format(prompt=prompt),
+            "optionB": tpl["optionB"].format(prompt=prompt),
+            "optionC": tpl["optionC"].format(prompt=prompt),
+            "optionD": tpl["optionD"].format(prompt=prompt),
+            "correctAnswer": tpl["correctAnswer"].format(prompt=prompt),
+            "explanation": tpl["explanation"].format(prompt=prompt)
+        })
+    return mock_questions
+
+@app.post("/generate-quiz-from-prompt")
+async def generate_quiz_from_prompt(request: PromptQuizRequest):
+    """
+    Generate quiz from a user prompt/topic using Gemini AI.
+    Falls back to a mock quiz generator if Gemini is unavailable or fails.
+    """
+    if llm is None:
+        log.warning("No LLM configured. Falling back to mock generator.")
+        questions = generate_mock_prompt_quiz(request.prompt, request.questionCount, request.difficulty)
+        return {
+            "success": True,
+            "questions": questions
+        }
+
+    try:
+        user_prompt = f"""You are a world-class certification exam developer (like AWS, Coursera, Microsoft, and NPTEL). Your goal is to write high-quality, concept-based multiple choice questions that test deep understanding rather than simple recall.
+
+Generate exactly {request.questionCount} high-quality, unique multiple-choice questions on the topic:
+"{request.prompt}"
+
+Difficulty level: {request.difficulty}
+
+## TARGET QUESTION MIX
+Target this distribution across the quiz:
+- 40% Concept Questions (understanding how mechanisms or ideas work)
+- 20% Definition Questions (fundamental terminology, rephrased naturally)
+- 20% Application Questions (how to use the knowledge practically)
+- 20% Scenario Questions (applying concepts in real-world contexts)
+
+## GENERATION RULES
+1. **No Referral Openings**: Never start a question with "According to the document", "Based on the document", "Which statement correctly describes", "What does the document say", or similar phrasing.
+2. **Rephrase Naturally**: Do not copy sentences or standard definitions directly from textbooks. Understand the underlying concept and explain/question it in your own words.
+3. **Standalone Clarity**: Every question must be fully understandable on its own.
+4. **Length Constraints**:
+   - Question length: Maximum 20 words.
+   - Option length: Maximum 8 words. Keep options short, concise, and clean.
+5. **Plausible Distractors**:
+   - Every question must have exactly 4 options: optionA, optionB, optionC, and optionD.
+   - Distractors (wrong answers) must be highly plausible and grammatically aligned, but clearly incorrect.
+   - Only one option must be correct.
+6. **No Duplicates**: Ensure no duplicate questions or options are generated.
+7. **Clean Text**: Do not include markdown formatting (like **, ##, ` backticks, or bullet points) in questions, options, or explanations. Keep them plain text.
+8. **One-Line Explanation**: Every question must have a concise, one-line explanation explaining why the correct option is right.
+9. **Topic Adaptation**:
+   - If the topic contains programming (e.g., Python conditional statements), ensure the questions cover different constructs (like if, if-else, elif, nested if, logical/comparison operators, ternary operator, etc.), syntax, output, debugging, and practical coding concepts. Generate output-based questions, code-analysis, or practical usage questions.
+   - If the topic is theoretical, focus on concept verification, real-world application, or scenario solving.
+10. **Difficulty Alignment**:
+   - Easy: Focus on definitions and basic mechanics.
+   - Medium: Focus on concepts and practical application.
+   - Hard: Focus on scenario-based problem solving and analytical thinking.
+11. **JSON Output Only**: Return ONLY a valid JSON array of objects. Do NOT wrap the JSON in markdown code blocks (such as ```json ... ```). Do NOT include any intro, outro, headings, or notes.
+
+Response Format:
+[
+  {{
+    "question": "Concise standalone question text (max 20 words)?",
+    "optionA": "Short option 1 (max 8 words)",
+    "optionB": "Short option 2 (max 8 words)",
+    "optionC": "Short option 3 (max 8 words)",
+    "optionD": "Short option 4 (max 8 words)",
+    "correctAnswer": "Exact string of the correct option",
+    "explanation": "One-line clear explanation."
+  }}
+]
+"""
+
+        log.info("Generating quiz from prompt: '%s', count=%d, difficulty=%s", 
+                 request.prompt, request.questionCount, request.difficulty)
+        
+        last_error = None
+        for attempt in range(1, Config.MAX_RETRIES + 1):
+            try:
+                log.info("Prompt generation attempt %d/%d...", attempt, Config.MAX_RETRIES)
+                response = llm.invoke(user_prompt)
+                result = response.content
+                
+                # Let's clean markdown fences if any
+                cleaned = result.strip()
+                fence_match = re.search(r"```(?:json)?\s*(.*?)```", cleaned, re.DOTALL | re.IGNORECASE)
+                if fence_match:
+                    cleaned = fence_match.group(1).strip()
+                
+                # Check for brackets
+                array_start = cleaned.find('[')
+                array_end = cleaned.rfind(']')
+                if array_start != -1 and array_end > array_start:
+                    cleaned = cleaned[array_start:array_end + 1]
+                
+                # Safe parse
+                try:
+                    parsed_data = json.loads(cleaned)
+                except json.JSONDecodeError:
+                    parsed_data, repair_err = _try_json_repair(cleaned)
+                
+                # Validate and filter prompt questions
+                validated_questions = validate_and_filter_prompt_questions(parsed_data, request.questionCount)
+                
+                log.info("Successfully generated %d questions from prompt", len(validated_questions))
+                return {
+                    "success": True,
+                    "questions": validated_questions
+                }
+                
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+                # Gemini rate limit (429 RESOURCE_EXHAUSTED) — sleep longer
+                if "429" in error_str or "resource_exhausted" in error_str or "quota" in error_str or "rate" in error_str:
+                    delay = min(30 * attempt, 120)
+                    log.warning("Gemini rate limit hit on attempt %d — backing off %ds", attempt, delay)
+                    await asyncio.sleep(delay)
+                    continue
+                log.warning("Attempt %d failed: %s", attempt, e)
+                if attempt < Config.MAX_RETRIES:
+                    await asyncio.sleep(Config.RETRY_DELAY * attempt)
+        
+        log.warning("Prompt quiz generation via LLM failed. Falling back to mock generator.")
+        questions = generate_mock_prompt_quiz(request.prompt, request.questionCount, request.difficulty)
+        return {
+            "success": True,
+            "questions": questions
+        }
+    except Exception as e:
+        log.error("Prompt quiz generation failed: %s. Falling back to mock generator.", e)
+        questions = generate_mock_prompt_quiz(request.prompt, request.questionCount, request.difficulty)
+        return {
+            "success": True,
+            "questions": questions
+        }
+
 
 @app.post("/upload-and-generate")
 async def upload_and_generate(
@@ -1342,7 +1913,126 @@ async def review_code(req: CodeReviewRequest):
         raise HTTPException(status_code=422, detail="AI returned malformed response. Try again.")
 
 
+def check_and_resolve_port(port: int) -> int:
+    """Check if the port is in use; try to terminate any previous instance, else fallback to next available ports."""
+    import socket
+    import subprocess
+    import sys
+    
+    def is_port_in_use(p: int) -> bool:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('0.0.0.0', p))
+                return False
+            except socket.error:
+                return True
+
+    if not is_port_in_use(port):
+        return port
+
+    log.warning(f"Port {port} is occupied. Attempting to terminate previous instance of AI service on this port...")
+    try:
+        if sys.platform == "win32":
+            cmd = f'netstat -ano | findstr LISTENING | findstr :{port}'
+            proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            lines = proc.stdout.strip().split("\n")
+            for line in lines:
+                parts = line.strip().split()
+                if len(parts) >= 5 and f":{port}" in parts[1]:
+                    pid = parts[-1]
+                    log.warning(f"Found process with PID {pid} occupying port {port}. Terminating...")
+                    subprocess.run(f"taskkill /F /PID {pid}", shell=True, capture_output=True)
+        else:
+            subprocess.run(f"fuser -k -n tcp {port}", shell=True, capture_output=True)
+    except Exception as e:
+        log.error(f"Error while attempting to terminate process on port {port}: {e}")
+
+    time.sleep(1.5)
+
+    if not is_port_in_use(port):
+        log.info(f"Port {port} successfully released.")
+        return port
+
+    resolved = port
+    while is_port_in_use(resolved):
+        log.warning(f"Port {resolved} is still occupied. Scanning next port...")
+        resolved += 1
+    
+    log.info(f"Port resolved to available port: {resolved}")
+    return resolved
+
+def validate_startup_config():
+    """Validates configuration parameters and environment variables on startup."""
+    log.info("🔍 Validating environment and configuration...")
+    
+    if Config.DEFAULT_CHUNK_SIZE <= 0:
+        log.critical("❌ Invalid configuration: DEFAULT_CHUNK_SIZE must be positive.")
+        sys.exit(1)
+    if Config.DEFAULT_CHUNK_OVERLAP < 0 or Config.DEFAULT_CHUNK_OVERLAP >= Config.DEFAULT_CHUNK_SIZE:
+        log.critical("❌ Invalid configuration: DEFAULT_CHUNK_OVERLAP must be non-negative and less than DEFAULT_CHUNK_SIZE.")
+        sys.exit(1)
+    if Config.MAX_RETRIES < 1:
+        log.critical("❌ Invalid configuration: MAX_RETRIES must be at least 1.")
+        sys.exit(1)
+    if Config.RETRY_DELAY < 0:
+        log.critical("❌ Invalid configuration: RETRY_DELAY must be non-negative.")
+        sys.exit(1)
+
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    
+    if gemini_key == "your-gemini-api-key-here":
+        log.critical("❌ Invalid environment: GEMINI_API_KEY is configured with a placeholder value.")
+        sys.exit(1)
+
+    port_str = os.getenv("AI_SERVICE_PORT", "8000")
+    try:
+        port = int(port_str)
+        if port < 1 or port > 65535:
+            raise ValueError()
+    except ValueError:
+        log.critical(f"❌ Invalid environment: AI_SERVICE_PORT '{port_str}' is not a valid port number.")
+        sys.exit(1)
+        
+    log.info("✅ Configuration and environment are valid.")
+
+def log_startup_banner(provider: str, model: str, port: int, health_status: str):
+    """Log a colored startup banner with AI service status details."""
+    startup_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    banner = f"""
+======================================================================
+                  LMS AI QUIZ GENERATOR SERVICE
+======================================================================
+   Startup Time:  {startup_time}
+   AI Provider:   {provider}
+   Model Name:    {model}
+   Server Port:   {port}
+   Health Status: {health_status}
+======================================================================
+"""
+    green_start = "\x1b[32;1m"
+    ansi_reset = "\x1b[0m"
+    for line in banner.strip().split("\n"):
+        log.info(f"{green_start}{line}{ansi_reset}")
+
 if __name__ == "__main__":
     import uvicorn
-    log.info("Starting AI Quiz Generator on port 8000...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    validate_startup_config()
+    
+    configured_port = int(os.getenv("AI_SERVICE_PORT", 8000))
+    resolved_port = check_and_resolve_port(configured_port)
+    
+    current_port = resolved_port
+    
+    provider = "None"
+    model = "None"
+    health_status = "WARNING (GEMINI_API_KEY not set)"
+    
+    if llm is not None:
+        provider = "Gemini"
+        model = GEMINI_MODEL
+        health_status = "UP"
+        
+    log_startup_banner(provider, model, resolved_port, health_status)
+    
+    uvicorn.run(app, host="0.0.0.0", port=resolved_port)

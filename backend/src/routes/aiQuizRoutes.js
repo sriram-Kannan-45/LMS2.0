@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const { AIDocument, AIQuiz, AIQuestion, QuizAttempt, QuizAnswer, QuizResult, Training, User } = require('../models');
+const { AIDocument, AIQuiz, AIQuestion, QuizAttempt, QuizAnswer, QuizResult, Training, User, Course, CourseTrainerAssignment, TrainingTrainerAssignment } = require('../models');
 const authenticateToken = require('../middleware/auth');
 const roleMiddleware = require('../middleware/roles');
 const aiService = require('../services/aiService');
@@ -106,8 +106,11 @@ const router = express.Router();
     upload.single('file'),
     async (req, res) => {
       try {
-        const { trainingId, numQuestions = 10, difficulty = 'MIXED' } = req.body;
+        const { trainingId, courseId, numQuestions = 10, difficulty = 'MIXED' } = req.body;
         const trainerId = req.user.id;
+
+        // Print received params for debugging as requested
+        console.log(`[aiQuizRoutes] Request received: trainingId="${trainingId}" (type: ${typeof trainingId}), courseId="${courseId}" (type: ${typeof courseId}), trainerId="${trainerId}"`);
 
         if (!req.file) {
           return res.status(400).json({ error: 'No file uploaded' });
@@ -149,9 +152,91 @@ const router = express.Router();
         return res.status(400).json({ error: 'Document content too short or empty' });
       }
 
+      // ── Resolve courseId and trainingId ──
+      let resolvedCourseId = courseId || null;
+      let resolvedTrainingId = trainingId || null;
+
+      // Clean up stringified values
+      if (resolvedCourseId === 'undefined' || resolvedCourseId === 'null' || resolvedCourseId === 'NaN' || resolvedCourseId === '') {
+        resolvedCourseId = null;
+      }
+      if (resolvedTrainingId === 'undefined' || resolvedTrainingId === 'null' || resolvedTrainingId === 'NaN' || resolvedTrainingId === '') {
+        resolvedTrainingId = null;
+      }
+
+      // Fallback: If trainingId was passed but no courseId was provided, check if it's actually a courseId or a trainingId.
+      if (resolvedTrainingId && !resolvedCourseId) {
+        const courseCheck = await Course.findByPk(resolvedTrainingId);
+        if (courseCheck) {
+          resolvedCourseId = resolvedTrainingId;
+          resolvedTrainingId = courseCheck.trainingProgramId;
+          console.log(`[aiQuizRoutes] Detected courseId "${resolvedCourseId}" passed in trainingId parameter. Resolved trainingProgramId: "${resolvedTrainingId}"`);
+        } else {
+          // If it is indeed a trainingId, resolve its associated Course under the new architecture
+          const course = await Course.findOne({ where: { trainingProgramId: resolvedTrainingId } });
+          if (course) {
+            resolvedCourseId = course.id;
+            console.log(`[aiQuizRoutes] Resolved courseId "${resolvedCourseId}" from trainingId "${resolvedTrainingId}"`);
+          }
+        }
+      }
+
+      // Perform validation and authorization
+      if (resolvedCourseId) {
+        const course = await Course.findByPk(resolvedCourseId);
+        if (!course) {
+          try { fs.unlinkSync(filePath); } catch (e) {}
+          return res.status(400).json({
+            success: false,
+            error: 'Course not found',
+            details: `The selected course (ID: ${resolvedCourseId}) does not exist.`
+          });
+        }
+
+        // Verify trainer assignment
+        const courseAssigned = await CourseTrainerAssignment.findOne({
+          where: { courseId: resolvedCourseId, trainerId }
+        });
+        const hasCourseAccess = course.trainerId === trainerId || courseAssigned !== null;
+        if (!hasCourseAccess) {
+          try { fs.unlinkSync(filePath); } catch (e) {}
+          return res.status(403).json({
+            success: false,
+            error: 'Access denied',
+            details: `You are not authorized to generate quizzes for course (ID: ${resolvedCourseId}).`
+          });
+        }
+
+        resolvedTrainingId = course.trainingProgramId;
+      } else if (resolvedTrainingId) {
+        const training = await Training.findByPk(resolvedTrainingId);
+        if (!training) {
+          try { fs.unlinkSync(filePath); } catch (e) {}
+          return res.status(400).json({
+            success: false,
+            error: 'Training not found',
+            details: `The selected training program (ID: ${resolvedTrainingId}) does not exist.`
+          });
+        }
+
+        // Verify trainer assignment
+        const trainingAssigned = await TrainingTrainerAssignment.findOne({
+          where: { trainingId: resolvedTrainingId, trainerId }
+        });
+        const hasTrainingAccess = training.trainerId === trainerId || training.createdBy === trainerId || trainingAssigned !== null;
+        if (!hasTrainingAccess) {
+          try { fs.unlinkSync(filePath); } catch (e) {}
+          return res.status(403).json({
+            success: false,
+            error: 'Access denied',
+            details: `You are not authorized to generate quizzes for training program (ID: ${resolvedTrainingId}).`
+          });
+        }
+      }
+
       const document = await AIDocument.create({
         trainerId,
-        trainingId: trainingId || null,
+        trainingId: resolvedTrainingId,
         title: req.file.originalname,
         content: content.substring(0, 50000),
         fileUrl: `/uploads/ai-docs/${req.file.filename}`,
@@ -162,7 +247,8 @@ const router = express.Router();
       const quiz = await AIQuiz.create({
         documentId: document.id,
         trainerId,
-        trainingId: trainingId || null,
+        trainingId: resolvedTrainingId,
+        courseId: resolvedCourseId,
         title: `Quiz: ${req.file.originalname}`,
         numQuestions: parseInt(numQuestions),
         difficulty,
@@ -487,7 +573,19 @@ router.post('/participant/submit/:attemptId',
         let isCorrect = false;
 
         if (question.questionType === 'MCQ') {
-          isCorrect = String(question.correctAnswer) === String(ans.selectedOption);
+          isCorrect = false;
+          const expectedStr = String(question.correctAnswer || '').trim();
+          const selectedOptIdx = ans.selectedOption !== undefined ? parseInt(ans.selectedOption, 10) : -1;
+          
+          if (expectedStr === String(selectedOptIdx)) {
+            isCorrect = true;
+          } else if (Array.isArray(question.options) && selectedOptIdx >= 0 && selectedOptIdx < question.options.length) {
+            const selectedText = String(question.options[selectedOptIdx]).trim().toLowerCase();
+            if (expectedStr.toLowerCase() === selectedText) {
+              isCorrect = true;
+            }
+          }
+          
           score = isCorrect ? 100 : 0;
           feedback = isCorrect ? 'Correct!' : `Incorrect. Correct answer: ${question.correctAnswer}`;
         } else {

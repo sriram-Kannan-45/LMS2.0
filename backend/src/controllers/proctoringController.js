@@ -401,7 +401,19 @@ exports.finalize = async (req, res, next) => {
       let feedback = '';
 
       if (q.questionType === 'MCQ') {
-        isCorrect = String(q.correctAnswer) === String(row.selectedOption);
+        isCorrect = false;
+        const expectedStr = String(q.correctAnswer || '').trim();
+        const selectedOptIdx = row.selectedOption !== undefined && row.selectedOption !== null ? parseInt(row.selectedOption, 10) : -1;
+        
+        if (expectedStr === String(selectedOptIdx)) {
+          isCorrect = true;
+        } else if (Array.isArray(q.options) && selectedOptIdx >= 0 && selectedOptIdx < q.options.length) {
+          const selectedText = String(q.options[selectedOptIdx]).trim().toLowerCase();
+          if (expectedStr.toLowerCase() === selectedText) {
+            isCorrect = true;
+          }
+        }
+        
         score = isCorrect ? 100 : 0;
         feedback = isCorrect ? 'Correct!' : 'Incorrect';
       } else {

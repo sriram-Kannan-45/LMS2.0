@@ -61,16 +61,26 @@ const aiService = {
 
         // Transform response format to match backend expectations
         const questions = response.data.questions.map((q, i) => {
-          // Convert "A"/"B"/"C"/"D" to "0"/"1"/"2"/"3"
+          const options = q.options || ['Option A', 'Option B', 'Option C', 'Option D'];
           let correctAnswer = q.correct_answer || q.correctAnswer || 'A';
+          
           if (['A', 'B', 'C', 'D'].includes(correctAnswer)) {
             correctAnswer = (correctAnswer.charCodeAt(0) - 65).toString();
+          } else if (!['0', '1', '2', '3'].includes(correctAnswer)) {
+            // It is likely the text of the correct option. Try to find its index.
+            const cleanCorrect = String(correctAnswer).trim().toLowerCase();
+            const idx = options.findIndex(opt => String(opt).trim().toLowerCase() === cleanCorrect);
+            if (idx !== -1) {
+              correctAnswer = idx.toString();
+            } else {
+              correctAnswer = '0';
+            }
           }
           
           return {
             questionText: q.question || q.questionText || `Question ${i+1}`,
             questionType: 'MCQ',
-            options: q.options || ['Option A', 'Option B', 'Option C', 'Option D'],
+            options: options,
             correctAnswer: correctAnswer,
             explanation: q.explanation || '',
             difficulty: difficulty,
@@ -152,6 +162,45 @@ const aiService = {
         feedback: score > 50 ? 'Good answer with relevant keywords' : 'Answer needs improvement — missing key concepts',
         isCorrect: score >= 60
       };
+    }
+  },
+
+  async generateQuizFromPrompt(prompt, questionCount = 10, difficulty = 'Medium') {
+    let cleanPrompt = (prompt || '').toString().trim();
+    if (!cleanPrompt) {
+      throw new Error('Prompt/Topic cannot be empty.');
+    }
+    if (questionCount < 1 || questionCount > 50) {
+      throw new Error('Number of questions must be between 1 and 50.');
+    }
+
+    try {
+      console.log(`[aiService] Querying AI service /generate-quiz-from-prompt for topic: "${cleanPrompt}"`);
+      const response = await axios.post(`${AI_SERVICE_URL}/generate-quiz-from-prompt`, {
+        prompt: cleanPrompt,
+        questionCount: parseInt(questionCount, 10),
+        difficulty: difficulty
+      }, {
+        timeout: AI_TIMEOUT,
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.data || !response.data.success || !response.data.questions) {
+        throw new Error('Invalid response from AI service');
+      }
+
+      return response.data.questions;
+    } catch (error) {
+      console.error('[aiService] generateQuizFromPrompt failed:', error.message);
+      if (error.response) {
+        const detail = error.response.data?.detail || '';
+        throw new Error(`AI service error: ${detail || error.response.statusText}`);
+      } else if (error.code === 'ECONNREFUSED') {
+        throw new Error('AI service is not running. Please start the Python AI service first.');
+      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        throw new Error('AI service timed out. The prompt may be too complex or the model is overloaded.');
+      }
+      throw new Error('Failed to generate quiz from prompt: ' + error.message);
     }
   }
 };
