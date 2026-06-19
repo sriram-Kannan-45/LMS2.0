@@ -29,6 +29,9 @@ const iconMap = {
   ClipboardList: <ClipboardList size={18} />,
   FileText: <FileText size={18} />,
   Notes: <FileText size={18} />,
+  'UserPlus': <UserPlus size={18} />,
+  'Enrollment Requests': <UserPlus size={18} />,
+  'Trainer Reports': <ClipboardList size={18} />,
 }
 
 const navItems = {
@@ -45,8 +48,11 @@ const navItems = {
   ],
   TRAINER: [
     { key: 'courses', label: 'Trainings', icon: 'Trainings' },
+    { key: 'notes', label: 'Notes & Resources', icon: 'Notes' },
     { key: 'coding', label: 'Coding Tests', icon: 'Coding' },
-    { key: 'feedback', label: 'Feedback', icon: 'Feedback' },
+    { key: 'enrollments', label: 'Enrollment Requests', icon: 'UserPlus' },
+    { key: 'reports', label: 'Trainer Reports', icon: 'ClipboardList' },
+    { key: 'feedback', label: 'Feedback Received', icon: 'Feedback' },
     { key: 'profile', label: 'My Profile', icon: 'My Profile' },
   ],
   PARTICIPANT: [

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Pencil, Trash2, Eye, Send, Sparkles, ListChecks, Search,
-  X, Save, Check, AlertTriangle, ChevronDown, ChevronUp, BookOpen,
+  X, Save, Check, AlertTriangle, ChevronDown, ChevronUp, BookOpen, Trophy,
 } from 'lucide-react'
 import { API } from '../../api/api'
 import { useToast } from '../Toast'
@@ -489,6 +489,9 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
   const [previewQuiz, setPreviewQuiz] = useState(null)
   const [publishQuiz, setPublishQuiz] = useState(null)
   const [showGenerator, setShowGenerator] = useState(false)
+  const [leaderboardQuiz, setLeaderboardQuiz] = useState(null)
+  const [leaderboardData, setLeaderboardData] = useState([])
+  const [sendingQuizId, setSendingQuizId] = useState(null)
 
   const handleQuizGenerated = (questions, title) => {
     if (questions === null) {
@@ -550,6 +553,29 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
   const openPreview = async (q) => {
     const full = await fetchQuizForEdit(q.id)
     if (full) setPreviewQuiz(full)
+  }
+
+  const sendQuiz = async (q) => {
+    if (!window.confirm(`Send "${q.title}" to enrolled participants?`)) return
+    setSendingQuizId(q.id)
+    try {
+      const r = await fetch(API.TRAINER_COURSES.SEND_QUIZ(q.id), { method: 'POST', headers: auth() })
+      const d = await r.json()
+      if (!r.ok || d.success === false) { showError(d.error || d.message || 'Send failed'); return }
+      success(`Quiz sent to ${d.assignedCount || 0} participant(s)`)
+      await fetchAll()
+    } catch (e) { showError(e.message) }
+    finally { setSendingQuizId(null) }
+  }
+
+  const openLeaderboard = async (q) => {
+    try {
+      const r = await fetch(API.TRAINER_COURSES.QUIZ_LEADERBOARD(q.id), { headers: auth() })
+      const d = await r.json()
+      if (d.success) setLeaderboardData(d.leaderboard || [])
+      else setLeaderboardData([])
+    } catch { setLeaderboardData([]) }
+    setLeaderboardQuiz(q)
   }
 
   // Question bank — flatten ALL questions across all quizzes (uses preview API)
@@ -670,17 +696,34 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
                       <button title="Edit" onClick={() => openEdit(q)} style={iconBtn('#eef2ff', '#4f46e5')}>
                         <Pencil size={12} />
                       </button>
-                      <button
-                        title={q.resultStatus === 'PUBLISHED' ? 'Already published' : 'Publish results'}
-                        onClick={() => q.resultStatus !== 'PUBLISHED' && setPublishQuiz(q)}
-                        disabled={q.resultStatus === 'PUBLISHED'}
-                        style={{
-                          ...iconBtn('#dcfce7', '#15803d'),
-                          opacity: q.resultStatus === 'PUBLISHED' ? 0.4 : 1,
-                          cursor: q.resultStatus === 'PUBLISHED' ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        <Send size={12} />
+                      {q.status === 'DRAFT' ? (
+                        <button title="Send to participants" onClick={() => sendQuiz(q)}
+                          disabled={sendingQuizId === q.id}
+                          style={{
+                            ...iconBtn('#dcfce7', '#15803d'),
+                            opacity: sendingQuizId === q.id ? 0.5 : 1,
+                            cursor: sendingQuizId === q.id ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          <Send size={12} />
+                        </button>
+                      ) : (
+                        <button
+                          title={q.resultStatus === 'PUBLISHED' ? 'Already published' : 'Publish results'}
+                          onClick={() => q.resultStatus !== 'PUBLISHED' && setPublishQuiz(q)}
+                          disabled={q.resultStatus === 'PUBLISHED'}
+                          style={{
+                            ...iconBtn('#dcfce7', '#15803d'),
+                            opacity: q.resultStatus === 'PUBLISHED' ? 0.4 : 1,
+                            cursor: q.resultStatus === 'PUBLISHED' ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          <Send size={12} />
+                        </button>
+                      )}
+                      <button title="Leaderboard" onClick={() => openLeaderboard(q)}
+                        style={iconBtn('#fef3c7', '#92400e')}>
+                        <Trophy size={12} />
                       </button>
                       <button title="Delete" onClick={() => remove(q)} style={iconBtn('#fee2e2', '#dc2626')}>
                         <Trash2 size={12} />
@@ -778,6 +821,13 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
         )}
         {previewQuiz && (
           <QuizPreview quiz={previewQuiz} onClose={() => setPreviewQuiz(null)} />
+        )}
+        {leaderboardQuiz && (
+          <LeaderboardModal
+            quiz={leaderboardQuiz}
+            data={leaderboardData}
+            onClose={() => setLeaderboardQuiz(null)}
+          />
         )}
       </AnimatePresence>
     </div>
@@ -1063,6 +1113,80 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
                 </div>
               </form>
             )}
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Leaderboard modal
+// ════════════════════════════════════════════════════════════════════════════
+function LeaderboardModal({ quiz, data, onClose }) {
+  const sorted = [...data].sort((a, b) => (b.score || 0) - (a.score || 0))
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
+        zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 500, padding: 22, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+            <Trophy size={18} style={{ verticalAlign: 'middle', marginRight: 8, color: '#f59e0b' }} />
+            Leaderboard — {quiz.title}
+          </h3>
+          <button onClick={onClose} style={iconBtn('#f1f5f9', '#475569')}><X size={14} /></button>
+        </div>
+
+        {sorted.length === 0 ? (
+          <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>
+            No submissions yet.
+          </div>
+        ) : (
+          <div style={{ overflow: 'auto', flex: 1 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                  <th style={{ ...th, width: 40 }}>#</th>
+                  <th style={th}>Participant</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Score</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Percentage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((entry, i) => (
+                  <tr key={entry.participantId || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: i < 3 ? '#f59e0b' : '#94a3b8', fontSize: 13 }}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+                    </td>
+                    <td style={{ ...td, fontWeight: 600, color: '#0f172a', fontSize: 13 }}>
+                      {entry.participantName || 'Anonymous'}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#475569', fontSize: 13 }}>
+                      {entry.score ?? '-'}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right' }}>
+                      <span style={{
+                        padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                        background: (entry.percentage || 0) >= 80 ? '#dcfce7' : (entry.percentage || 0) >= 50 ? '#fef3c7' : '#fee2e2',
+                        color: (entry.percentage || 0) >= 80 ? '#15803d' : (entry.percentage || 0) >= 50 ? '#92400e' : '#dc2626',
+                      }}>
+                        {entry.percentage != null ? `${Math.round(entry.percentage)}%` : '-'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </motion.div>

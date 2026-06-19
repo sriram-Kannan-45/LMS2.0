@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Calendar, Users, Star, FileText, CheckCircle, XCircle, Clock, MessageSquare, TrendingUp } from 'lucide-react'
 import TrainerForm from '../components/TrainerForm'
-import TrainerAIQuiz from '../components/TrainerAIQuiz'
 import NotesSection from '../components/trainer/notes/NotesSection'
 import ParticipantProfileView from '../components/shared/ParticipantProfileView'
 import TrainerCourses from './TrainerCourses'
@@ -17,19 +16,7 @@ const API = API_BASE
 
 function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
   const { success, error: showError, info } = useToast()
-  const [tab, setTab] = useState(activeTab === 'trainings' ? 'courses' : (activeTab || 'courses'))
-
-  useEffect(() => {
-    if (activeTab) {
-      setTab(activeTab === 'trainings' ? 'courses' : activeTab)
-    }
-  }, [activeTab])
-
-  const handleTabChange = (newTab) => {
-    const targetTab = newTab === 'trainings' ? 'courses' : newTab
-    setTab(targetTab)
-    if (onTabChange) onTabChange(targetTab)
-  }
+  const tab = activeTab === 'trainings' ? 'courses' : (activeTab || 'courses')
   const [trainings, setTrainings] = useState([])
   const [feedbacks, setFeedbacks] = useState([])
   const [stats, setStats] = useState({ totalTrainings: 0, avgTrainerRating: 0, avgSubjectRating: 0, totalFeedbacks: 0 })
@@ -209,19 +196,6 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
     }))
   }
 
-  const TABS = [
-    { key: 'courses', label: 'Trainings' },
-    { key: 'notes', label: 'Notes & Resources' },
-    { key: 'ai-quiz', label: 'AI Quiz Generator' },
-    { key: 'coding', label: 'Coding Tests' },
-    { key: 'enrollments', label: 'Enrollment Requests' },
-    { key: 'reports', label: 'Trainer Reports' },
-    { key: 'feedback', label: 'Feedback Received' },
-    { key: 'profile', label: 'My Profile' },
-  ]
-
-  // Note management is fully encapsulated in <NotesSection />.
-
   return (
     <div className="dashboard">
       <div className="stats-grid">
@@ -241,14 +215,6 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
           <div className="stat-label">Avg Subject Rating</div>
           <div className="stat-value">{stats.avgSubjectRating}</div>
         </div>
-      </div>
-
-      <div className="tabs-pills">
-        {TABS.map(t => (
-          <button key={t.key} className={`tab-pill ${tab === t.key ? 'active' : ''}`} onClick={() => handleTabChange(t.key)}>
-            {t.label}
-          </button>
-        ))}
       </div>
 
       {tab === 'courses' && (
@@ -350,10 +316,6 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
         >
           <NotesSection user={user} />
         </motion.div>
-      )}
-
-      {tab === 'ai-quiz' && (
-        <TrainerAIQuiz user={user} />
       )}
 
       {tab === 'coding' && (

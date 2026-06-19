@@ -75,23 +75,6 @@ export const API = {
   AI_QUIZ: {
     GENERATE_FROM_PROMPT:   `${API_BASE}/ai-quiz/generate-from-prompt`,
     GENERATE_FROM_DOCUMENT: `${API_BASE}/ai-quiz/generate-from-document`,
-    TRAINER_GET_QUIZZES:    `${API_BASE}/trainer/quizzes`,
-    PARTICIPANT_GET_QUIZZES:`${API_BASE}/participant/quizzes`,
-    TRAINING_QUIZZES:  (id)=>`${API_BASE}/training/${id}/quizzes`,
-    TRAINER_UPLOAD:     `${API_BASE}/ai-quiz/trainer/upload-document`,
-    TRAINER_QUIZZES:    `${API_BASE}/ai-quiz/trainer/quizzes`,
-    TRAINER_UPDATE_QUIZ:(id) => `${API_BASE}/ai-quiz/trainer/quiz/${id}`,
-    PARTICIPANT_QUIZZES:`${API_BASE}/ai-quiz/participant/quizzes`,
-    START:              (quizId)    => `${API_BASE}/ai-quiz/participant/start/${quizId}`,
-    SUBMIT:             (attemptId) => `${API_BASE}/ai-quiz/participant/submit/${attemptId}`,
-    LEADERBOARD:        (quizId)    => `${API_BASE}/ai-quiz/leaderboard/${quizId}`,
-    SEND:               (id)        => `${API_BASE}/ai-quiz/trainer/quiz/${id}/send`,
-    PUBLISH_RESULT:     (id)        => `${API_BASE}/ai-quiz/trainer/quiz/${id}/publish-result`,
-    PUBLISH_RESULT_V2:  (id)        => `${API_BASE}/quizzes/${id}/publish-result`,
-    CLOSE:              (id)        => `${API_BASE}/quizzes/${id}/close`,
-    UNPUBLISH:          (id)        => `${API_BASE}/quizzes/${id}/unpublish`,
-    DELETE:             (id)        => `${API_BASE}/ai-quiz/trainer/quiz/${id}`,
-    PARTICIPANT_RESULTS:            `${API_BASE}/participant/results`
   },
 
   /** Lesson workflow: lessons + quiz/assessment gating, results & dashboards */
@@ -143,11 +126,12 @@ export const API = {
     REORDER_MATERIALS:(lessonId)       => `${API_BASE}/trainer/lessons/${lessonId}/materials/reorder`,
 
     QUIZ_MANUAL:   (courseId)          => `${API_BASE}/trainer/courses/${courseId}/quiz/manual`,
-    GENERATE_FROM_PROMPT:              `${API_BASE}/trainer/quiz/generate-from-prompt`,
     QUIZZES:       (courseId)          => `${API_BASE}/trainer/courses/${courseId}/quizzes`,
     QUIZ:          (courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}`,
+    SEND_QUIZ:     (quizId)            => `${API_BASE}/quizzes/${quizId}/send`,
     PUBLISH_QUIZ:  (courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}/publish`,
     QUIZ_DASHBOARD:(courseId, quizId)  => `${API_BASE}/trainer/courses/${courseId}/quizzes/${quizId}/dashboard`,
+    QUIZ_LEADERBOARD:(quizId)          => `${API_BASE}/ai-quiz/leaderboard/${quizId}`,
 
     PARTICIPANTS:  (courseId)          => `${API_BASE}/trainer/courses/${courseId}/participants`,
     PARTICIPANT:   (courseId, userId)  => `${API_BASE}/trainer/courses/${courseId}/participants/${userId}`,
