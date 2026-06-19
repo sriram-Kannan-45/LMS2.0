@@ -530,6 +530,7 @@ function ResourcesView({ user, courseId }) {
 function QuizzesView({ user, courseId }) {
   const { error: showError } = useToast()
   const [quizzes, setQuizzes] = useState([])
+  const [completedQuizzes, setCompletedQuizzes] = useState([])
   const [loading, setLoading] = useState(true)
   const [openQuizId, setOpenQuizId] = useState(null)
 
@@ -538,7 +539,10 @@ function QuizzesView({ user, courseId }) {
       setLoading(true)
       const r = await fetch(API.PARTICIPANT_COURSES.QUIZZES(courseId), { headers: auth(user.token) })
       const d = await r.json()
-      if (d.success) setQuizzes(d.quizzes || [])
+      if (d.success) {
+        setQuizzes(d.quizzes || [])
+        setCompletedQuizzes(d.completedQuizzes || [])
+      }
       else showError(d.error || 'Failed to load quizzes')
     } catch (e) { showError(e.message) }
     finally { setLoading(false) }
@@ -546,7 +550,7 @@ function QuizzesView({ user, courseId }) {
   useEffect(() => { refresh() }, [courseId])
 
   if (loading) return <div style={{ height: 100, background: '#f1f5f9', borderRadius: 10 }} />
-  if (quizzes.length === 0) {
+  if (quizzes.length === 0 && completedQuizzes.length === 0) {
     return (
       <div style={emptyCard}>
         <Sparkles size={36} color="#cbd5e1" />
@@ -555,43 +559,58 @@ function QuizzesView({ user, courseId }) {
     )
   }
 
+  const renderQuizGrid = (list) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+      {list.map(q => (
+        <div key={q.quizId} style={{
+          background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16,
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+            {q.title}
+          </div>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+            {q.lessonTitle || 'Course-level'} · {q.questionCount} question{q.questionCount !== 1 ? 's' : ''}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto', justifyContent: 'space-between' }}>
+            {q.myStatus === 'SUBMITTED' ? (
+              <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>
+                ✓ Submitted{q.myScore != null ? ` · ${q.myScore.toFixed(0)}%` : ''}
+              </span>
+            ) : (
+              <span style={{ fontSize: 11, color: '#475569' }}>Not started</span>
+            )}
+            <button
+              onClick={() => setOpenQuizId(q.quizId)}
+              style={{
+                padding: '7px 12px', background: '#4f46e5', color: '#fff', border: 'none',
+                borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              {q.myStatus === 'SUBMITTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
+              {q.myStatus === 'SUBMITTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Awaiting Result') : 'Start'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-        {quizzes.map(q => (
-          <div key={q.quizId} style={{
-            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16,
-            display: 'flex', flexDirection: 'column',
-          }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
-              {q.title}
-            </div>
-            <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
-              {q.lessonTitle || 'Course-level'} · {q.questionCount} question{q.questionCount !== 1 ? 's' : ''}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto', justifyContent: 'space-between' }}>
-              {q.myStatus === 'SUBMITTED' ? (
-                <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>
-                  ✓ Submitted{q.myScore != null ? ` · ${q.myScore.toFixed(0)}%` : ''}
-                </span>
-              ) : (
-                <span style={{ fontSize: 11, color: '#475569' }}>Not started</span>
-              )}
-              <button
-                onClick={() => setOpenQuizId(q.quizId)}
-                style={{
-                  padding: '7px 12px', background: '#4f46e5', color: '#fff', border: 'none',
-                  borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}
-              >
-                {q.myStatus === 'SUBMITTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
-                {q.myStatus === 'SUBMITTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Awaiting Result') : 'Start'}
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+      {quizzes.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h4 style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 12 }}>Available Quizzes</h4>
+          {renderQuizGrid(quizzes)}
+        </div>
+      )}
+      {completedQuizzes.length > 0 && (
+        <div>
+          <h4 style={{ fontSize: 13, fontWeight: 600, color: '#475569', marginBottom: 12 }}>Completed Quizzes</h4>
+          {renderQuizGrid(completedQuizzes)}
+        </div>
+      )}
       <AnimatePresence>
         {openQuizId && (
           <QuizModal

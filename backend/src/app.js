@@ -27,6 +27,7 @@ const noteRoutes = require('./routes/noteRoutes');
 const feedRoutes = require('./routes/feedRoutes');
 const liveRoutes = require('./routes/liveRoutes');
 const aiQuizRoutes = require('./routes/aiQuizRoutes');
+const quizzesRoutes = require('./routes/quizzesRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const participantProfileRoutes = require('./routes/participantProfileRoutes');
 const proctoringRoutes = require('./routes/proctoringRoutes');
@@ -86,12 +87,14 @@ app.use('/api/participant', participantCourseRoutes);
 app.use('/api/participant', enrollmentRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/trainings', trainingRoutes);
+app.use('/api/training', trainingRoutes);
 app.use('/api/survey', surveyRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/live', liveRoutes);
 app.use('/api/ai-quiz', aiQuizRoutes);
+app.use('/api/quizzes', quizzesRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/participant-profile', participantProfileRoutes);
 app.use('/api/proctor', proctoringRoutes);
@@ -453,6 +456,14 @@ const startServer = async () => {
    /api/survey    → survey routes
       `);
       logger.info('🔌 WebSocket server active on Socket.IO');
+
+      // Start quiz auto-close scheduler
+      try {
+        const quizAutoClose = require('./jobs/quizAutoClose');
+        quizAutoClose.start();
+      } catch (jobErr) {
+        logger.warn('Failed to start quiz auto-close job:', jobErr.message);
+      }
     });
 
     // Graceful shutdown

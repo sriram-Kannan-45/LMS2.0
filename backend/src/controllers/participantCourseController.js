@@ -610,7 +610,7 @@ async function listCourseQuizzes(req, res) {
     const { course } = ctx;
 
     const quizzes = await AIQuiz.findAll({
-      where: { courseId: course.id, status: 'PUBLISHED' },
+      where: { courseId: course.id, isPublished: true },
       include: [
         { model: Lesson,    as: 'lesson',    attributes: ['id', 'title'], required: false },
         { model: AIQuestion, as: 'questions', attributes: ['id'], required: false },
@@ -636,7 +636,7 @@ async function listCourseQuizzes(req, res) {
     const out = quizzes.map(q => {
       const attempt = attemptMap[String(q.id)];
       const result = resultMap[String(q.id)];
-      const showScore = q.resultStatus === 'PUBLISHED' && !!result;
+      const showScore = q.isResultPublished && !!result;
       return {
         quizId: q.id,
         title: q.title,
@@ -649,7 +649,9 @@ async function listCourseQuizzes(req, res) {
         myScore: showScore ? Number(result.percentage) : null,
       };
     });
-    res.json({ success: true, quizzes: out });
+    const available = out.filter(q => q.myStatus !== 'SUBMITTED' && q.myStatus !== 'EVALUATED');
+    const completed = out.filter(q => q.myStatus === 'SUBMITTED' || q.myStatus === 'EVALUATED');
+    res.json({ success: true, quizzes: available, completedQuizzes: completed });
   } catch (e) {
     console.error('listCourseQuizzes:', e.message);
     res.status(500).json({ error: 'Failed to list course quizzes' });
@@ -798,14 +800,39 @@ async function markLessonViewed(req, res) {
 async function loadAccessibleQuiz(req, res, quizId) {
   const id = parseInt(quizId, 10);
   if (!id) { res.status(422).json({ error: 'Invalid quizId' }); return null; }
-  const quiz = await AIQuiz.findByPk(id);
+  
+  const { Course, Training } = require('../models');
+  const quiz = await AIQuiz.findByPk(id, {
+    include: [{
+      model: Course,
+      as: 'course',
+      include: [{ model: Training, as: 'program' }]
+    }]
+  });
   if (!quiz) { res.status(404).json({ error: 'Quiz not found' }); return null; }
+  if (!quiz.isPublished) { res.status(403).json({ error: 'Quiz not published' }); return null; }
   if (!quiz.courseId) { res.status(403).json({ error: 'Quiz not associated with a course' }); return null; }
+  
   // Must be enrolled in the quiz's course.
   const enrollment = await Enrollment.findOne({
     where: { courseId: quiz.courseId, participantId: req.user.id, status: 'ENROLLED' },
   });
   if (!enrollment) { res.status(403).json({ error: 'You are not enrolled in this course' }); return null; }
+
+  // Check availability
+  const training = quiz.course?.program || (quiz.trainingId ? await Training.findByPk(quiz.trainingId) : null);
+  if (training) {
+    const now = new Date();
+    if (training.startDate && now < new Date(training.startDate)) {
+      res.status(403).json({ error: 'Quiz is not yet available (training program has not started)' });
+      return null;
+    }
+    if (training.endDate && now > new Date(training.endDate)) {
+      res.status(403).json({ error: 'Quiz is no longer available (training program has ended)' });
+      return null;
+    }
+  }
+
   return { quiz, enrollment };
 }
 
@@ -820,18 +847,42 @@ async function startQuiz(req, res) {
       return res.status(403).json({ error: 'Quiz not published' });
     }
 
-    // Reuse an in-progress attempt or create a new one.
-    let [attempt] = await QuizAttempt.findAll({
-      where: { quizId: quiz.id, participantId: req.user.id, status: 'IN_PROGRESS' },
-      order: [['id', 'DESC']],
-      limit: 1,
-    });
-    if (!attempt) {
-      attempt = await QuizAttempt.create({
-        quizId: quiz.id,
-        participantId: req.user.id,
-        status: 'IN_PROGRESS',
+    // Check if completed attempt exists or resume/create in-progress attempt under transaction
+    let attempt;
+    try {
+      await sequelize.transaction(async t => {
+        const completed = await QuizAttempt.findOne({
+          where: { quizId: quiz.id, participantId: req.user.id, status: { [Op.in]: ['SUBMITTED', 'EVALUATED'] } },
+          lock: t.LOCK.UPDATE,
+          transaction: t
+        });
+        if (completed) {
+          const err = new Error('You have already attempted this quiz.');
+          err.status = 403;
+          throw err;
+        }
+
+        const existing = await QuizAttempt.findOne({
+          where: { quizId: quiz.id, participantId: req.user.id, status: 'IN_PROGRESS' },
+          lock: t.LOCK.UPDATE,
+          transaction: t
+        });
+
+        if (existing) {
+          attempt = existing;
+        } else {
+          attempt = await QuizAttempt.create({
+            quizId: quiz.id,
+            participantId: req.user.id,
+            status: 'IN_PROGRESS',
+          }, { transaction: t });
+        }
       });
+    } catch (transError) {
+      if (transError.status) {
+        return res.status(transError.status).json({ error: transError.message });
+      }
+      throw transError;
     }
 
     const questions = await AIQuestion.findAll({
@@ -874,21 +925,30 @@ async function submitQuiz(req, res) {
     if (!Array.isArray(answers)) {
       return res.status(422).json({ error: 'answers[] is required' });
     }
-    const attempt = await QuizAttempt.findOne({
-      where: { id: attemptId, quizId: quiz.id, participantId: req.user.id },
-    });
-    if (!attempt) return res.status(404).json({ error: 'Attempt not found' });
-    if (attempt.status === 'SUBMITTED') {
-      return res.status(409).json({ error: 'Quiz already submitted' });
-    }
-
     const questions = await AIQuestion.findAll({ where: { quizId: quiz.id } });
     const correctByQ = Object.fromEntries(questions.map(q => [String(q.id), q.correctAnswer]));
 
     let correct = 0;
     const total = questions.length;
 
+    let attempt;
     await sequelize.transaction(async t => {
+      attempt = await QuizAttempt.findOne({
+        where: { id: attemptId, quizId: quiz.id, participantId: req.user.id },
+        lock: t.LOCK.UPDATE,
+        transaction: t
+      });
+      if (!attempt) {
+        const err = new Error('Attempt not found');
+        err.status = 404;
+        throw err;
+      }
+      if (attempt.status === 'SUBMITTED' || attempt.status === 'EVALUATED') {
+        const err = new Error('Quiz already submitted');
+        err.status = 409;
+        throw err;
+      }
+
       // Wipe any prior partial answers for this attempt then recreate.
       await QuizAnswer.destroy({ where: { attemptId: attempt.id }, transaction: t });
 
@@ -965,6 +1025,9 @@ async function submitQuiz(req, res) {
     });
   } catch (e) {
     console.error('submitQuiz:', e.message);
+    if (e.status) {
+      return res.status(e.status).json({ error: e.message });
+    }
     res.status(500).json({ error: 'Failed to submit quiz' });
   }
 }
@@ -984,12 +1047,12 @@ async function getQuizResult(req, res) {
       return res.json({ success: true, status: 'NOT_SUBMITTED', resultStatus: quiz.resultStatus });
     }
 
-    if (quiz.resultStatus !== 'PUBLISHED') {
+    if (!quiz.isResultPublished) {
       return res.json({
         success: true,
         status: 'SUBMITTED_HIDDEN',
         resultStatus: 'HIDDEN',
-        message: 'Quiz submitted. Results will be revealed when your trainer publishes them.',
+        message: 'Your quiz has been submitted successfully. Results will be published by the trainer.',
         submittedAt: attempt.submittedAt,
       });
     }

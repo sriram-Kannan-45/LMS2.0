@@ -108,6 +108,9 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false)
   const timerRef = useRef(null)
 
+  /* ── Post-submit result state ────────────────── */
+  const [resultData, setResultData] = useState(null)
+
   /* ── Fullscreen + warning state ──────────────────────────────────────── */
   const [isFullscreen, setIsFullscreen] = useState(!!fsApi.element())
   const [warnings, setWarnings] = useState(0)
@@ -153,10 +156,10 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
         })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error || 'Submit failed')
-        // Best-effort exit fullscreen so result page renders normally.
+        // Best-effort exit fullscreen so result summary renders normally.
         if (fsApi.element()) { try { await fsApi.exit() } catch { /* ignore */ } }
         if (!silent) showSuccess('Quiz submitted successfully!')
-        onSubmit?.(d.result)
+        setResultData(d.result)
       } catch (err) {
         submittedRef.current = false
         if (!silent) showError('Failed to submit quiz: ' + err.message)
@@ -253,6 +256,46 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
     return () => clearInterval(timerRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /* ── Autosave to localStorage ─────────────────────────────────────────── */
+  const PROGRESS_KEY = `quiz_progress_${attemptId}`
+  const autosaveTimerRef = useRef(null)
+
+  // Restore saved answers on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(PROGRESS_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.answers && Object.keys(parsed.answers).length > 0) {
+          setAnswers(parsed.answers)
+        }
+        if (typeof parsed.currentQ === 'number' && parsed.currentQ > 0) {
+          setCurrentQ(parsed.currentQ)
+        }
+      }
+    } catch { /* ignore corrupt data */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Debounced save whenever answers or currentQ change
+  useEffect(() => {
+    if (submittedRef.current) return
+    clearTimeout(autosaveTimerRef.current)
+    autosaveTimerRef.current = setTimeout(() => {
+      try {
+        sessionStorage.setItem(PROGRESS_KEY, JSON.stringify({ answers, currentQ }))
+      } catch { /* storage full — ignore */ }
+    }, 2000)
+    return () => clearTimeout(autosaveTimerRef.current)
+  }, [answers, currentQ, PROGRESS_KEY])
+
+  // Clear saved progress on submit
+  useEffect(() => {
+    if (submittedRef.current) {
+      try { sessionStorage.removeItem(PROGRESS_KEY) } catch { /* ignore */ }
+    }
+  }, [PROGRESS_KEY])
 
   /* ── Helpers / derived state ─────────────────────────────────────────── */
   const handleAnswer = (questionId, value) =>
@@ -736,6 +779,72 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
               <div className="qt-modal__hint">
                 <Loader size={14} className="qt-spin" /> Returning to your dashboard…
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Post-submit result summary ────────────────────────────────── */}
+      <AnimatePresence>
+        {resultData && (
+          <motion.div
+            key="result-bg"
+            className="qt-modal-bg"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              role="dialog"
+              aria-labelledby="qt-result-title"
+              initial={{ scale: 0.95, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 16 }}
+              className="qt-modal qt-modal--result"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: 440, textAlign: 'center' }}
+            >
+              <div
+                className="qt-modal__icon-wrap"
+                style={{
+                  width: 64, height: 64, borderRadius: '50%',
+                  background: resultData.percentage >= 50 ? '#ecfdf5' : '#fef2f2',
+                  color: resultData.percentage >= 50 ? '#16a34a' : '#dc2626',
+                  margin: '0 auto 16px', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <CheckCircle2 size={32} />
+              </div>
+              <h2 id="qt-result-title" className="qt-modal__title" style={{ fontSize: 20 }}>
+                Quiz Submitted
+              </h2>
+              <div style={{ margin: '20px 0', display: 'flex', justifyContent: 'center', gap: 32 }}>
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
+                    {Math.round(resultData.percentage)}%
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Score
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
+                    {resultData.totalScore?.toFixed(0) ?? 0}/{resultData.maxScore ?? 0}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Points
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="qt-foot__btn qt-foot__btn--primary"
+                onClick={() => { setResultData(null); onSubmit?.(resultData) }}
+                style={{ marginTop: 8, width: '100%', justifyContent: 'center' }}
+              >
+                Back to quizzes
+              </button>
             </motion.div>
           </motion.div>
         )}

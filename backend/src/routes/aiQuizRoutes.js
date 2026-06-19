@@ -1,7 +1,9 @@
 const express = require('express');
+const { Op } = require('sequelize');
+const { sequelize } = require('../config/db');
 const multer = require('multer');
 const path = require('path');
-const { AIDocument, AIQuiz, AIQuestion, QuizAttempt, QuizAnswer, QuizResult, Training, User, Course, CourseTrainerAssignment, TrainingTrainerAssignment } = require('../models');
+const { AIDocument, AIQuiz, AIQuestion, AIQuestionOption, QuizAttempt, QuizAnswer, QuizResult, Training, User, Course, CourseTrainerAssignment, TrainingTrainerAssignment, QuizAssignment } = require('../models');
 const authenticateToken = require('../middleware/auth');
 const roleMiddleware = require('../middleware/roles');
 const aiService = require('../services/aiService');
@@ -12,7 +14,8 @@ const { generateAIQuiz } = require('../controllers/aiQuizGenerationController');
 const { uploadAIQuizMaterial } = require('../middleware/uploadAIQuizMaterial');
 
 const { gradeAnswer } = require('../utils/gradeAnswer');
-
+const { areResultsVisible } = require('../utils/quizStateMachine');
+ 
 const router = express.Router();
 
   // Absolute path for uploads directory
@@ -113,6 +116,220 @@ const router = express.Router();
     generateAIQuiz
   );
 
+  // POST /api/ai-quiz/generate-from-document
+  router.post('/generate-from-document',
+    authenticateToken,
+    roleMiddleware('TRAINER'),
+    uploadAIQuizMaterial.single('file'),
+    generateAIQuiz
+  );
+
+  // POST /api/ai-quiz/generate-from-prompt
+  router.post('/generate-from-prompt',
+    authenticateToken,
+    roleMiddleware('TRAINER', 'ADMIN'),
+    async (req, res) => {
+      try {
+        const { prompt, questionCount = 10, difficulty = 'MIXED', courseId, trainingId } = req.body;
+        const trainerId = req.user.id;
+
+        if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+          return res.status(422).json({ error: 'Prompt/Topic cannot be empty.' });
+        }
+
+        const count = parseInt(questionCount, 10);
+        if (isNaN(count) || count < 1 || count > 50) {
+          return res.status(422).json({ error: 'Number of questions must be between 1 and 50.' });
+        }
+
+        // ── Resolve courseId and trainingId ──
+        let resolvedCourseId = courseId || null;
+        let resolvedTrainingId = trainingId || null;
+
+        // Clean up stringified values
+        if (resolvedCourseId === 'undefined' || resolvedCourseId === 'null' || resolvedCourseId === 'NaN' || resolvedCourseId === '') {
+          resolvedCourseId = null;
+        }
+        if (resolvedTrainingId === 'undefined' || resolvedTrainingId === 'null' || resolvedTrainingId === 'NaN' || resolvedTrainingId === '') {
+          resolvedTrainingId = null;
+        }
+
+        if (resolvedCourseId && resolvedTrainingId && String(resolvedCourseId) === String(resolvedTrainingId)) {
+          resolvedCourseId = null;
+        }
+
+        // Fallback: If trainingId was passed but no courseId was provided, check if it's actually a courseId or a trainingId.
+        if (resolvedTrainingId && !resolvedCourseId) {
+          const courseCheck = await Course.findByPk(resolvedTrainingId);
+          if (courseCheck) {
+            resolvedCourseId = resolvedTrainingId;
+            resolvedTrainingId = courseCheck.trainingProgramId;
+          } else {
+            const course = await Course.findOne({ where: { trainingProgramId: resolvedTrainingId } });
+            if (course) {
+              resolvedCourseId = course.id;
+            }
+          }
+        }
+
+        // Perform validation and authorization
+        if (resolvedCourseId) {
+          const course = await Course.findByPk(resolvedCourseId);
+          if (!course) {
+            return res.status(400).json({
+              success: false,
+              error: 'Course not found',
+              details: `The selected course (ID: ${resolvedCourseId}) does not exist.`
+            });
+          }
+
+          // Verify trainer assignment
+          const courseAssigned = await CourseTrainerAssignment.findOne({
+            where: { courseId: resolvedCourseId, trainerId }
+          });
+          const hasCourseAccess = course.trainerId === trainerId || courseAssigned !== null || req.user.role === 'ADMIN';
+          if (!hasCourseAccess) {
+            return res.status(403).json({
+              success: false,
+              error: 'Access denied',
+              details: `You are not authorized to generate quizzes for course (ID: ${resolvedCourseId}).`
+            });
+          }
+
+          resolvedTrainingId = course.trainingProgramId;
+        } else if (resolvedTrainingId) {
+          const training = await Training.findByPk(resolvedTrainingId);
+          if (!training) {
+            return res.status(400).json({
+              success: false,
+              error: 'Training not found',
+              details: `The selected training program (ID: ${resolvedTrainingId}) does not exist.`
+            });
+          }
+
+          // Verify trainer assignment
+          const trainingAssigned = await TrainingTrainerAssignment.findOne({
+            where: { trainingId: resolvedTrainingId, trainerId }
+          });
+          const hasTrainingAccess = training.trainerId === trainerId || training.createdBy === trainerId || trainingAssigned !== null || req.user.role === 'ADMIN';
+          if (!hasTrainingAccess) {
+            return res.status(403).json({
+              success: false,
+              error: 'Access denied',
+              details: `You are not authorized to generate quizzes for training program (ID: ${resolvedTrainingId}).`
+            });
+          }
+        }
+
+        // Coerce difficulty for prompt generation
+        const diffCoerced = difficulty.charAt(0).toUpperCase() + difficulty.slice(1).toLowerCase();
+        const diffUpper = difficulty.toUpperCase();
+
+        console.log(`[aiQuizRoutes] Requesting prompt-quiz generation from AI for: "${prompt}"`);
+        const questions = await aiService.generateQuizFromPrompt(prompt.trim(), count, ['Easy', 'Medium', 'Hard'].includes(diffCoerced) ? diffCoerced : 'Medium');
+
+        if (!questions || questions.length === 0) {
+          return res.status(502).json({
+            error: 'AI service returned no questions',
+            details: 'The prompt was processed but the LLM did not produce any usable questions.'
+          });
+        }
+
+        // Auto-assign training if missing
+        if (!resolvedTrainingId) {
+          console.log(`[aiQuizRoutes] No trainingId provided — attempting auto-assignment for trainer #${trainerId}`);
+          resolvedTrainingId = await resolveTrainingId(trainerId, resolvedTrainingId);
+        }
+
+        // Always resolve corresponding courseId if trainingId is present but courseId is not
+        if (resolvedTrainingId && !resolvedCourseId) {
+          const course = await Course.findOne({ where: { trainingProgramId: resolvedTrainingId } });
+          if (course) {
+            resolvedCourseId = course.id;
+          }
+        }
+
+        console.log(`[aiQuizRoutes] Resolved trainingId=${resolvedTrainingId}, courseId=${resolvedCourseId} for quiz creation`);
+
+        // Save Quiz to database
+        const quiz = await AIQuiz.create({
+          trainerId,
+          trainingId: resolvedTrainingId,
+          courseId: resolvedCourseId,
+          title: `Quiz: ${prompt.trim()}`,
+          numQuestions: questions.length,
+          difficulty: ['EASY', 'MEDIUM', 'HARD', 'MIXED'].includes(diffUpper) ? diffUpper : 'MIXED',
+          status: 'DRAFT',
+          isPublished: false,
+          isActive: true,
+          published: false,
+          createdBy: trainerId
+        });
+
+        console.log(`[aiQuizRoutes] ✅ Quiz #${quiz.id} created as DRAFT — trainingId=${quiz.trainingId}, courseId=${quiz.courseId}, createdBy=${trainerId}`);
+        // NOTE: quiz_assignments are created per-participant when trainer clicks "Send Quiz"
+
+        console.log(`[aiQuizRoutes] Saving ${questions.length} prompt-generated questions for quiz #${quiz.id}...`);
+        for (let i = 0; i < questions.length; i++) {
+          const q = questions[i];
+          
+          // Extract options and correct answer
+          const optionA = q.optionA || q.option_a || '';
+          const optionB = q.optionB || q.option_b || '';
+          const optionC = q.optionC || q.option_c || '';
+          const optionD = q.optionD || q.option_d || '';
+          const optionsList = [optionA, optionB, optionC, optionD].filter(Boolean);
+
+          const rawCorrect = q.correctAnswer || q.correct_answer || '';
+          
+          // Map correct answer text to options index (0-3)
+          let correctIdx = 0;
+          const idx = optionsList.findIndex(opt => String(opt).trim().toLowerCase() === String(rawCorrect).trim().toLowerCase());
+          if (idx >= 0) {
+            correctIdx = idx;
+          } else if (['0', '1', '2', '3'].includes(String(rawCorrect))) {
+            correctIdx = parseInt(rawCorrect, 10);
+          } else if (['A', 'B', 'C', 'D'].includes(String(rawCorrect).toUpperCase())) {
+            correctIdx = String(rawCorrect).toUpperCase().charCodeAt(0) - 65;
+          }
+
+          const savedQuestion = await AIQuestion.create({
+            quizId: quiz.id,
+            questionText: q.question || q.questionText || `Question ${i + 1}`,
+            questionType: 'MCQ',
+            options: optionsList,
+            correctAnswer: String(correctIdx),
+            explanation: q.explanation || '',
+            difficulty: q.difficulty || diffUpper || 'MEDIUM',
+            order: i
+          });
+
+          // Also save to AIQuestionOption table if options exist
+          for (let optionIndex = 0; optionIndex < optionsList.length; optionIndex++) {
+            await AIQuestionOption.create({
+              questionId: savedQuestion.id,
+              optionText: String(optionsList[optionIndex]),
+              isCorrect: optionIndex === correctIdx,
+              order: optionIndex
+            });
+          }
+        }
+
+        await quiz.reload({ include: [{ model: AIQuestion, as: 'questions' }] });
+
+        return res.status(201).json({
+          success: true,
+          message: `Quiz "${quiz.title}" generated successfully from prompt with ${questions.length} questions`,
+          quiz
+        });
+
+      } catch (error) {
+        console.error('Prompt generation endpoint error:', error);
+        res.status(500).json({ error: error.message });
+      }
+    }
+  );
+
   // POST /api/ai-quiz/trainer/upload-document
   router.post('/trainer/upload-document',
     authenticateToken,
@@ -176,6 +393,10 @@ const router = express.Router();
       }
       if (resolvedTrainingId === 'undefined' || resolvedTrainingId === 'null' || resolvedTrainingId === 'NaN' || resolvedTrainingId === '') {
         resolvedTrainingId = null;
+      }
+
+      if (resolvedCourseId && resolvedTrainingId && String(resolvedCourseId) === String(resolvedTrainingId)) {
+        resolvedCourseId = null;
       }
 
       // Fallback: If trainingId was passed but no courseId was provided, check if it's actually a courseId or a trainingId.
@@ -248,6 +469,22 @@ const router = express.Router();
         }
       }
 
+      // Auto-assign training if still missing
+      if (!resolvedTrainingId) {
+        console.log(`[aiQuizRoutes/upload] No trainingId provided — attempting auto-assignment for trainer #${trainerId}`);
+        resolvedTrainingId = await resolveTrainingId(trainerId, resolvedTrainingId);
+      }
+
+      // Always resolve corresponding courseId if trainingId is present but courseId is not
+      if (resolvedTrainingId && !resolvedCourseId) {
+        const course = await Course.findOne({ where: { trainingProgramId: resolvedTrainingId } });
+        if (course) {
+          resolvedCourseId = course.id;
+        }
+      }
+
+      console.log(`[aiQuizRoutes/upload] Resolved trainingId=${resolvedTrainingId}, courseId=${resolvedCourseId}`);
+
       const document = await AIDocument.create({
         trainerId,
         trainingId: resolvedTrainingId,
@@ -266,14 +503,26 @@ const router = express.Router();
         title: `Quiz: ${req.file.originalname}`,
         numQuestions: parseInt(numQuestions),
         difficulty,
-        status: 'DRAFT'
+        status: 'PUBLISHED',
+        isPublished: true,
+        isActive: true,
+        published: true, // legacy compatibility
+        publishedAt: new Date(),
+        createdBy: trainerId
       });
+
+      console.log(`[aiQuizRoutes/upload] ✅ Quiz #${quiz.id} created — trainingId=${quiz.trainingId}, courseId=${quiz.courseId}, isPublished=${quiz.isPublished}, isActive=${quiz.isActive}, createdBy=${trainerId}`);
+
+      // Create quiz_assignment record
+      if (resolvedTrainingId) {
+        await ensureQuizAssignment(quiz.id, resolvedTrainingId);
+      }
 
       try {
         // Strip image references that might confuse the AI. Keep newlines and
         // sentence punctuation intact — the Python service does the heavier
         // text normalization, and over-cleaning here was destroying context.
-        let cleanContent = content.substring(0, 15000);
+        let cleanContent = content;
         // Remove image filename patterns (image.png, fig1.jpg, etc.)
         cleanContent = cleanContent.replace(/\b(image|img|fig|figure)\d*\.(png|jpg|jpeg|gif|bmp|webp|svg)\b/gi, ' ');
         cleanContent = cleanContent.replace(/\b(image|img|fig|figure)\s*\d+\.(png|jpg|jpeg|gif|bmp|webp|svg)\b/gi, ' ');
@@ -396,18 +645,234 @@ router.put('/trainer/quiz/:id',
   }
 );
 
+// DELETE /api/ai-quiz/trainer/quiz/:id
+router.delete('/trainer/quiz/:id',
+  authenticateToken,
+  roleMiddleware('TRAINER'),
+  async (req, res) => {
+    try {
+      const { QuizAssignment, QuizAttempt, QuizAnswer, QuizResult, AIQuestion, AIQuestionOption, AIDocument } = require('../models');
+      const quiz = await AIQuiz.findOne({
+        where: { id: req.params.id, trainerId: req.user.id }
+      });
+      if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+      const quizId = quiz.id;
+
+      // Delete in dependency order
+      const attempts = await QuizAttempt.findAll({ where: { quizId } });
+      for (const attempt of attempts) {
+        await QuizAnswer.destroy({ where: { attemptId: attempt.id } });
+        await QuizResult.destroy({ where: { attemptId: attempt.id } });
+      }
+      await QuizAttempt.destroy({ where: { quizId } });
+      await QuizResult.destroy({ where: { quizId } });
+      await QuizAssignment.destroy({ where: { quizId } });
+
+      const questions = await AIQuestion.findAll({ where: { quizId } });
+      for (const q of questions) {
+        await AIQuestionOption.destroy({ where: { questionId: q.id } });
+      }
+      await AIQuestion.destroy({ where: { quizId } });
+      await quiz.destroy();
+
+      console.log(`[DELETE quiz] ✅ Quiz #${quizId} and all related records deleted by trainer #${req.user.id}`);
+      res.json({ success: true, message: 'Quiz deleted successfully' });
+    } catch (error) {
+      console.error('[DELETE quiz] Error:', error.message);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// POST /api/ai-quiz/trainer/quiz/:id/send
+// POST /api/ai-quiz/trainer/quiz/:id/send
+// Assigns quiz to ALL participants enrolled in the quiz's training/course,
+// then marks the quiz as PUBLISHED so participants can see it.
+router.post('/trainer/quiz/:id/send',
+  authenticateToken,
+  roleMiddleware('TRAINER'),
+  async (req, res) => {
+    try {
+      const { Enrollment, QuizAssignment, Course } = require('../models');
+      const { Op } = require('sequelize');
+
+      const quiz = await AIQuiz.findOne({
+        where: { id: req.params.id, trainerId: req.user.id }
+      });
+      if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+      if (!quiz.courseId && !quiz.trainingId) {
+        return res.status(400).json({ error: 'Quiz has no training or course association. Cannot determine participants.' });
+      }
+
+      // Collect all course IDs that belong to this training
+      let courseIds = quiz.courseId ? [quiz.courseId] : [];
+      if (quiz.trainingId && !quiz.courseId) {
+        const relatedCourses = await Course.findAll({
+          where: { trainingProgramId: quiz.trainingId },
+          attributes: ['id']
+        });
+        courseIds = relatedCourses.map(c => c.id);
+      }
+
+      // Build OR conditions for enrollment lookup
+      const enrollmentOrConditions = [];
+      if (quiz.trainingId) {
+        enrollmentOrConditions.push({ trainingId: quiz.trainingId });
+      }
+      if (courseIds.length > 0) {
+        enrollmentOrConditions.push({ courseId: courseIds });
+      }
+
+      const enrollments = await Enrollment.findAll({
+        where: {
+          status: { [Op.in]: ['ENROLLED', 'COMPLETED', 'PENDING'] },
+          [Op.or]: enrollmentOrConditions.length > 0 ? enrollmentOrConditions : [{ id: null }]
+        },
+        attributes: ['participantId'],
+      });
+
+      // Deduplicate participant IDs
+      const participantIds = [...new Set(enrollments.map(e => String(e.participantId)))];
+      console.log(`[send quiz] Quiz #${quiz.id} — found ${participantIds.length} enrolled participants`);
+
+      if (participantIds.length === 0) {
+        // Still publish the quiz so it shows up once someone enrolls
+        await quiz.update({
+          isPublished: true,
+          published: true,
+          status: 'PUBLISHED',
+          publishedAt: new Date(),
+        });
+        return res.json({
+          success: true,
+          message: 'Quiz published. No enrolled participants found yet — they will see it when they enroll.',
+          participantCount: 0,
+        });
+      }
+
+      // Upsert one quiz_assignment row per participant
+      let assignedCount = 0;
+      for (const participantId of participantIds) {
+        const [, created] = await QuizAssignment.findOrCreate({
+          where: { quizId: quiz.id, participantId },
+          defaults: { quizId: quiz.id, participantId, status: 'PENDING' },
+        });
+        if (created) assignedCount++;
+      }
+
+      // Mark quiz as PUBLISHED
+      await quiz.update({
+        isPublished: true,
+        published: true,
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+      });
+
+      // Emit real-time update so participant dashboards refresh
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          io.emit('quiz:published', { quizId: quiz.id, trainingId: quiz.trainingId });
+        }
+      } catch (_) {}
+
+      console.log(`[send quiz] ✅ Quiz #${quiz.id} published. Assigned to ${assignedCount} new participants (${participantIds.length} total enrolled).`);
+      res.json({
+        success: true,
+        message: `Quiz sent to ${participantIds.length} participant(s)`,
+        participantCount: participantIds.length,
+        newAssignments: assignedCount,
+      });
+    } catch (error) {
+      console.error('[send quiz] Error:', error.message);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+// POST /api/ai-quiz/trainer/quiz/:id/publish-result
+// Reveals scores and correct answers to participants.
+router.post('/trainer/quiz/:id/publish-result',
+  authenticateToken,
+  roleMiddleware('TRAINER'),
+  async (req, res) => {
+    try {
+      const quiz = await AIQuiz.findOne({
+        where: { id: req.params.id, trainerId: req.user.id }
+      });
+      if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+      if (!quiz.isPublished) {
+        return res.status(400).json({ error: 'Quiz must be sent to participants before publishing results.' });
+      }
+
+      await quiz.update({
+        isResultPublished: true,
+        resultPublishedAt: new Date(),
+      });
+
+      // Emit real-time update
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          io.emit('quiz:results:published', { quizId: quiz.id, trainingId: quiz.trainingId });
+        }
+      } catch (_) {}
+
+      console.log(`[publish-result] ✅ Results published for quiz #${quiz.id} by trainer #${req.user.id}`);
+      res.json({ success: true, message: 'Results published. Participants can now view their scores.' });
+    } catch (error) {
+      console.error('[publish-result] Error:', error.message);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
 // POST /api/ai-quiz/participant/start/:quizId
 router.post('/participant/start/:quizId',
   authenticateToken,
   roleMiddleware('PARTICIPANT'),
   async (req, res) => {
     try {
+      const { Course, Training, QuizAssignment } = require('../models');
       const quiz = await AIQuiz.findOne({
         where: { id: req.params.quizId, status: 'PUBLISHED' },
-        include: [{ model: AIQuestion, as: 'questions' }]
+        include: [
+          { model: AIQuestion, as: 'questions' },
+          { model: Course, as: 'course', include: [{ model: Training, as: 'program' }] }
+        ]
       });
 
       if (!quiz) return res.status(404).json({ error: 'Quiz not found or not available' });
+
+      // Verify participant has a pending assignment for this quiz
+      const assignment = await QuizAssignment.findOne({
+        where: { quizId: quiz.id, participantId: req.user.id, status: 'PENDING' }
+      });
+      if (!assignment) {
+        return res.status(403).json({ error: 'This quiz has not been assigned to you' });
+      }
+
+      // Time window check on the quiz itself
+      const now = new Date();
+      if (quiz.startTime && now < new Date(quiz.startTime)) {
+        return res.status(403).json({ error: 'Quiz is not yet available' });
+      }
+      if (quiz.endTime && now > new Date(quiz.endTime)) {
+        return res.status(403).json({ error: 'Quiz availability window has ended' });
+      }
+
+      // Training dates check
+      const training = quiz.course?.program || (quiz.trainingId ? await Training.findByPk(quiz.trainingId) : null);
+      if (training) {
+        if (training.startDate && now < new Date(training.startDate)) {
+          return res.status(403).json({ error: 'Quiz is not yet available (training program has not started)' });
+        }
+        if (training.endDate && now > new Date(training.endDate)) {
+          return res.status(403).json({ error: 'Quiz is no longer available (training program has ended)' });
+        }
+      }
 
       console.log(`[participant/start] Quiz #${quiz.id} "${quiz.title}" has ${quiz.questions?.length ?? 0} questions`);
 
@@ -429,7 +894,6 @@ router.post('/participant/start/:quizId',
       const deviceFingerprint = (req.body?.deviceFingerprint || '').toString().slice(0, 512) || null;
 
       // Compute expiry: timeLimit minutes + 15 min buffer; fallback 3 h.
-      const now = new Date();
       const minutes = Number.isFinite(quiz.timeLimit) && quiz.timeLimit > 0 ? quiz.timeLimit : 0;
       const ttlMs = minutes > 0 ? (minutes + 15) * 60_000 : 3 * 60 * 60_000;
       const expiresAt = new Date(now.getTime() + ttlMs);
@@ -570,13 +1034,31 @@ router.post('/participant/submit/:attemptId',
       });
       if (!attempt) return res.status(404).json({ error: 'Attempt not found' });
 
+      const { Course, Training } = require('../models');
       const quiz = await AIQuiz.findByPk(attempt.quizId, {
-        include: [{ model: AIQuestion, as: 'questions' }]
+        include: [
+          { model: AIQuestion, as: 'questions' },
+          { model: Course, as: 'course', include: [{ model: Training, as: 'program' }] }
+        ]
       });
 
+      if (!quiz || (quiz.status !== 'PUBLISHED' && quiz.status !== 'CLOSED')) {
+        return res.status(403).json({ error: 'Quiz is not available for submission' });
+      }
+
+      // Check availability
+      const training = quiz.course?.program || (quiz.trainingId ? await Training.findByPk(quiz.trainingId) : null);
+      if (training) {
+        const now = new Date();
+        if (training.startDate && now < new Date(training.startDate)) {
+          return res.status(403).json({ error: 'Quiz is not yet available (training program has not started)' });
+        }
+      }
+
       let totalScore = 0;
+      let maxScore = 0;
       const questionsMap = {};
-      quiz.questions.forEach(q => { questionsMap[q.id] = q; });
+      quiz.questions.forEach(q => { questionsMap[q.id] = q; maxScore += (q.marks || 1); });
 
       for (const ans of answers) {
         const question = questionsMap[ans.questionId];
@@ -585,6 +1067,7 @@ router.post('/participant/submit/:attemptId',
         let score = 0;
         let feedback = '';
         let isCorrect = false;
+        const qMarks = question.marks || 1;
 
         if (['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING'].includes(question.questionType)) {
           const result = gradeAnswer(question, {
@@ -594,9 +1077,9 @@ router.post('/participant/submit/:attemptId',
             matches: ans.matches
           });
           isCorrect = result.isCorrect;
-          score = result.score;
+          score = result.score > 0 ? (result.score / 100) * qMarks : 0;
           if (question.questionType === 'MATCHING') {
-            feedback = `Score: ${score}%. Matched ${result.correctCount} of ${result.total} correctly.`;
+            feedback = `Score: ${result.score}%. Matched ${result.correctCount} of ${result.total} correctly.`;
           } else {
             feedback = isCorrect ? 'Correct!' : `Incorrect. Correct answer: ${question.correctAnswer}`;
           }
@@ -625,7 +1108,6 @@ router.post('/participant/submit/:attemptId',
         totalScore += score;
       }
 
-      const maxScore = quiz.questions.length * 100;
       const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
 
       // Compute time taken (seconds) if attempt has a startedAt timestamp.
@@ -690,6 +1172,18 @@ router.post('/participant/submit/:attemptId',
         console.warn('[submit] leaderboard emit failed:', emitErr.message);
       }
 
+      // Mark quiz_assignment as COMPLETED
+      try {
+        const { QuizAssignment } = require('../models');
+        await QuizAssignment.update(
+          { status: 'COMPLETED' },
+          { where: { quizId: quiz.id, participantId: req.user.id } }
+        );
+        console.log(`[submit] ✅ Quiz assignment marked COMPLETED for participant #${req.user.id}, quiz #${quiz.id}`);
+      } catch (qaErr) {
+        console.warn('[submit] Failed to update quiz_assignment:', qaErr.message);
+      }
+
       // Best-effort: mark the assessment session EXPIRED so the participant
       // is no longer locked to this device. Skipped if no session existed
       // (legacy / proctored flow without X-Assessment-Session).
@@ -739,54 +1233,107 @@ router.get('/leaderboard/:quizId',
 );
 
 // GET /api/ai-quiz/participant/quizzes
+// Available → PENDING quiz_assignments (with status=PUBLISHED, within time window).
+// Completed → COMPLETED quiz_assignments. Results only visible when status=RESULTS_PUBLISHED
+// or showResultImmediately=true.
 router.get('/participant/quizzes',
   authenticateToken,
   roleMiddleware('PARTICIPANT'),
   async (req, res) => {
     try {
-      const { Op } = require('sequelize');
-      const { Enrollment } = require('../models');
+      const { QuizAssignment, AIQuestion, Training, QuizResult } = require('../models');
 
-      const enrollments = await Enrollment.findAll({
-        where: { participantId: req.user.id, status: 'ENROLLED' }
+      const participantId = req.user.id;
+      const now = new Date();
+
+      // Find pending assignments
+      const pendingAssignments = await QuizAssignment.findAll({
+        where: { participantId, status: 'PENDING' },
+        attributes: ['quizId']
       });
-      const courseIds = enrollments.map(e => e.courseId).filter(Boolean);
-      const trainingIds = enrollments.map(e => e.trainingId).filter(Boolean);
 
-      console.log(`[participant/quizzes] participantId=${req.user.id}, enrolledCourses=[${courseIds.join(',')}], enrolledTrainings=[${trainingIds.join(',')}]`);
+      // Find completed assignments
+      const completedAssignments = await QuizAssignment.findAll({
+        where: { participantId, status: 'COMPLETED' },
+        attributes: ['quizId']
+      });
 
-      // Only show PUBLISHED quizzes belonging to a course (or legacy training)
-      // the participant is actually enrolled in. No global/unscoped quizzes.
-      const orConds = [];
-      if (courseIds.length) orConds.push({ courseId: courseIds });
-      if (trainingIds.length) orConds.push({ trainingId: trainingIds });
-      if (orConds.length === 0) {
-        return res.json({ quizzes: [] });
+      const pendingQuizIds = pendingAssignments.map(a => a.quizId);
+      const completedQuizIds = completedAssignments.map(a => a.quizId);
+
+      // Available quizzes: PUBLISHED + within time window + assigned
+      const quizzes = pendingQuizIds.length > 0
+        ? await AIQuiz.findAll({
+            where: {
+              id: pendingQuizIds,
+              status: 'PUBLISHED',
+              isActive: true,
+              [Op.and]: [
+                sequelize.where(sequelize.fn('COALESCE', sequelize.col('start_time'), sequelize.fn('NOW')), '<=', now),
+                sequelize.where(sequelize.fn('COALESCE', sequelize.col('end_time'), sequelize.fn('NOW')), '>=', now),
+              ]
+            },
+            include: [
+              { model: AIQuestion, as: 'questions', attributes: ['id', 'questionText', 'questionType', 'options', 'difficulty', 'order', 'marks'] },
+              { model: Training, as: 'training', attributes: ['id', 'title'] }
+            ],
+            order: [['created_at', 'DESC']]
+          })
+        : [];
+
+      // Completed quizzes with results gating
+      let completedQuizzes = [];
+      if (completedQuizIds.length > 0) {
+        const quizRows = await AIQuiz.findAll({
+          where: { id: completedQuizIds, isActive: true },
+          include: [
+            { model: AIQuestion, as: 'questions', attributes: ['id', 'questionText', 'questionType', 'options', 'difficulty', 'order', 'marks'] },
+            { model: Training, as: 'training', attributes: ['id', 'title'] }
+          ],
+          order: [['created_at', 'DESC']]
+        });
+
+        // Fetch participant's best result for each completed quiz
+        const resultRows = await QuizResult.findAll({
+          where: { participantId, quizId: completedQuizIds },
+          attributes: ['quizId', 'percentage', 'totalScore', 'maxScore', 'evaluatedAt'],
+          order: [['percentage', 'DESC']]
+        });
+        const bestResultByQuiz = {};
+        for (const r of resultRows) {
+          if (!bestResultByQuiz[r.quizId]) {
+            bestResultByQuiz[r.quizId] = {
+              percentage: parseFloat(r.percentage),
+              totalScore: parseFloat(r.totalScore),
+              maxScore: parseFloat(r.maxScore),
+              evaluatedAt: r.evaluatedAt,
+            };
+          }
+        }
+
+        completedQuizzes = quizRows.map(q => {
+          const json = q.toJSON();
+          const canSeeResult = areResultsVisible(q);
+          return {
+            ...json,
+            myResult: canSeeResult ? (bestResultByQuiz[q.id] || null) : null,
+            completionPercent: bestResultByQuiz[q.id]?.percentage ?? 100,
+            _resultLocked: !canSeeResult,
+          };
+        });
       }
-      const whereClause = { status: 'PUBLISHED', [Op.or]: orConds };
 
-      const quizzes = await AIQuiz.findAll({
-        where: whereClause,
-        include: [
-          // CRITICAL: include questions so participants can see the count and take the quiz
-          { model: AIQuestion, as: 'questions', attributes: ['id', 'questionText', 'questionType', 'options', 'correctAnswer', 'explanation', 'difficulty', 'order'] },
-          { model: Training, as: 'training', attributes: ['id', 'title'] }
-        ],
-        order: [['created_at', 'DESC']]
-      });
+      console.log(`[participant/quizzes] Available: ${quizzes.length}, Completed: ${completedQuizzes.length}`);
 
-      console.log(`[participant/quizzes] Found ${quizzes.length} PUBLISHED quizzes`);
-      quizzes.forEach(q => {
-        console.log(`  → Quiz #${q.id} "${q.title}" has ${q.questions?.length ?? 0} questions`);
-      });
-
-      res.json({ quizzes });
+      res.json({ quizzes, completedQuizzes });
     } catch (error) {
       console.error('[participant/quizzes] Error:', error.message);
+      console.error('[participant/quizzes] Stack:', error.stack);
       res.status(500).json({ error: error.message });
     }
   }
 );
+
 
 // ════════════════════════════════════════════════════════════════════════════
 // PARTICIPANT ANALYTICS & GLOBAL LEADERBOARD (additive — student dashboard)
@@ -1056,5 +1603,47 @@ router.post('/admin/reset-session/:sessionId',
     }
   }
 );
+
+// Helper: ensure a quiz_assignment record exists for a quiz + training
+async function ensureQuizAssignment(quizId, trainingId) {
+  if (!quizId) return;
+  if (!trainingId) {
+    console.log(`[quizAssignment] Skipping — no trainingId for quiz #${quizId}`);
+    return;
+  }
+  const existing = await QuizAssignment.findOne({
+    where: { quizId, trainingId }
+  });
+  if (!existing) {
+    await QuizAssignment.create({ quizId, trainingId });
+    console.log(`[quizAssignment] ✅ Created assignment: quiz #${quizId} → training #${trainingId}`);
+  } else {
+    console.log(`[quizAssignment] ℹ️  Assignment already exists: quiz #${quizId} → training #${trainingId}`);
+  }
+}
+
+// Helper: if trainingId is null, try to auto-assign from the trainer's first training
+async function resolveTrainingId(trainerId, trainingId) {
+  if (trainingId) return trainingId;
+  const { Op } = require('sequelize');
+  // Try to find the trainer's first training
+  const training = await Training.findOne({
+    where: { [Op.or]: [{ trainerId }, { createdBy: trainerId }] }
+  });
+  if (training) {
+    console.log(`[resolveTrainingId] Auto-assigned training #${training.id} for trainer #${trainerId}`);
+    return training.id;
+  }
+  // Try via trainer assignment
+  const assignment = await TrainingTrainerAssignment.findOne({
+    where: { trainerId }
+  });
+  if (assignment) {
+    console.log(`[resolveTrainingId] Auto-assigned training #${assignment.trainingId} via assignment for trainer #${trainerId}`);
+    return assignment.trainingId;
+  }
+  console.log(`[resolveTrainingId] No training found for trainer #${trainerId}`);
+  return null;
+}
 
 module.exports = router;

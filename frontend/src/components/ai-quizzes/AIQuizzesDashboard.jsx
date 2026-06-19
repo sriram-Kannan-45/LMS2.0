@@ -21,6 +21,7 @@ import { motion } from 'framer-motion';
 import '../../styles/design-tokens.css';
 
 import { useQuizzes } from './hooks/useQuizzes';
+import { useSocketEvent } from '../../hooks/useSocket';
 import PageHeader from './sections/PageHeader';
 import FilterChips from './sections/FilterChips';
 import ErrorBanner from './sections/ErrorBanner';
@@ -39,7 +40,17 @@ const gridVariants = {
 };
 
 export default function AIQuizzesDashboard({ user, onStartQuiz, onLogout, embedded = true }) {
-  const { quizzes, loading, error, startingId, fetchQuizzes, startQuiz } = useQuizzes();
+  const { quizzes, completedQuizzes, loading, error, startingId, fetchQuizzes, startQuiz } = useQuizzes();
+
+  useSocketEvent('quiz:published', () => {
+    fetchQuizzes();
+  }, [fetchQuizzes]);
+
+  useSocketEvent('quiz:results:published', () => {
+    fetchQuizzes();
+  }, [fetchQuizzes]);
+
+  const [activeTab, setActiveTab] = useState('AVAILABLE'); // 'AVAILABLE' | 'COMPLETED'
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
 
@@ -53,32 +64,36 @@ export default function AIQuizzesDashboard({ user, onStartQuiz, onLogout, embedd
   const [pendingSessionToken, setPendingSessionToken] = useState(null);
   const [lockedInfo, setLockedInfo] = useState(null); // { lockedAt }
 
+  const activeList = useMemo(() => {
+    return activeTab === 'AVAILABLE' ? quizzes : completedQuizzes;
+  }, [activeTab, quizzes, completedQuizzes]);
+
   const counts = useMemo(() => {
-    const c = { ALL: quizzes.length };
-    quizzes.forEach((q) => {
+    const c = { ALL: activeList.length };
+    activeList.forEach((q) => {
       const k = (q.difficulty || 'MEDIUM').toUpperCase();
       c[k] = (c[k] || 0) + 1;
     });
     return c;
-  }, [quizzes]);
+  }, [activeList]);
 
   const filteredQuizzes = useMemo(() => {
-    return quizzes.filter((q) => {
+    return activeList.filter((q) => {
       const diff = (q.difficulty || 'MEDIUM').toUpperCase();
       const matchesFilter = filter === 'ALL' || diff === filter;
       const matchesSearch =
         !search.trim() || q.title?.toLowerCase().includes(search.trim().toLowerCase());
       return matchesFilter && matchesSearch;
     });
-  }, [quizzes, filter, search]);
+  }, [activeList, filter, search]);
 
   const totalQuestions = useMemo(
-    () => quizzes.reduce((s, q) => s + (q.questionCount ?? q.questions?.length ?? 0), 0),
-    [quizzes],
+    () => activeList.reduce((s, q) => s + (q.questionCount ?? q.questions?.length ?? 0), 0),
+    [activeList],
   );
   const totalMinutes = useMemo(
-    () => quizzes.reduce((s, q) => s + (q.timeLimit || 30), 0),
-    [quizzes],
+    () => activeList.reduce((s, q) => s + (q.timeLimit || 30), 0),
+    [activeList],
   );
 
   // Reset all flow state back to the list
@@ -148,16 +163,38 @@ export default function AIQuizzesDashboard({ user, onStartQuiz, onLogout, embedd
           {!embedded && <QuizzesTopNav user={user} onLogout={onLogout} />}
 
           <PageHeader
-            quizCount={quizzes.length}
+            quizCount={activeList.length}
             totalMinutes={totalMinutes}
             totalQuestions={totalQuestions}
             loading={loading}
             onRefresh={fetchQuizzes}
+            statusLabel={activeTab === 'AVAILABLE' ? "Available" : "Completed"}
           />
+
+          {!loading && (
+            <div className="qz-tabs">
+              <button
+                type="button"
+                className="qz-tab-btn"
+                data-active={activeTab === 'AVAILABLE' ? "true" : "false"}
+                onClick={() => { setActiveTab('AVAILABLE'); setFilter('ALL'); }}
+              >
+                Available Quizzes ({quizzes.length})
+              </button>
+              <button
+                type="button"
+                className="qz-tab-btn"
+                data-active={activeTab === 'COMPLETED' ? "true" : "false"}
+                onClick={() => { setActiveTab('COMPLETED'); setFilter('ALL'); }}
+              >
+                Completed Quizzes ({completedQuizzes.length})
+              </button>
+            </div>
+          )}
 
           <ErrorBanner message={error} onRetry={fetchQuizzes} />
 
-          {!loading && quizzes.length > 0 && (
+          {!loading && activeList.length > 0 && (
             <div style={{ marginTop: 20 }}>
               <FilterChips
                 filter={filter}
@@ -178,7 +215,9 @@ export default function AIQuizzesDashboard({ user, onStartQuiz, onLogout, embedd
           ) : filteredQuizzes.length === 0 ? (
             <EmptyState
               onRefresh={fetchQuizzes}
-              filtered={quizzes.length > 0 && filteredQuizzes.length === 0}
+              filtered={activeList.length > 0 && filteredQuizzes.length === 0}
+              title={activeTab === 'COMPLETED' && activeList.length === 0 ? 'No completed quizzes' : undefined}
+              description={activeTab === 'COMPLETED' && activeList.length === 0 ? 'You have not completed any quizzes yet.' : undefined}
             />
           ) : (
             <motion.div

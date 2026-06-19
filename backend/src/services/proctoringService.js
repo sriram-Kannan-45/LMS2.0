@@ -126,6 +126,16 @@ async function startSession({ userId, quizId, attemptId, fingerprintHash, ipAddr
     label: 'Exam device',
   });
 
+  // Check if already attempted
+  const completed = await QuizAttempt.findOne({
+    where: { quizId, participantId: userId, status: { [Op.in]: ['SUBMITTED', 'EVALUATED'] } }
+  });
+  if (completed) {
+    const err = new Error('You have already attempted this quiz.');
+    err.status = 403;
+    throw err;
+  }
+
   // Reuse caller-supplied attempt if provided + valid; else create a new one.
   // This avoids creating a second QuizAttempt when the existing AI-quiz
   // start endpoint already created one.
@@ -133,6 +143,11 @@ async function startSession({ userId, quizId, attemptId, fingerprintHash, ipAddr
   if (attemptId) {
     attempt = await QuizAttempt.findOne({
       where: { id: attemptId, participantId: userId, quizId },
+    });
+  }
+  if (!attempt) {
+    attempt = await QuizAttempt.findOne({
+      where: { quizId, participantId: userId, status: 'IN_PROGRESS' }
     });
   }
   if (!attempt) {

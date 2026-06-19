@@ -18,7 +18,7 @@ const QuizAttempt = sequelize.define('QuizAttempt', {
     field: 'participant_id'
   },
   status: {
-    type: DataTypes.ENUM('IN_PROGRESS', 'SUBMITTED', 'EVALUATED'),
+    type: DataTypes.ENUM('IN_PROGRESS', 'SUBMITTED', 'EVALUATED', 'AUTO_SUBMITTED'),
     allowNull: false,
     defaultValue: 'IN_PROGRESS'
   },
@@ -43,7 +43,13 @@ const QuizAttempt = sequelize.define('QuizAttempt', {
   tableName: 'quiz_attempts',
   timestamps: true,
   createdAt: 'created_at',
-  updatedAt: 'updated_at'
+  updatedAt: 'updated_at',
+  indexes: [
+    {
+      unique: true,
+      fields: ['participant_id', 'quiz_id']
+    }
+  ]
 });
 
 module.exports = QuizAttempt;

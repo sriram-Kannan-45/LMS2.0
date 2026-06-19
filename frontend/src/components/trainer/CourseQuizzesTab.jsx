@@ -535,7 +535,7 @@ export default function CourseQuizzesTab({ user, courseId, onCountChange }) {
     try {
       const r = await fetch(API.TRAINER_COURSES.QUIZ(courseId, q.id), { method: 'DELETE', headers: auth() })
       const d = await r.json()
-      if (!r.ok || d.success === false) { showError(d.error || 'Delete failed'); return }
+      if (!r.ok || d.success === false) { showError(d.message || d.error || 'Delete failed'); return }
       success('Quiz deleted')
       await fetchAll()
       onCountChange?.()
@@ -810,13 +810,14 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
     }
     setGenerating(true)
     try {
-      const response = await fetch(API.TRAINER_COURSES.GENERATE_FROM_PROMPT, {
+      const response = await fetch(API.AI_QUIZ.GENERATE_FROM_PROMPT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${user.token}`
         },
         body: JSON.stringify({
+          courseId: courseId,
           trainingId: courseId,
           prompt: promptText.trim(),
           questionCount: parseInt(questionCount, 10),
@@ -828,20 +829,8 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
         throw new Error(data.error || 'Failed to generate quiz')
       }
       
-      // Map AI response format to QuizBuilder format:
-      // AI returns: { success: true, questions: [{ question, optionA, optionB, optionC, optionD, correctAnswer, explanation }] }
-      const formatted = data.questions.map(q => {
-        const options = [q.optionA, q.optionB, q.optionC, q.optionD]
-        return {
-          questionText: q.question,
-          options: options,
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation || ''
-        }
-      })
-      
-      success('AI Quiz questions generated successfully! Loading preview...')
-      onGenerated(formatted, `AI Quiz: ${promptText.substring(0, 30)}`)
+      success('Quiz Created Successfully')
+      onGenerated(null) // trigger reload
       onClose()
     } catch (err) {
       showError(err.message)
@@ -862,11 +851,11 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
     formData.append('file', file)
     formData.append('courseId', courseId)
     formData.append('trainingId', courseId)
-    formData.append('numQuestions', questionCount)
-    formData.append('difficulty', difficulty.toUpperCase())
+    formData.append('questionCount', questionCount)
+    formData.append('difficulty', difficulty)
 
     try {
-      const response = await fetch(API.AI_QUIZ.TRAINER_UPLOAD, {
+      const response = await fetch(API.AI_QUIZ.GENERATE_FROM_DOCUMENT, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${user.token}`
@@ -878,7 +867,7 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
         throw new Error(data.error || 'Failed to generate quiz from document')
       }
       
-      success('Quiz generated from document successfully!')
+      success('Quiz Created Successfully')
       onGenerated(null) // trigger reload
       onClose()
     } catch (err) {

@@ -36,8 +36,14 @@ const {
   Enrollment,
   AIQuiz,
   AIQuestion,
+  AIQuestionOption,
   QuizAttempt,
+  QuizAnswer,
   QuizResult,
+  ExamSession,
+  Violation,
+  ProctorActivity,
+  AssessmentSession,
   User,
 } = require('../models');
 const { TYPE_LIMITS, ROOT: MATERIALS_ROOT } = require('../middleware/uploadMaterial');
@@ -773,16 +779,58 @@ async function deleteCourseQuiz(req, res) {
     const quiz = await AIQuiz.findOne({ where: { id: req.params.quizId, courseId: course.id } });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
-    await Promise.all([
-      AIQuestion.destroy({ where: { quizId: quiz.id } }),
-      QuizAttempt.destroy({ where: { quizId: quiz.id } }),
-      LessonQuiz.destroy({ where: { quizId: quiz.id } }),
-    ]);
-    await quiz.destroy();
-    res.json({ success: true, message: 'Quiz deleted' });
+    const quizId = quiz.id;
+
+    await sequelize.transaction(async (t) => {
+      // 1. Find all dependent entity IDs to handle deep child records
+      const attempts = await QuizAttempt.findAll({ where: { quizId }, transaction: t });
+      const attemptIds = attempts.map(a => a.id);
+
+      const examSessions = await ExamSession.findAll({ where: { quizId }, transaction: t });
+      const examSessionIds = examSessions.map(es => es.id);
+
+      const questions = await AIQuestion.findAll({ where: { quizId }, transaction: t });
+      const questionIds = questions.map(q => q.id);
+
+      const lessonQuizzes = await LessonQuiz.findAll({ where: { quizId }, transaction: t });
+      const lessonQuizIds = lessonQuizzes.map(lq => lq.id);
+
+      // 2. Delete leaf nodes and child records in order of dependency constraints
+      if (examSessionIds.length > 0) {
+        await ProctorActivity.destroy({ where: { sessionId: { [Op.in]: examSessionIds } }, transaction: t });
+        await Violation.destroy({ where: { sessionId: { [Op.in]: examSessionIds } }, transaction: t });
+      }
+
+      await AssessmentSession.destroy({ where: { quizId }, transaction: t });
+      await ExamSession.destroy({ where: { quizId }, transaction: t });
+
+      if (lessonQuizIds.length > 0) {
+        await QuizProgress.destroy({ where: { lessonQuizId: { [Op.in]: lessonQuizIds } }, transaction: t });
+      }
+      await LessonQuiz.destroy({ where: { quizId }, transaction: t });
+
+      if (attemptIds.length > 0) {
+        await QuizAnswer.destroy({ where: { attemptId: { [Op.in]: attemptIds } }, transaction: t });
+      }
+      await QuizResult.destroy({ where: { quizId }, transaction: t });
+      await QuizAttempt.destroy({ where: { quizId }, transaction: t });
+
+      if (questionIds.length > 0) {
+        await AIQuestionOption.destroy({ where: { questionId: { [Op.in]: questionIds } }, transaction: t });
+      }
+      await AIQuestion.destroy({ where: { quizId }, transaction: t });
+
+      // 3. Delete the parent quiz
+      await quiz.destroy({ transaction: t });
+    });
+
+    res.json({ success: true, message: 'Quiz deleted successfully' });
   } catch (e) {
-    console.error('deleteCourseQuiz:', e.message);
-    res.status(500).json({ error: 'Failed to delete quiz' });
+    console.error('deleteCourseQuiz error:', e);
+    res.status(500).json({
+      error: 'Failed to delete quiz',
+      message: e.message || 'Failed to delete quiz'
+    });
   }
 }
 

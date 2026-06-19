@@ -57,6 +57,7 @@ const ProctorActivity = require('./proctorActivity');
 
 // New Enhancements
 const TrainingTrainerAssignment = require('./trainingTrainerAssignment');
+const QuizAssignment = require('./quizAssignment');
 const DiscussionPost = require('./discussionPost');
 const Certificate = require('./certificate');
 const ParticipantTracking = require('./participantTracking');
@@ -153,9 +154,15 @@ AIQuiz.belongsTo(Training, { foreignKey: 'trainingId', as: 'training' }); // leg
 AIQuiz.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
 AIQuiz.belongsTo(Lesson, { foreignKey: 'lessonId', as: 'lesson' });
 AIQuiz.hasMany(AIQuestion, { foreignKey: 'quizId', as: 'questions' });
+AIQuiz.hasMany(QuizAssignment, { foreignKey: 'quizId', as: 'quizAssignments' });
 
 Course.hasMany(AIQuiz, { foreignKey: 'courseId', as: 'quizzes' });
 Lesson.hasMany(AIQuiz, { foreignKey: 'lessonId', as: 'directQuizzes' });
+
+// QuizAssignment associations (per-participant assignment with PENDING/COMPLETED status)
+QuizAssignment.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
+QuizAssignment.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
+User.hasMany(QuizAssignment, { foreignKey: 'participantId', as: 'quizAssignments' });
 
 AIQuestion.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
 AIQuestion.hasMany(AIQuestionOption, { foreignKey: 'questionId', as: 'optionRows' });
@@ -314,6 +321,7 @@ module.exports = {
   CodingViolation,
   PlagiarismReport,
   TrainingTrainerAssignment,
+  QuizAssignment,
   DiscussionPost,
   Certificate,
   ParticipantTracking
