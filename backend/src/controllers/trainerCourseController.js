@@ -842,10 +842,16 @@ async function publishQuizResults(req, res) {
     const quiz = await AIQuiz.findOne({ where: { id: req.params.quizId, courseId: course.id } });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
-    const force = req.body.force === true || req.query.force === 'true';
+    const force = req.body.force === true || req.body.override === true || req.query.force === 'true';
+    const reason = req.body.reason || null;
     const participantIds = await courseParticipantIds(course.id);
-    const completed = await QuizAttempt.count({
-      where: { quizId: quiz.id, status: 'SUBMITTED' },
+
+    // ✅ FIX: Use QuizResult.count — a result row only exists when a participant
+    // fully completes and is graded, regardless of QuizAttempt.status enum value.
+    // The old code counted QuizAttempt{ status:'SUBMITTED' } which missed
+    // attempts stored as 'EVALUATED' or 'AUTO_SUBMITTED'.
+    const completed = participantIds.length === 0 ? 0 : await QuizResult.count({
+      where: { quizId: quiz.id, participantId: participantIds },
     });
     const pending = participantIds.length - completed;
 
@@ -858,10 +864,37 @@ async function publishQuizResults(req, res) {
       });
     }
 
+    const now = new Date();
+    const trainerId = req.user.id;
+
+    // Mark every QuizResult for this quiz as published
+    await QuizResult.update(
+      { resultPublished: true, publishedAt: now, publishedBy: trainerId },
+      { where: { quizId: quiz.id } }
+    );
+
     await quiz.update({
       resultStatus: 'PUBLISHED',
-      status:       'PUBLISHED',
+      status: 'PUBLISHED',
+      isResultPublished: true,
+      resultPublishedAt: now,
     });
+
+    // Write audit log
+    try {
+      const { QuizResultsAudit } = require('../models');
+      await QuizResultsAudit.create({
+        quizId: quiz.id,
+        action: pending > 0 ? 'override_used' : 'published',
+        performedBy: trainerId,
+        enrolledCount: participantIds.length,
+        completedCount: completed,
+        pendingCount: pending,
+        reason: pending > 0 ? (reason || 'Override used without reason') : null,
+      });
+    } catch (auditErr) {
+      console.warn('[publishQuizResults] Audit log failed (non-fatal):', auditErr.message);
+    }
 
     // Notify all enrolled participants
     const io = req.app.get('io');
@@ -876,7 +909,12 @@ async function publishQuizResults(req, res) {
       }, io).catch(() => {}),
     ));
 
-    res.json({ success: true, message: 'Quiz results published', enrolled: participantIds.length, completed });
+    // Emit real-time leaderboard update
+    if (io) {
+      io.emit('quiz:results:published', { quizId: quiz.id, courseId: course.id });
+    }
+
+    res.json({ success: true, message: 'Quiz results published', enrolled: participantIds.length, completed, published_at: now });
   } catch (e) {
     console.error('publishQuizResults:', e.message);
     res.status(500).json({ error: 'Failed to publish quiz results' });
@@ -892,18 +930,50 @@ async function quizDashboard(req, res) {
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
     const participantIds = await courseParticipantIds(course.id);
-    const completed = participantIds.length === 0 ? 0 : await QuizAttempt.count({
-      where: { quizId: quiz.id, participantId: participantIds, status: 'SUBMITTED' },
+
+    // ✅ FIX: Count participants who have a QuizResult row (fully graded) instead of
+    // counting QuizAttempt{ status:'SUBMITTED' }. The AI quiz flow writes EVALUATED
+    // attempts, which were never counted by the old query — making everyone look PENDING.
+    const completed = participantIds.length === 0 ? 0 : await QuizResult.count({
+      where: { quizId: quiz.id, participantId: participantIds },
     });
     const pending = participantIds.length - completed;
+
+    // Average score and pass rate (only meaningful once some results exist)
+    let averageScore = null;
+    let passRate = null;
+    if (completed > 0) {
+      const { fn, col } = require('sequelize');
+      const agg = await QuizResult.findOne({
+        where: { quizId: quiz.id, participantId: participantIds },
+        attributes: [
+          [fn('AVG', col('percentage')), 'avg'],
+        ],
+        raw: true,
+      });
+      averageScore = agg?.avg != null ? parseFloat(parseFloat(agg.avg).toFixed(1)) : null;
+      // Pass rate: % who scored >= 50 (configurable later via quiz.passScore)
+      const passThreshold = quiz.passScore || 50;
+      const passed = await QuizResult.count({
+        where: {
+          quizId: quiz.id,
+          participantId: participantIds,
+          percentage: { [Op.gte]: passThreshold }
+        },
+      });
+      passRate = completed > 0 ? parseFloat(((passed / completed) * 100).toFixed(1)) : null;
+    }
 
     res.json({
       success: true,
       enrolled: participantIds.length,
       completed,
       pending,
+      averageScore,
+      passRate,
       canPublish: participantIds.length > 0 && pending === 0 && quiz.resultStatus === 'HIDDEN',
       resultStatus: quiz.resultStatus,
+      quizTitle: quiz.title,
     });
   } catch (e) {
     console.error('quizDashboard:', e.message);

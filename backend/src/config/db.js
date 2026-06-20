@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Sequelize } = require('sequelize');
+const logger = require('../utils/logger');
 
 const dbName = process.env.DB_NAME || 'training_db';
 const dbUser = process.env.DB_USER || 'root';
@@ -35,10 +36,10 @@ const createDatabase = async () => {
       define: { freezeTableName: true }
     });
     await tempSeq.query(`CREATE DATABASE IF NOT EXISTS ${dbName}`);
-    console.log(`✅ Database '${dbName}' created or already exists`);
+    logger.logAlways(`✅ Database '${dbName}' created or already exists`);
     await tempSeq.close();
   } catch (error) {
-    console.error('❌ Error creating database:', error.message);
+    logger.error('❌ Error creating database', { error: error.message });
   }
 };
 
@@ -46,7 +47,7 @@ const connectDB = async () => {
   try {
     await createDatabase();
     await sequelize.authenticate();
-    console.log('✅ Database connected successfully');
+    logger.logAlways('✅ Database connected successfully');
     
     // ═══════════════════════════════════════════════════════════════════════════════
     // PRODUCTION-READY SYNC CONFIGURATION
@@ -76,20 +77,20 @@ const connectDB = async () => {
       const [oldCols] = await sequelize.query("SHOW COLUMNS FROM `quiz_assignments`");
       const oldColNames = oldCols.map(c => c.Field);
       if (oldColNames.includes('training_id') && !oldColNames.includes('participant_id')) {
-        console.log('♻️ Dropping old-format quiz_assignments (has training_id, needs participant_id)...');
+        logger.info('♻️ Dropping old-format quiz_assignments (has training_id, needs participant_id)...');
         await sequelize.query("DROP TABLE IF EXISTS quiz_assignments");
       }
     } catch (_) {
       // Table doesn't exist yet — nothing to clean up
     }
 
-    console.log('📊 Syncing database schema...');
+    logger.info('📊 Syncing database schema...');
     await sequelize.sync({ 
       alter: false,  // ✅ CRITICAL: Do not alter - causes duplicate indexes
       force: false,  // ✅ CRITICAL: Do not drop - causes data loss
       logging: false
     });
-    console.log('✅ Database schema verified');
+    logger.info('✅ Database schema verified');
     
     // Manual database migration for ai_questions to support new quiz question formats
     try {
@@ -98,28 +99,28 @@ const connectDB = async () => {
       
       // Check and add acceptable_answers column
       if (!columnNames.includes('acceptable_answers')) {
-        console.log('➕ Adding acceptable_answers column to ai_questions...');
+        logger.info('➕ Adding acceptable_answers column to ai_questions...');
         await sequelize.query("ALTER TABLE `ai_questions` ADD COLUMN `acceptable_answers` JSON NULL COMMENT 'Acceptable answers for FILL_BLANK'");
       }
       
       // Check and add pairs column
       if (!columnNames.includes('pairs')) {
-        console.log('➕ Adding pairs column to ai_questions...');
+        logger.info('➕ Adding pairs column to ai_questions...');
         await sequelize.query("ALTER TABLE `ai_questions` ADD COLUMN `pairs` JSON NULL COMMENT 'Pairs for MATCHING question type'");
       }
 
       if (!columnNames.includes('topic')) {
-        console.log('Adding topic column to ai_questions...');
+        logger.info('Adding topic column to ai_questions...');
         await sequelize.query("ALTER TABLE `ai_questions` ADD COLUMN `topic` VARCHAR(255) NULL");
       }
 
       if (!columnNames.includes('blooms_level')) {
-        console.log('Adding blooms_level column to ai_questions...');
+        logger.info('Adding blooms_level column to ai_questions...');
         await sequelize.query("ALTER TABLE `ai_questions` ADD COLUMN `blooms_level` VARCHAR(64) NULL");
       }
 
       if (!columnNames.includes('marks')) {
-        console.log('Adding marks column to ai_questions...');
+        logger.info('Adding marks column to ai_questions...');
         await sequelize.query("ALTER TABLE `ai_questions` ADD COLUMN `marks` INT NOT NULL DEFAULT 1 COMMENT 'Points this question is worth'");
       }
       
@@ -128,14 +129,14 @@ const connectDB = async () => {
       if (questionTypeCol) {
         const typeStr = String(questionTypeCol.Type).toUpperCase();
         if (!typeStr.includes('TRUE_FALSE') || !typeStr.includes('FILL_BLANK') || !typeStr.includes('MATCHING')) {
-          console.log('🔄 Updating question_type ENUM values in ai_questions...');
+          logger.info('🔄 Updating question_type ENUM values in ai_questions...');
           await sequelize.query("ALTER TABLE `ai_questions` MODIFY COLUMN `question_type` ENUM('MCQ', 'SHORT_ANSWER', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING') NOT NULL");
         }
       }
 
       // Manual migration: Ensure unique constraint UNIQUE(participant_id, quiz_id) on quiz_attempts
       try {
-        console.log('📊 Running manual migration for quiz_attempts uniqueness constraint...');
+        logger.info('📊 Running manual migration for quiz_attempts uniqueness constraint...');
         
         // 1. Delete duplicate attempts if they exist, keeping the earliest created one.
         await sequelize.query(`
@@ -157,13 +158,13 @@ const connectDB = async () => {
         `);
         
         if (indices.length === 0) {
-          console.log('➕ Adding unique index idx_participant_quiz_unique to quiz_attempts...');
+          logger.info('➕ Adding unique index idx_participant_quiz_unique to quiz_attempts...');
           await sequelize.query("ALTER TABLE `quiz_attempts` ADD UNIQUE INDEX `idx_participant_quiz_unique` (`participant_id`, `quiz_id`)");
         } else {
-          console.log('✅ Unique index idx_participant_quiz_unique already exists on quiz_attempts');
+          logger.info('✅ Unique index idx_participant_quiz_unique already exists on quiz_attempts');
         }
       } catch (idxError) {
-        console.error('⚠️ Error migrating quiz_attempts unique index:', idxError.message);
+        logger.error('⚠️ Error migrating quiz_attempts unique index', { error: idxError.message });
       }
 
       // Manual database migration for ai_quizzes to support full lifecycle
@@ -172,57 +173,57 @@ const connectDB = async () => {
         const columnNames = columns.map(c => c.Field);
         
         if (!columnNames.includes('is_published')) {
-          console.log('➕ Adding is_published column to ai_quizzes...');
+          logger.info('➕ Adding is_published column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `is_published` TINYINT(1) NOT NULL DEFAULT 0");
         }
         if (!columnNames.includes('is_result_published')) {
-          console.log('➕ Adding is_result_published column to ai_quizzes...');
+          logger.info('➕ Adding is_result_published column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `is_result_published` TINYINT(1) NOT NULL DEFAULT 0");
         }
         if (!columnNames.includes('published_at')) {
-          console.log('➕ Adding published_at column to ai_quizzes...');
+          logger.info('➕ Adding published_at column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `published_at` TIMESTAMP NULL");
         }
         if (!columnNames.includes('result_published_at')) {
-          console.log('➕ Adding result_published_at column to ai_quizzes...');
+          logger.info('➕ Adding result_published_at column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `result_published_at` TIMESTAMP NULL");
         }
 
         // ── New lifecycle columns ──
         if (!columnNames.includes('start_time')) {
-          console.log('➕ Adding start_time column to ai_quizzes...');
+          logger.info('➕ Adding start_time column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `start_time` TIMESTAMP NULL");
         }
         if (!columnNames.includes('end_time')) {
-          console.log('➕ Adding end_time column to ai_quizzes...');
+          logger.info('➕ Adding end_time column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `end_time` TIMESTAMP NULL");
         }
         if (!columnNames.includes('closed_at')) {
-          console.log('➕ Adding closed_at column to ai_quizzes...');
+          logger.info('➕ Adding closed_at column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `closed_at` TIMESTAMP NULL");
         }
         if (!columnNames.includes('total_marks')) {
-          console.log('➕ Adding total_marks column to ai_quizzes...');
+          logger.info('➕ Adding total_marks column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `total_marks` DECIMAL(10,2) NOT NULL DEFAULT 0");
         }
         if (!columnNames.includes('allow_multiple_attempts')) {
-          console.log('➕ Adding allow_multiple_attempts column to ai_quizzes...');
+          logger.info('➕ Adding allow_multiple_attempts column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `allow_multiple_attempts` TINYINT(1) NOT NULL DEFAULT 0");
         }
         if (!columnNames.includes('max_attempts')) {
-          console.log('➕ Adding max_attempts column to ai_quizzes...');
+          logger.info('➕ Adding max_attempts column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `max_attempts` INT NOT NULL DEFAULT 1");
         }
         if (!columnNames.includes('show_result_immediately')) {
-          console.log('➕ Adding show_result_immediately column to ai_quizzes...');
+          logger.info('➕ Adding show_result_immediately column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `show_result_immediately` TINYINT(1) NOT NULL DEFAULT 0");
         }
         if (!columnNames.includes('show_correct_answers_on_result')) {
-          console.log('➕ Adding show_correct_answers_on_result column to ai_quizzes...');
+          logger.info('➕ Adding show_correct_answers_on_result column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `show_correct_answers_on_result` TINYINT(1) NOT NULL DEFAULT 1");
         }
         if (!columnNames.includes('shuffle_questions')) {
-          console.log('➕ Adding shuffle_questions column to ai_quizzes...');
+          logger.info('➕ Adding shuffle_questions column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `shuffle_questions` TINYINT(1) NOT NULL DEFAULT 0");
         }
 
@@ -232,7 +233,7 @@ const connectDB = async () => {
         if (statusCol) {
           const typeStr = String(statusCol.Type).toUpperCase();
           if (!typeStr.includes('RESULTS_PUBLISHED')) {
-            console.log('🔄 Updating status ENUM to include RESULTS_PUBLISHED, ARCHIVED...');
+            logger.info('🔄 Updating status ENUM to include RESULTS_PUBLISHED, ARCHIVED...');
             await sequelize.query(
               "ALTER TABLE `ai_quizzes` MODIFY COLUMN `status` ENUM('DRAFT','PUBLISHED','CLOSED','RESULTS_PUBLISHED','ARCHIVED') NOT NULL DEFAULT 'DRAFT'"
             );
@@ -249,14 +250,14 @@ const connectDB = async () => {
           `);
         } catch (_) {}
       } catch (migQuizError) {
-        console.error('⚠️ Error applying manual schema migrations to ai_quizzes:', migQuizError.message);
+        logger.error('⚠️ Error applying manual schema migrations to ai_quizzes', { error: migQuizError.message });
       }
 
       // Manual migration: quiz_assignments table (per-participant assignment with status)
       try {
         const [tables] = await sequelize.query("SHOW TABLES LIKE 'quiz_assignments'");
         if (tables.length === 0) {
-          console.log('➕ Creating quiz_assignments table...');
+          logger.info('➕ Creating quiz_assignments table...');
           await sequelize.query(`
             CREATE TABLE quiz_assignments (
               id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -278,7 +279,7 @@ const connectDB = async () => {
             const [cols] = await sequelize.query("SHOW COLUMNS FROM `quiz_assignments`");
             const colNames = cols.map(c => c.Field);
             if (colNames.includes('training_id') && !colNames.includes('participant_id')) {
-              console.log('♻️ Recreating quiz_assignments table with new schema...');
+              logger.info('♻️ Recreating quiz_assignments table with new schema...');
               await sequelize.query("DROP TABLE IF EXISTS quiz_assignments");
               await sequelize.query(`
                 CREATE TABLE quiz_assignments (
@@ -296,35 +297,54 @@ const connectDB = async () => {
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
               `);
             } else {
-              console.log('✅ quiz_assignments table already has correct schema');
+              logger.info('✅ quiz_assignments table already has correct schema');
             }
           } catch (checkErr) {
-            console.error('⚠️ Error checking quiz_assignments schema:', checkErr.message);
+            logger.error('⚠️ Error checking quiz_assignments schema', { error: checkErr.message });
           }
         }
       } catch (qaError) {
-        console.error('⚠️ Error creating quiz_assignments table:', qaError.message);
+        logger.error('⚠️ Error creating quiz_assignments table', { error: qaError.message });
       }
 
-      console.log('✅ Manual schema migration checks completed successfully');
+      // Manual database migration for quiz_results (result publication columns)
+      try {
+        const [qrCols] = await sequelize.query("SHOW COLUMNS FROM `quiz_results`");
+        const qrColNames = qrCols.map(c => c.Field);
+        if (!qrColNames.includes('result_published')) {
+          logger.info('➕ Adding result_published column to quiz_results...');
+          await sequelize.query("ALTER TABLE `quiz_results` ADD COLUMN `result_published` BOOLEAN NOT NULL DEFAULT FALSE");
+        }
+        if (!qrColNames.includes('published_at')) {
+          logger.info('➕ Adding published_at column to quiz_results...');
+          await sequelize.query("ALTER TABLE `quiz_results` ADD COLUMN `published_at` DATETIME NULL");
+        }
+        if (!qrColNames.includes('published_by')) {
+          logger.info('➕ Adding published_by column to quiz_results...');
+          await sequelize.query("ALTER TABLE `quiz_results` ADD COLUMN `published_by` BIGINT UNSIGNED NULL");
+        }
+      } catch (qrError) {
+        logger.error('⚠️ Error applying migration to quiz_results', { error: qrError.message });
+      }
+
+      logger.info('✅ Manual schema migration checks completed successfully');
     } catch (migError) {
-      console.error('⚠️ Error applying manual schema migrations to ai_questions:', migError.message);
+      logger.error('⚠️ Error applying manual schema migrations to ai_questions', { error: migError.message });
     }
     
-    
   } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
+    logger.error('❌ Database connection failed', { error: error.message });
     
     // Helpful error message for "too many keys" issue
     if (error.message && error.message.includes('Too many keys specified')) {
-      console.error('\n⚠️  DUPLICATE INDEX DETECTION:');
-      console.error('   The error "Too many keys specified; max 64 keys allowed"');
-      console.error('   indicates duplicate indexes in the database.');
-      console.error('\n💡 SOLUTION:');
-      console.error('   1. Run: node cleanup-duplicate-indexes.js');
-      console.error('   2. Verify all tables show ✅ (under 64 keys)');
-      console.error('   3. Restart the server');
-      console.error('   4. Never use alter: true in production\n');
+      logger.logAlways('\n⚠️  DUPLICATE INDEX DETECTION:');
+      logger.logAlways('   The error "Too many keys specified; max 64 keys allowed"');
+      logger.logAlways('   indicates duplicate indexes in the database.');
+      logger.logAlways('\n💡 SOLUTION:');
+      logger.logAlways('   1. Run: node cleanup-duplicate-indexes.js');
+      logger.logAlways('   2. Verify all tables show ✅ (under 64 keys)');
+      logger.logAlways('   3. Restart the server');
+      logger.logAlways('   4. Never use alter: true in production\n');
     }
     
     process.exit(1);

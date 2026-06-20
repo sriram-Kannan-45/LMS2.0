@@ -454,16 +454,10 @@ async function getCourseOverview(req, res) {
     const quizIds = quizzes.map(q => q.id);
     const [attemptedCount, results] = await Promise.all([
       quizIds.length === 0 ? 0 : QuizAttempt.count({
-        where: { quizId: quizIds, participantId: req.user.id, status: 'SUBMITTED' },
+        where: { quizId: quizIds, participantId: req.user.id },
       }),
       quizIds.length === 0 ? [] : QuizResult.findAll({
-        where: { quizId: quizIds, participantId: req.user.id },
-        include: [{
-          model: AIQuiz, as: 'quiz',
-          where: { courseId: course.id, resultStatus: 'PUBLISHED' },
-          required: true,
-          attributes: [],
-        }],
+        where: { quizId: quizIds, participantId: req.user.id, resultPublished: true },
         attributes: ['percentage'],
       }),
     ]);
@@ -649,8 +643,8 @@ async function listCourseQuizzes(req, res) {
         myScore: showScore ? Number(result.percentage) : null,
       };
     });
-    const available = out.filter(q => q.myStatus !== 'SUBMITTED' && q.myStatus !== 'EVALUATED');
-    const completed = out.filter(q => q.myStatus === 'SUBMITTED' || q.myStatus === 'EVALUATED');
+    const available = out.filter(q => q.myStatus === 'NOT_STARTED');
+    const completed = out.filter(q => q.myStatus !== 'NOT_STARTED');
     res.json({ success: true, quizzes: available, completedQuizzes: completed });
   } catch (e) {
     console.error('listCourseQuizzes:', e.message);
@@ -713,10 +707,16 @@ async function getLessonDetail(req, res) {
 
     // Quiz status per quiz for this participant
     const quizIds = quizzes.map(q => q.id);
-    const attempts = quizIds.length === 0 ? [] : await QuizAttempt.findAll({
-      where: { quizId: quizIds, participantId: req.user.id },
-    });
+    const [attempts, results] = quizIds.length === 0 ? [[], []] : await Promise.all([
+      QuizAttempt.findAll({
+        where: { quizId: quizIds, participantId: req.user.id },
+      }),
+      QuizResult.findAll({
+        where: { quizId: quizIds, participantId: req.user.id, resultPublished: true },
+      })
+    ]);
     const attemptByQuiz = Object.fromEntries(attempts.map(a => [String(a.quizId), a]));
+    const resultByQuiz = Object.fromEntries(results.map(r => [String(r.quizId), r]));
 
     // Assessment submission status per assessment
     const assessmentIds = assessments.map(a => a.id);
@@ -727,6 +727,7 @@ async function getLessonDetail(req, res) {
 
     res.json({
       success: true,
+      trainingProgramId: course.trainingProgramId,
       lesson: {
         id: lesson.id,
         courseId: lesson.courseId,
@@ -738,6 +739,7 @@ async function getLessonDetail(req, res) {
       materials,
       quizzes: quizzes.map(q => {
         const a = attemptByQuiz[String(q.id)];
+        const r = resultByQuiz[String(q.id)];
         return {
           quizId: q.id,
           title: q.title,
@@ -745,6 +747,7 @@ async function getLessonDetail(req, res) {
           isMandatory: q.isMandatory,
           myStatus: a?.status || 'NOT_STARTED',
           resultStatus: q.resultStatus,
+          myScore: r ? Number(r.percentage) : null,
         };
       }),
       assessments: assessments.map(a => {
@@ -847,40 +850,33 @@ async function startQuiz(req, res) {
       return res.status(403).json({ error: 'Quiz not published' });
     }
 
-    // Check if completed attempt exists or resume/create in-progress attempt under transaction
+    // Check if any attempt already exists to prevent duplicate attempt records
     let attempt;
     try {
       await sequelize.transaction(async t => {
-        const completed = await QuizAttempt.findOne({
-          where: { quizId: quiz.id, participantId: req.user.id, status: { [Op.in]: ['SUBMITTED', 'EVALUATED'] } },
+        const existingAttempt = await QuizAttempt.findOne({
+          where: { quizId: quiz.id, participantId: req.user.id },
           lock: t.LOCK.UPDATE,
           transaction: t
         });
-        if (completed) {
+        if (existingAttempt) {
           const err = new Error('You have already attempted this quiz.');
-          err.status = 403;
+          err.status = 400;
           throw err;
         }
 
-        const existing = await QuizAttempt.findOne({
-          where: { quizId: quiz.id, participantId: req.user.id, status: 'IN_PROGRESS' },
-          lock: t.LOCK.UPDATE,
-          transaction: t
-        });
-
-        if (existing) {
-          attempt = existing;
-        } else {
-          attempt = await QuizAttempt.create({
-            quizId: quiz.id,
-            participantId: req.user.id,
-            status: 'IN_PROGRESS',
-          }, { transaction: t });
-        }
+        attempt = await QuizAttempt.create({
+          quizId: quiz.id,
+          participantId: req.user.id,
+          status: 'IN_PROGRESS',
+        }, { transaction: t });
       });
     } catch (transError) {
-      if (transError.status) {
-        return res.status(transError.status).json({ error: transError.message });
+      if (transError.status === 400) {
+        return res.status(400).json({
+          success: false,
+          message: transError.message
+        });
       }
       throw transError;
     }
@@ -1040,7 +1036,11 @@ async function getQuizResult(req, res) {
     const { quiz } = ctx;
 
     const attempt = await QuizAttempt.findOne({
-      where: { quizId: quiz.id, participantId: req.user.id, status: 'SUBMITTED' },
+      where: {
+        quizId: quiz.id,
+        participantId: req.user.id,
+        status: { [Op.in]: ['SUBMITTED', 'EVALUATED', 'AUTO_SUBMITTED', 'COMPLETED', 'GRADED', 'submitted', 'completed', 'evaluated', 'graded'] }
+      },
       order: [['id', 'DESC']],
     });
     if (!attempt) {
@@ -1073,13 +1073,18 @@ async function getQuizResult(req, res) {
       totalScore: result ? Number(result.totalScore) : null,
       maxScore: result ? Number(result.maxScore) : null,
       submittedAt: attempt.submittedAt,
+      correctCount: myAnswers.filter(a => a.isCorrect).length,
+      wrongCount: reviewQuestions.length - myAnswers.filter(a => a.isCorrect).length,
+      passStatus: (result && Number(result.percentage) >= 50) ? 'Pass' : 'Fail',
       review: reviewQuestions.map(q => {
         const my = answerMap[String(q.id)];
         return {
           questionId: q.id,
           questionText: q.questionText,
+          questionType: q.questionType,
           options: q.options,
           correctAnswer: q.correctAnswer,
+          pairs: q.pairs,
           myAnswer: my?.answerText || null,
           mySelectedOption: my?.selectedOption ?? null,
           isCorrect: my?.isCorrect || false,

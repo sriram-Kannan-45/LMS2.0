@@ -260,21 +260,44 @@ router.post('/:id/send', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) =>
     const hasAccess = await verifyTrainerAccess(req, res, quiz);
     if (!hasAccess) return;
 
-    if (!quiz.trainingId) {
-      return res.status(400).json({ error: 'Quiz has no training assigned. Please assign a training first.' });
+    if (!quiz.trainingId && !quiz.courseId) {
+      return res.status(400).json({ error: 'Quiz has no training or course assigned. Please assign one first.' });
     }
 
-    // Find all participants enrolled in this training
+    // Build enrollment lookup conditions — support both trainingId and courseId
+    const enrollmentOrConditions = [];
+    if (quiz.trainingId) {
+      enrollmentOrConditions.push({ trainingId: quiz.trainingId });
+    }
+    if (quiz.courseId) {
+      enrollmentOrConditions.push({ courseId: quiz.courseId });
+    }
+
     const enrollments = await Enrollment.findAll({
-      where: { trainingId: quiz.trainingId, status: 'ENROLLED' }
+      where: {
+        status: 'ENROLLED',
+        [Op.or]: enrollmentOrConditions
+      }
     });
 
     if (enrollments.length === 0) {
-      console.log(`[send] No enrolled participants found for training #${quiz.trainingId}`);
-      return res.status(400).json({ error: 'No participants are enrolled in this training.' });
+      console.log(`[send] No enrolled participants found for training #${quiz.trainingId} / course #${quiz.courseId}`);
+      // Still publish the quiz so it shows up once someone enrolls
+      const now = new Date();
+      await quiz.update({
+        isPublished: true,
+        publishedAt: now,
+        status: 'PUBLISHED',
+        published: true
+      });
+      return res.json({
+        success: true,
+        message: 'Quiz published. No enrolled participants found yet — they will see it when they enroll.',
+        participantCount: 0,
+      });
     }
 
-    const participantIds = enrollments.map(e => e.participantId);
+    const participantIds = [...new Set(enrollments.map(e => e.participantId))];
     console.log(`[send] Found ${participantIds.length} enrolled participants: [${participantIds.join(',')}]`);
 
     // Create quiz_assignment records for each participant
@@ -354,49 +377,198 @@ router.post('/:id/send', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) =>
 });
 
 /**
+ * GET /api/quizzes/:id/results-summary
+ * Live (no-cache) summary of quiz completion status.
+ * Used by PublishDialog and Results tab to show correct counts on every open.
+ * IMPORTANT: never trust cached/prop-passed counts — always query fresh.
+ */
+router.get('/:id/results-summary', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const { fn, col, Op: SeqOp } = require('sequelize');
+    const quiz = await AIQuiz.findByPk(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    const hasAccess = await verifyTrainerAccess(req, res, quiz);
+    if (!hasAccess) return;
+
+    // Resolve the enrolled participant list from Enrollment table
+    const enrollmentWhere = [];
+    if (quiz.courseId)   enrollmentWhere.push({ courseId: quiz.courseId });
+    if (quiz.trainingId) enrollmentWhere.push({ trainingId: quiz.trainingId });
+
+    const enrollments = enrollmentWhere.length > 0
+      ? await Enrollment.findAll({ where: { [Op.or]: enrollmentWhere }, attributes: ['participantId'] })
+      : [];
+
+    const participantIds = [...new Set(enrollments.map(e => String(e.participantId)))];
+    const enrolled = participantIds.length;
+
+    // completed = distinct participants with a QuizResult row (graded/evaluated)
+    const completed = enrolled === 0 ? 0 : await QuizResult.count({
+      where: { quizId: quiz.id, participantId: participantIds },
+    });
+    const pending = enrolled - completed;
+
+    // Average score and pass rate
+    let averageScore = null;
+    let passRate = null;
+    if (completed > 0) {
+      const agg = await QuizResult.findOne({
+        where: { quizId: quiz.id, participantId: participantIds },
+        attributes: [[fn('AVG', col('percentage')), 'avg']],
+        raw: true,
+      });
+      averageScore = agg?.avg != null ? parseFloat(parseFloat(agg.avg).toFixed(1)) : null;
+
+      const passThreshold = quiz.passScore || 50;
+      const passed = await QuizResult.count({
+        where: {
+          quizId: quiz.id,
+          participantId: participantIds,
+          percentage: { [Op.gte]: passThreshold },
+        },
+      });
+      passRate = parseFloat(((passed / completed) * 100).toFixed(1));
+    }
+
+    res.json({
+      success: true,
+      quiz_id: quiz.id,
+      title: quiz.title,
+      enrolled,
+      completed,
+      pending,
+      averageScore,
+      passRate,
+      results_visibility: quiz.resultStatus || 'HIDDEN',
+      can_publish_without_override: pending === 0 && enrolled > 0,
+    });
+  } catch (error) {
+    console.error('[results-summary] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/quizzes/:id/publish-result
- * CLOSED → RESULTS_PUBLISHED. Participants can now view scores.
+ * Publishes results so participants can see their scores.
+ * Accepts: { override: boolean, reason?: string }
+ * Recomputes pending count live — never trusts client-sent numbers.
  */
 router.post('/:id/publish-result', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
   try {
     const quiz = await AIQuiz.findByPk(req.params.id);
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
-    assertTransition(quiz, 'RESULTS_PUBLISHED', 'Quiz must be CLOSED before publishing results');
-
     const hasAccess = await verifyTrainerAccess(req, res, quiz);
     if (!hasAccess) return;
+
+    const override = req.body.override === true || req.body.force === true;
+    const reason   = req.body.reason || null;
+
+    // Recompute live — do not trust any client-sent count
+    const enrollmentWhere = [];
+    if (quiz.courseId)   enrollmentWhere.push({ courseId: quiz.courseId });
+    if (quiz.trainingId) enrollmentWhere.push({ trainingId: quiz.trainingId });
+
+    const enrollments = enrollmentWhere.length > 0
+      ? await Enrollment.findAll({ where: { [Op.or]: enrollmentWhere }, attributes: ['participantId'] })
+      : [];
+    const participantIds = [...new Set(enrollments.map(e => String(e.participantId)))];
+    const enrolled = participantIds.length;
+
+    const completed = enrolled === 0 ? 0 : await QuizResult.count({
+      where: { quizId: quiz.id, participantId: participantIds },
+    });
+    const pending = enrolled - completed;
+
+    if (pending > 0 && !override) {
+      return res.status(400).json({
+        error: 'PENDING_PARTICIPANTS',
+        message: `${pending} participant(s) haven't completed the quiz yet.`,
+        pending_count: pending,
+        enrolled,
+        completed,
+      });
+    }
 
     // Compute rank for each participant based on percentage
     const results = await QuizResult.findAll({
       where: { quizId: quiz.id },
       order: [['percentage', 'DESC']]
     });
+    const now = new Date();
+    const trainerId = req.user.id;
     for (let i = 0; i < results.length; i++) {
-      await results[i].update({ rank: i + 1 });
+      await results[i].update({
+        rank: i + 1,
+        resultPublished: true,
+        publishedAt: now,
+        publishedBy: trainerId,
+      });
     }
 
-    const now = new Date();
     await quiz.update({
       isResultPublished: true,
       resultPublishedAt: now,
       resultStatus: 'PUBLISHED',
-      status: 'RESULTS_PUBLISHED'
+      // Allow from PUBLISHED or CLOSED state (state machine is optional here)
+      ...(quiz.status === 'CLOSED' ? { status: 'RESULTS_PUBLISHED' } : {}),
     });
 
-    const attempts = await QuizAttempt.findAll({
-      where: { quizId: quiz.id },
-      attributes: ['participantId'],
-      group: ['participantId']
-    });
-    const participantIds = attempts.map(a => a.participantId);
+    // Write audit log
+    try {
+      const { QuizResultsAudit } = require('../models');
+      await QuizResultsAudit.create({
+        quizId: quiz.id,
+        action: (pending > 0 && override) ? 'override_used' : 'published',
+        performedBy: trainerId,
+        enrolledCount: enrolled,
+        completedCount: completed,
+        pendingCount: pending,
+        reason: (pending > 0 && override) ? (reason || 'Override used without reason') : null,
+      });
+    } catch (auditErr) {
+      console.warn('[publish-result] Audit log failed (non-fatal):', auditErr.message);
+    }
 
+    // Broadcast updated leaderboard
     const io = req.app.get('io');
-
     if (io) {
+      try {
+        const { User } = require('../models');
+        const buildLeaderboard = async (where) => {
+          const rows = await QuizResult.findAll({
+            where: { ...where, resultPublished: true },
+            include: [{ model: User, as: 'participant', attributes: ['id', 'name'] }],
+            order: [['percentage', 'DESC']]
+          });
+          return rows.map((r, idx) => ({
+            rank: idx + 1,
+            userId: r.participantId,
+            name: r.participant?.name || 'Unknown',
+            score: parseFloat(r.percentage),
+            totalScore: parseFloat(r.totalScore),
+            maxScore: parseFloat(r.maxScore)
+          }));
+        };
+        const quizLb = (await buildLeaderboard({ quizId: quiz.id })).slice(0, 50);
+        io.to(`leaderboard:quiz:${quiz.id}`).emit('leaderboard:update', { scope: 'quiz', id: String(quiz.id), leaderboard: quizLb });
+        if (quiz.trainingId) {
+          const trainingQuizIds = (await AIQuiz.findAll({
+            where: { trainingId: quiz.trainingId },
+            attributes: ['id']
+          })).map(q => q.id);
+          const trainLb = (await buildLeaderboard({ quizId: trainingQuizIds })).slice(0, 50);
+          io.to(`leaderboard:training:${quiz.trainingId}`).emit('leaderboard:update', { scope: 'training', id: String(quiz.trainingId), leaderboard: trainLb });
+        }
+      } catch (emitErr) {
+        console.warn('[publish-result] leaderboard emit failed:', emitErr.message);
+      }
       io.emit('quiz:results:published', { quizId: quiz.id, courseId: quiz.courseId, trainingId: quiz.trainingId });
     }
 
+    // Notify all enrolled participants
     for (const pId of participantIds) {
       try {
         await NotificationService.createNotification({
@@ -412,12 +584,508 @@ router.post('/:id/publish-result', roleMiddleware('TRAINER', 'ADMIN'), async (re
       }
     }
 
-    res.json({ success: true, message: 'Results published successfully', quiz });
+    res.json({ success: true, message: 'Results published successfully', published_at: now, enrolled, completed });
   } catch (error) {
     console.error('Error publishing results:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
+// ── Individual & bulk result management ──────────────────────────────────
+
+
+/**
+ * GET /api/quizzes/:id
+ * Returns full quiz details including questions, course, training, lesson info.
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const { Course, Training } = require('../models');
+    const quiz = await AIQuiz.findByPk(req.params.id, {
+      include: [
+        { model: AIQuestion, as: 'questions', order: [['order', 'ASC'], ['id', 'ASC']] },
+        { model: Course, as: 'course', attributes: ['id', 'title'] },
+        { model: Training, as: 'training', attributes: ['id', 'title'] },
+      ]
+    });
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+    res.json({ quiz });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/quizzes/:id/results
+ * Trainer-only: returns all results for a quiz with participant details,
+ * regardless of publication status (for the trainer results management page).
+ */
+router.get('/:id/results', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const quiz = await AIQuiz.findByPk(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    const hasAccess = await verifyTrainerAccess(req, res, quiz);
+    if (!hasAccess) return;
+
+    const { User } = require('../models');
+    const results = await QuizResult.findAll({
+      where: { quizId: quiz.id },
+      include: [{ model: User, as: 'participant', attributes: ['id', 'name', 'email', 'profilePic'] }],
+      order: [['percentage', 'DESC']]
+    });
+
+    const participantResults = results.map((r, idx) => ({
+      id: r.id,
+      participantId: r.participantId,
+      participantName: r.participant?.name || 'Unknown',
+      participantEmail: r.participant?.email || '',
+      totalScore: parseFloat(r.totalScore),
+      maxScore: parseFloat(r.maxScore),
+      percentage: parseFloat(r.percentage),
+      rank: r.rank || idx + 1,
+      evaluatedAt: r.evaluatedAt,
+      resultPublished: r.resultPublished,
+      publishedAt: r.publishedAt,
+    }));
+
+    res.json({ results: participantResults, quizTitle: quiz.title });
+  } catch (error) {
+    console.error('[results] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/quizzes/:id/publish-participant/:participantId
+ * Trainer-only: publishes a single participant's result.
+ */
+router.post('/:id/publish-participant/:participantId', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const quiz = await AIQuiz.findByPk(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    const hasAccess = await verifyTrainerAccess(req, res, quiz);
+    if (!hasAccess) return;
+
+    const participantId = req.params.participantId;
+    const result = await QuizResult.findOne({
+      where: { quizId: quiz.id, participantId }
+    });
+    if (!result) return res.status(404).json({ error: 'Result not found for this participant' });
+    if (result.resultPublished) {
+      return res.status(409).json({ error: 'Result already published' });
+    }
+
+    const now = new Date();
+    const trainerId = req.user.id;
+
+    // Compute rank for this participant
+    const higherCount = await QuizResult.count({
+      where: { quizId: quiz.id, percentage: { [Op.gt]: result.percentage } },
+    });
+    await result.update({
+      rank: higherCount + 1,
+      resultPublished: true,
+      publishedAt: now,
+      publishedBy: trainerId,
+    });
+
+    // Broadcast updated leaderboard
+    const io = req.app.get('io');
+    if (io) {
+      try {
+        const { User } = require('../models');
+        const buildLeaderboard = async (where) => {
+          const rows = await QuizResult.findAll({
+            where: { ...where, resultPublished: true },
+            include: [{ model: User, as: 'participant', attributes: ['id', 'name'] }],
+            order: [['percentage', 'DESC']]
+          });
+          return rows.map((r, idx) => ({
+            rank: idx + 1,
+            userId: r.participantId,
+            name: r.participant?.name || 'Unknown',
+            score: parseFloat(r.percentage),
+            totalScore: parseFloat(r.totalScore),
+            maxScore: parseFloat(r.maxScore)
+          }));
+        };
+        const quizLb = (await buildLeaderboard({ quizId: quiz.id })).slice(0, 50);
+        io.to(`leaderboard:quiz:${quiz.id}`).emit('leaderboard:update', { scope: 'quiz', id: String(quiz.id), leaderboard: quizLb });
+      } catch (emitErr) {
+        console.warn('[publish-participant] leaderboard emit failed:', emitErr.message);
+      }
+    }
+
+    await NotificationService.createNotification({
+      userId: participantId,
+      message: `Your result for "${quiz.title}" has been published.`,
+      type: 'FEEDBACK_REPLY',
+      actionUrl: quiz.courseId ? `/participant/courses/${quiz.courseId}/quizzes` : '/participant/quizzes',
+      relatedEntityId: quiz.id,
+      relatedEntityType: 'AI_QUIZ'
+    }, io);
+
+    res.json({ success: true, message: 'Result published for participant', participantId });
+  } catch (error) {
+    console.error('[publish-participant] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Question CRUD ─────────────────────────────────────────────────────────
+
+/**
+ * GET /api/quizzes/:id/questions
+ * Returns all questions for a quiz, ordered by `order` ASC.
+ */
+router.get('/:id/questions', async (req, res) => {
+  try {
+    const quizId = req.params.id;
+    const userRole = (req.user.role || '').toUpperCase();
+    const userId = req.user.id;
+
+    console.log(`[GET /api/quizzes/${quizId}/questions] Request by user #${userId}, role: ${userRole}`);
+    console.log(`[GET /api/quizzes/${quizId}/questions] JWT Payload:`, req.user);
+
+    const quiz = await AIQuiz.findByPk(quizId, {
+      attributes: ['id', 'courseId', 'trainingId', 'createdBy', 'status', 'timeLimit', 'title']
+    });
+    if (!quiz) {
+      console.log(`[GET /api/quizzes/${quizId}/questions] Quiz not found: #${quizId}`);
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    if (userRole === 'TRAINER' || userRole === 'ADMIN') {
+      const hasAccess = await verifyTrainerAccess(req, res, quiz);
+      if (!hasAccess) {
+        console.log(`[GET /api/quizzes/${quizId}/questions] Trainer/Admin access denied for user #${userId}`);
+        return; // verifyTrainerAccess already responded with 403
+      }
+
+      const questions = await AIQuestion.findAll({
+        where: { quizId: quiz.id },
+        order: [['order', 'ASC'], ['id', 'ASC']],
+        include: [{ model: AIQuestionOption, as: 'options' }]
+      });
+      console.log(`[GET /api/quizzes/${quizId}/questions] Returning full question details (count: ${questions.length}) for trainer/admin #${userId}`);
+      return res.json({ questions });
+    } else if (userRole === 'PARTICIPANT') {
+      // 1. Check if quiz is published
+      if (quiz.status !== 'PUBLISHED') {
+        console.log(`[GET /api/quizzes/${quizId}/questions] Permission denied: Quiz is not PUBLISHED`);
+        return res.status(403).json({ error: 'Quiz is not published or is currently unavailable.' });
+      }
+
+      // 2. Check enrollment
+      const enrollmentCheck = await Enrollment.findOne({
+        where: {
+          participantId: userId,
+          status: 'ENROLLED',
+          [Op.or]: [
+            ...(quiz.courseId ? [{ courseId: quiz.courseId }] : []),
+            ...(quiz.trainingId ? [{ trainingId: quiz.trainingId }] : []),
+          ]
+        }
+      });
+
+      console.log(`[GET /api/quizzes/${quizId}/questions] Enrollment check result for participant #${userId}:`, enrollmentCheck ? `Enrolled (ID: ${enrollmentCheck.id}, Status: ${enrollmentCheck.status})` : 'Not Enrolled');
+
+      if (!enrollmentCheck) {
+        console.log(`[GET /api/quizzes/${quizId}/questions] Permission denied: Participant #${userId} is not enrolled in course #${quiz.courseId} / training #${quiz.trainingId}`);
+        return res.status(403).json({ error: 'Access denied. You are not enrolled in this training.' });
+      }
+
+      // 3. Check attempt
+      const hasAttempt = await QuizAttempt.findOne({
+        where: { quizId: quiz.id, participantId: userId }
+      });
+
+      console.log(`[GET /api/quizzes/${quizId}/questions] QuizAttempt check result for participant #${userId}:`, hasAttempt ? `Attempt exists (ID: ${hasAttempt.id}, Status: ${hasAttempt.status})` : 'No Attempt');
+
+      if (!hasAttempt) {
+        console.log(`[GET /api/quizzes/${quizId}/questions] Permission denied: Participant #${userId} has no active/existing attempt for quiz #${quizId}`);
+        return res.status(403).json({ error: 'Access denied. Start the quiz attempt first.' });
+      }
+
+      // Fetch questions without correct answers
+      const questions = await AIQuestion.findAll({
+        where: { quizId: quiz.id },
+        attributes: ['id', 'questionText', 'questionType', 'options', 'order', 'pairs', 'marks'],
+        order: [['order', 'ASC'], ['id', 'ASC']]
+      });
+
+      console.log(`[GET /api/quizzes/${quizId}/questions] Permission check result: APPROVED. Returning ${questions.length} questions.`);
+      
+      const apiResponse = {
+        success: true,
+        quiz: {
+          id: quiz.id,
+          title: quiz.title,
+          timeLimit: quiz.timeLimit
+        },
+        questions: questions.map(q => ({
+          id: q.id,
+          questionText: q.questionText,
+          questionType: q.questionType,
+          options: q.options,
+          order: q.order,
+          pairs: q.pairs,
+          marks: q.marks
+        }))
+      };
+
+      return res.json(apiResponse);
+    } else {
+      console.log(`[GET /api/quizzes/${quizId}/questions] Permission denied: Unknown/Unmatched role: ${userRole}`);
+      return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
+    }
+  } catch (error) {
+    console.error(`[GET /api/quizzes/${req.params.id}/questions] Error:`, error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/quizzes/:id/questions
+ * Adds a new question to the quiz.
+ * Body: { questionText, questionType, options?, correctAnswer?, marks?, order?, ... }
+ */
+router.post('/:id/questions', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const quiz = await AIQuiz.findByPk(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    const hasAccess = await verifyTrainerAccess(req, res, quiz);
+    if (!hasAccess) return;
+
+    const { questionText, questionType, options, correctAnswer, acceptableAnswers, pairs, explanation, difficulty, marks, order, answerText } = req.body;
+
+    // Auto-assign order if not provided
+    let questionOrder = order;
+    if (questionOrder == null) {
+      const maxOrder = await AIQuestion.max('order', { where: { quizId: quiz.id } });
+      questionOrder = (maxOrder || 0) + 1;
+    }
+
+    const question = await AIQuestion.create({
+      quizId: quiz.id,
+      questionText,
+      questionType: questionType || 'MCQ',
+      options: options || null,
+      correctAnswer: correctAnswer || answerText || null,
+      acceptableAnswers: acceptableAnswers || null,
+      pairs: pairs || null,
+      explanation: explanation || null,
+      difficulty: difficulty || 'MEDIUM',
+      marks: marks || 1,
+      order: questionOrder,
+    });
+
+    res.status(201).json({ success: true, question });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/questions/:id
+ * Updates a single question.
+ */
+router.put('/questions/:id', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const question = await AIQuestion.findByPk(req.params.id);
+    if (!question) return res.status(404).json({ error: 'Question not found' });
+
+    const quiz = await AIQuiz.findByPk(question.quizId);
+    if (quiz) {
+      const hasAccess = await verifyTrainerAccess(req, res, quiz);
+      if (!hasAccess) return;
+    }
+
+    const { questionText, questionType, options, correctAnswer, acceptableAnswers, pairs, explanation, difficulty, marks, order, answerText } = req.body;
+
+    await question.update({
+      ...(questionText !== undefined && { questionText }),
+      ...(questionType !== undefined && { questionType }),
+      ...(options !== undefined && { options }),
+      ...((correctAnswer !== undefined || answerText !== undefined) && { correctAnswer: correctAnswer ?? answerText ?? question.correctAnswer }),
+      ...(acceptableAnswers !== undefined && { acceptableAnswers }),
+      ...(pairs !== undefined && { pairs }),
+      ...(explanation !== undefined && { explanation }),
+      ...(difficulty !== undefined && { difficulty }),
+      ...(marks !== undefined && { marks }),
+      ...(order !== undefined && { order }),
+    });
+
+    res.json({ success: true, question });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/questions/:id
+ * Deletes a single question.
+ */
+router.delete('/questions/:id', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const question = await AIQuestion.findByPk(req.params.id);
+    if (!question) return res.status(404).json({ error: 'Question not found' });
+
+    const quiz = await AIQuiz.findByPk(question.quizId);
+    if (quiz) {
+      const hasAccess = await verifyTrainerAccess(req, res, quiz);
+      if (!hasAccess) return;
+    }
+
+    await question.destroy();
+    res.json({ success: true, message: 'Question deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/quizzes/:id/questions/reorder
+ * Body: { orderedIds: [1, 2, 3, ...] } — new ordering of question IDs
+ */
+router.post('/:id/questions/reorder', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const quiz = await AIQuiz.findByPk(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    const hasAccess = await verifyTrainerAccess(req, res, quiz);
+    if (!hasAccess) return;
+
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds)) {
+      return res.status(400).json({ error: 'orderedIds must be an array' });
+    }
+
+    for (let i = 0; i < orderedIds.length; i++) {
+      await AIQuestion.update({ order: i }, { where: { id: orderedIds[i], quizId: quiz.id } });
+    }
+
+    res.json({ success: true, message: 'Questions reordered' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Participant listing for a quiz ────────────────────────────────────────
+
+/**
+ * GET /api/quizzes/:id/participants
+ * Returns all enrolled participants for a quiz with their current status.
+ * Status logic:
+ *   - No QuizAssignment record → NOT_STARTED
+ *   - QuizAssignment status=PENDING, no QuizAttempt → NOT_STARTED
+ *   - QuizAttempt status=IN_PROGRESS → IN_PROGRESS
+ *   - QuizAttempt status=SUBMITTED/EVALUATED → SUBMITTED
+ *   - Has QuizResult + resultPublished=false → WAITING_RESULT
+ *   - Has QuizResult + resultPublished=true → RESULT_PUBLISHED
+ */
+router.get('/:id/participants', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const quiz = await AIQuiz.findByPk(req.params.id);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+
+    const hasAccess = await verifyTrainerAccess(req, res, quiz);
+    if (!hasAccess) return;
+
+    const { User, QuizAssignment } = require('../models');
+
+    // Find all enrolled participants
+    const enrollmentWhere = [];
+    if (quiz.courseId) enrollmentWhere.push({ courseId: quiz.courseId });
+    if (quiz.trainingId) enrollmentWhere.push({ trainingId: quiz.trainingId });
+
+    const enrollments = enrollmentWhere.length > 0
+      ? await Enrollment.findAll({ where: { [Op.or]: enrollmentWhere, status: 'ENROLLED' } })
+      : [];
+
+    const participantIds = [...new Set(enrollments.map(e => e.participantId))];
+
+    if (participantIds.length === 0) {
+      return res.json({ participants: [] });
+    }
+
+    const users = await User.findAll({
+      where: { id: participantIds, role: 'PARTICIPANT' },
+      attributes: ['id', 'name', 'email']
+    });
+
+    const assignments = await QuizAssignment.findAll({ where: { quizId: quiz.id } });
+    const attempts = await QuizAttempt.findAll({ where: { quizId: quiz.id } });
+    const results = await QuizResult.findAll({ where: { quizId: quiz.id } });
+
+    const assignmentByUser = {};
+    assignments.forEach(a => { assignmentByUser[a.participantId] = a; });
+
+    const attemptByUser = {};
+    attempts.forEach(a => {
+      if (!attemptByUser[a.participantId] || new Date(a.createdAt) > new Date(attemptByUser[a.participantId].createdAt)) {
+        attemptByUser[a.participantId] = a;
+      }
+    });
+
+    const resultByUser = {};
+    results.forEach(r => { resultByUser[r.participantId] = r; });
+
+    const participants = users.map(user => {
+      const assignment = assignmentByUser[user.id];
+      const attempt = attemptByUser[user.id];
+      const result = resultByUser[user.id];
+
+      let status = 'NOT_STARTED';
+      let submittedAt = null;
+      let score = null;
+      let percentage = null;
+      let totalScore = null;
+      let maxScore = null;
+
+      if (attempt) {
+        if (attempt.status === 'IN_PROGRESS') status = 'IN_PROGRESS';
+        else if (['SUBMITTED', 'EVALUATED', 'AUTO_SUBMITTED', 'COMPLETED', 'GRADED', 'submitted', 'completed', 'evaluated', 'graded'].includes(attempt.status)) {
+          status = 'COMPLETED';
+          submittedAt = attempt.submittedAt;
+        }
+      }
+
+      if (result) {
+        score = parseFloat(result.totalScore);
+        totalScore = parseFloat(result.totalScore);
+        maxScore = parseFloat(result.maxScore);
+        percentage = parseFloat(result.percentage);
+        submittedAt = result.evaluatedAt || submittedAt;
+        // Always mark as completed if a result row exists, regardless of attempt status
+        status = result.resultPublished ? 'RESULT_PUBLISHED' : 'COMPLETED';
+      }
+
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        status,
+        submittedAt,
+        score,
+        totalScore,
+        maxScore,
+        percentage,
+        passed: result ? parseFloat(result.percentage) >= (50) : null,
+        resultPublished: result ? result.resultPublished : false,
+      };
+    });
+
+    res.json({ participants, total: participants.length });
+  } catch (error) {
+    console.error('[participants] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 /**
  * DELETE /api/quizzes/:id
@@ -481,6 +1149,350 @@ router.delete('/:id', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
   } catch (error) {
     console.error('Error deleting quiz:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/quizzes/:quizId/attempts
+ * Starts or resumes a quiz attempt for a participant.
+ */
+const startQuizAttempt = async (req, res) => {
+  try {
+    const quizId = req.params.quizId;
+    const participantId = req.user.id;
+    const authHeader = req.headers['authorization'];
+
+    console.log("--- START QUIZ ATTEMPT API HIT ---");
+    console.log("Participant ID:", participantId);
+    console.log("JWT:", authHeader);
+    console.log("req.user:", req.user);
+    console.log("req.params:", req.params);
+    console.log("req.body:", req.body);
+
+    const quiz = await AIQuiz.findByPk(quizId);
+    if (!quiz) {
+      console.log(`[startQuizAttempt] Quiz not found: #${quizId}`);
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    console.log("Training ID:", quiz.trainingId || quiz.courseId);
+    console.log("Quiz ID:", quiz.id);
+    console.log("quiz:", quiz.toJSON ? quiz.toJSON() : quiz);
+
+    if (quiz.status !== 'PUBLISHED') {
+      console.log(`[startQuizAttempt] Permission denied: Quiz is not PUBLISHED`);
+      return res.status(403).json({ error: 'Quiz not published' });
+    }
+
+    // Verify participant has access — either via QuizAssignment or enrollment
+    let assignment = await QuizAssignment.findOne({
+      where: { quizId: quiz.id, participantId }
+    });
+
+    if (!assignment) {
+      const enrollmentCheck = await Enrollment.findOne({
+        where: {
+          participantId,
+          status: 'ENROLLED',
+          [Op.or]: [
+            ...(quiz.courseId ? [{ courseId: quiz.courseId }] : []),
+            ...(quiz.trainingId ? [{ trainingId: quiz.trainingId }] : []),
+          ]
+        }
+      });
+      
+      console.log(`[startQuizAttempt] Enrollment check result:`, enrollmentCheck ? `Enrolled (ID: ${enrollmentCheck.id})` : 'Not Enrolled');
+
+      if (!enrollmentCheck) {
+        console.log(`[startQuizAttempt] Permission denied: Participant #${participantId} is not enrolled in course/training`);
+        return res.status(403).json({ error: 'Participant not enrolled' });
+      }
+      // Create a pending QuizAssignment on-the-fly for tracking
+      assignment = await QuizAssignment.create({
+        quizId: quiz.id,
+        participantId,
+        status: 'PENDING'
+      });
+    }
+
+    // Check if completed attempt exists or resume/create in-progress attempt
+    let attempt;
+    // Check if any attempt already exists to prevent duplicate attempt records
+    const existingAttempt = await QuizAttempt.findOne({
+      where: { quizId: quiz.id, participantId }
+    });
+
+    if (existingAttempt) {
+      console.log(`[startQuizAttempt] Rejecting start: attempt already exists for quiz #${quiz.id}, participant #${participantId}`);
+      return res.status(400).json({
+        success: false,
+        message: "You have already attempted this quiz."
+      });
+    }
+
+    // Since no attempt exists, create a new in-progress attempt
+    attempt = await QuizAttempt.create({
+      quizId: quiz.id,
+      participantId,
+      status: 'IN_PROGRESS',
+      startedAt: new Date()
+    });
+    console.log(`[startQuizAttempt] Created new attempt #${attempt.id} for participant #${participantId}`);
+
+    // Handle AssessmentSession lock
+    const crypto = require('crypto');
+    const ipAddress = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim();
+    const userAgent = (req.headers['user-agent'] || '').slice(0, 1024);
+    const deviceFingerprint = (req.body?.deviceFingerprint || '').toString().slice(0, 512) || null;
+
+    const minutes = Number.isFinite(quiz.timeLimit) && quiz.timeLimit > 0 ? quiz.timeLimit : 0;
+    const ttlMs = minutes > 0 ? (minutes + 15) * 60_000 : 3 * 60 * 60_000;
+    const expiresAt = new Date(Date.now() + ttlMs);
+
+    let session = await AssessmentSession.findOne({
+      where: {
+        attemptId: attempt.id
+      }
+    });
+
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+
+    if (session) {
+      console.log(`[startQuizAttempt] Found existing assessment session #${session.id} for attempt #${attempt.id} with status: ${session.status}. Updating...`);
+      await session.update({
+        quizId: quiz.id,
+        participantId,
+        ipAddress: ipAddress || null,
+        userAgent: userAgent || null,
+        deviceFingerprint,
+        sessionToken,
+        status: 'ACTIVE',
+        lockedAt: new Date(),
+        expiresAt
+      });
+      console.log(`[startQuizAttempt] Successfully updated and reactivated session #${session.id} for attempt #${attempt.id}`);
+    } else {
+      console.log(`[startQuizAttempt] No session found for attempt #${attempt.id}. Creating new...`);
+      session = await AssessmentSession.create({
+        attemptId: attempt.id,
+        quizId: quiz.id,
+        participantId,
+        ipAddress: ipAddress || null,
+        userAgent: userAgent || null,
+        deviceFingerprint,
+        sessionToken,
+        status: 'ACTIVE',
+        lockedAt: new Date(),
+        expiresAt
+      });
+      console.log(`[startQuizAttempt] Successfully created new session #${session.id} for attempt #${attempt.id}`);
+    }
+
+    const apiResponse = {
+      success: true,
+      attemptId: attempt.id,
+      sessionToken: session.sessionToken,
+      quiz: {
+        id: quiz.id,
+        title: quiz.title,
+        timeLimit: quiz.timeLimit
+      }
+    };
+
+    console.log(`[startQuizAttempt] Success response:`, apiResponse);
+    return res.json(apiResponse);
+  } catch (error) {
+    console.error('[startQuizAttempt] Error starting quiz attempt:', error);
+    return res.status(500).json({ error: error.message || 'Failed to start quiz attempt' });
+  }
+};
+
+router.post('/:quizId/attempts', startQuizAttempt);
+router.post('/:quizId/start', startQuizAttempt);
+
+router.get('/attempts/:attemptId', async (req, res) => {
+  try {
+    const attemptId = req.params.attemptId;
+    const participantId = req.user.id;
+
+    console.log(`[GET /api/quizzes/attempts/${attemptId}] Request by user #${participantId}`);
+
+    const attempt = await QuizAttempt.findByPk(attemptId, {
+      include: [{ model: AIQuiz, as: 'quiz' }]
+    });
+
+    if (!attempt) {
+      console.log(`[GET /api/quizzes/attempts/${attemptId}] Attempt not found`);
+      return res.status(404).json({ error: 'Attempt not found' });
+    }
+
+    if (req.user.role === 'PARTICIPANT' && attempt.participantId !== participantId) {
+      console.log(`[GET /api/quizzes/attempts/${attemptId}] Access denied. User #${participantId} does not own attempt #${attemptId}`);
+      return res.status(403).json({ error: 'Permission denied' });
+    }
+
+    console.log(`[GET /api/quizzes/attempts/${attemptId}] Returning attempt details`);
+    return res.json({ attempt });
+  } catch (err) {
+    console.error('Error fetching quiz attempt:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Note: GET /:quizId/questions has been merged with GET /:id/questions above to avoid router matching conflicts.
+
+/**
+ * POST /api/quizzes/:quizId/attempts/:attemptId/submit
+ * Submits and grades the quiz attempt, updating enrollment status inside a transaction.
+ */
+router.post('/:quizId/attempts/:attemptId/submit', async (req, res) => {
+  try {
+    const { answers } = req.body;
+    const { attemptId, quizId } = req.params;
+    const participantId = req.user.id;
+
+    if (!Array.isArray(answers)) {
+      return res.status(422).json({ error: 'answers[] is required' });
+    }
+
+    const attempt = await QuizAttempt.findOne({
+      where: { id: attemptId, quizId, participantId }
+    });
+    if (!attempt) {
+      return res.status(404).json({ error: 'Attempt not found' });
+    }
+    if (attempt.status === 'SUBMITTED' || attempt.status === 'EVALUATED') {
+      return res.status(409).json({ error: 'Quiz already submitted' });
+    }
+
+    const quiz = await AIQuiz.findByPk(quizId);
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    const questions = await AIQuestion.findAll({ where: { quizId: quiz.id } });
+    const questionsMap = {};
+    let maxScore = 0;
+    questions.forEach(q => {
+      questionsMap[q.id] = q;
+      maxScore += (q.marks || 1);
+    });
+
+    const { sequelize } = require('../models');
+    let totalScore = 0;
+
+    await sequelize.transaction(async (t) => {
+      // Wipe any prior partial answers for this attempt
+      await QuizAnswer.destroy({ where: { attemptId: attempt.id }, transaction: t });
+
+      for (const ans of answers) {
+        const question = questionsMap[ans.questionId];
+        if (!question) continue;
+
+        let score = 0;
+        let feedback = '';
+        let isCorrect = false;
+        const qMarks = question.marks || 1;
+
+        if (['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING'].includes(question.questionType)) {
+          const { gradeAnswer } = require('../utils/gradeAnswer');
+          const result = gradeAnswer(question, {
+            selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
+            answer: ans.answerText || ans.answer || '',
+            answerText: ans.answerText || ans.answer || '',
+            matches: ans.matches
+          });
+          isCorrect = result.isCorrect;
+          score = result.score > 0 ? (result.score / 100) * qMarks : 0;
+          if (question.questionType === 'MATCHING') {
+            feedback = `Score: ${result.score}%. Matched ${result.correctCount} of ${result.total} correctly.`;
+          } else {
+            feedback = isCorrect ? 'Correct!' : `Incorrect. Correct answer: ${question.correctAnswer}`;
+          }
+        } else {
+          // Fallback to AI evaluation
+          const aiService = require('../services/aiService');
+          try {
+            const evaluation = await aiService.evaluateShortAnswer(
+              question.questionText,
+              question.correctAnswer,
+              ans.answerText || ''
+            );
+            score = evaluation.score || 0;
+            feedback = evaluation.feedback || '';
+            isCorrect = evaluation.isCorrect || false;
+          } catch (aiErr) {
+            console.error('AI evaluation failed, defaulting to 0:', aiErr.message);
+          }
+        }
+
+        await QuizAnswer.create({
+          attemptId: attempt.id,
+          questionId: ans.questionId,
+          answerText: ans.answerText || '',
+          selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
+          isCorrect,
+          score,
+          feedback,
+          evaluatedByAI: !['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING'].includes(question.questionType)
+        }, { transaction: t });
+
+        totalScore += score;
+      }
+
+      const submittedAt = new Date();
+      let timeTaken = null;
+      if (attempt.startedAt) {
+        timeTaken = Math.max(0, Math.round((submittedAt.getTime() - new Date(attempt.startedAt).getTime()) / 1000));
+      }
+
+      await attempt.update({
+        status: 'EVALUATED',
+        submittedAt,
+        ...(timeTaken != null ? { timeTaken } : {})
+      }, { transaction: t });
+
+      const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+
+      await QuizResult.create({
+        attemptId: attempt.id,
+        quizId: quiz.id,
+        participantId,
+        totalScore,
+        maxScore,
+        percentage,
+        evaluatedAt: submittedAt,
+        resultPublished: false
+      }, { transaction: t });
+
+      // Synchronously update QuizAssignment status in the same transaction
+      await QuizAssignment.update(
+        { status: 'COMPLETED' },
+        { where: { quizId: quiz.id, participantId }, transaction: t }
+      );
+    });
+
+    // Best-effort: expire assessment session
+    try {
+      const sessionToken = req.headers['x-assessment-session'] || req.headers['X-Assessment-Session'];
+      if (sessionToken) {
+        await AssessmentSession.update(
+          { status: 'EXPIRED' },
+          { where: { sessionToken, attemptId, status: 'ACTIVE' } }
+        );
+      }
+    } catch (sessionErr) {
+      console.warn('Failed to expire assessment session:', sessionErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Quiz submitted successfully. Please wait for trainer to publish results.',
+      status: 'PENDING_RESULT'
+    });
+  } catch (err) {
+    console.error('Error submitting quiz attempt:', err);
+    return res.status(500).json({ error: 'Failed to submit quiz attempt' });
   }
 });
 

@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const { User } = require('./models');
 const { sequelize, connectDB } = require('./config/db');
 const logger = require('./utils/logger');
+const authenticateToken = require('./middleware/auth');
 const {
   initializeSocket,
   setupRedisAdapter,
@@ -74,7 +75,20 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Global request logger
 app.use((req, res, next) => {
-  console.log('➡️ API HIT:', req.method, req.originalUrl);
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const isError = res.statusCode >= 400;
+    const isDev = process.env.NODE_ENV === 'development';
+    if (isError || isDev) {
+      const logMsg = `➡️ ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`;
+      if (isError) {
+        logger.error(logMsg);
+      } else {
+        logger.debug(logMsg);
+      }
+    }
+  });
   next();
 });
 
@@ -95,6 +109,33 @@ app.use('/api/feed', feedRoutes);
 app.use('/api/live', liveRoutes);
 app.use('/api/ai-quiz', aiQuizRoutes);
 app.use('/api/quizzes', quizzesRoutes);
+
+// Endpoint GET /api/attempts/:attemptId
+app.get('/api/attempts/:attemptId', authenticateToken, async (req, res) => {
+  try {
+    const { QuizAttempt, AIQuiz } = require('./models');
+    const attempt = await QuizAttempt.findByPk(req.params.attemptId, {
+      include: [{ model: AIQuiz, as: 'quiz' }]
+    });
+    if (!attempt) {
+      console.log(`[GET /api/attempts/${req.params.attemptId}] Attempt not found`);
+      return res.status(404).json({ error: 'Attempt not found' });
+    }
+    
+    // Check ownership if participant
+    if (req.user.role === 'PARTICIPANT' && attempt.participantId !== req.user.id) {
+      console.log(`[GET /api/attempts/${req.params.attemptId}] Access denied for user #${req.user.id}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    console.log(`[GET /api/attempts/${req.params.attemptId}] Returning attempt details for user #${req.user.id}`);
+    res.json({ attempt });
+  } catch (error) {
+    console.error(`[GET /api/attempts/${req.params.attemptId}] Error:`, error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.use('/api/profile', profileRoutes);
 app.use('/api/participant-profile', participantProfileRoutes);
 app.use('/api/proctor', proctoringRoutes);
@@ -129,7 +170,6 @@ app.get('/api/ai/health', async (req, res) => {
 // Custom route for updating profile exactly as requested
 const profileController = require('./controllers/profileController');
 const upload = require('./middleware/upload');
-const authenticateToken = require('./middleware/auth');
 app.put('/api/update-profile', authenticateToken, upload.single('profilePic'), profileController.updateProfile);
 
 // Top-level /api/test-mail alias (matches the spec's debugging step #5)
@@ -434,7 +474,7 @@ const startServer = async () => {
     });
 
     server.listen(PORT, () => {
-      logger.info(`🚀 WAVE INIT LMS Server running on http://localhost:${PORT}`);
+      logger.logAlways(`🚀 WAVE INIT LMS Server running on http://localhost:${PORT}`);
       logger.info(`📋 Mounted routes:
    /api/auth      → auth routes
    /api/admin     → admin routes (+ analytics endpoints)
@@ -455,7 +495,7 @@ const startServer = async () => {
        · GET    /:userId             (admin/trainer view)
    /api/survey    → survey routes
       `);
-      logger.info('🔌 WebSocket server active on Socket.IO');
+      logger.logAlways('🔌 WebSocket server active on Socket.IO');
 
       // Start quiz auto-close scheduler
       try {
@@ -468,9 +508,9 @@ const startServer = async () => {
 
     // Graceful shutdown
     process.on('SIGTERM', async () => {
-      logger.info('SIGTERM signal received: closing HTTP server');
+      logger.logAlways('SIGTERM signal received: closing HTTP server');
       server.close(async () => {
-        logger.info('HTTP server closed');
+        logger.logAlways('HTTP server closed');
         await cleanupSocket(io);
         await sequelize.close();
         process.exit(0);
@@ -478,9 +518,9 @@ const startServer = async () => {
     });
 
     process.on('SIGINT', async () => {
-      logger.info('SIGINT signal received: closing HTTP server');
+      logger.logAlways('SIGINT signal received: closing HTTP server');
       server.close(async () => {
-        logger.info('HTTP server closed');
+        logger.logAlways('HTTP server closed');
         await cleanupSocket(io);
         await sequelize.close();
         process.exit(0);

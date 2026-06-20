@@ -8,6 +8,7 @@
  */
 import { motion } from 'framer-motion';
 import { ArrowRight, Check, Loader2, Trophy } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const DIFFICULTY = {
   HARD:   { label: 'Hard',   bg: '#fef2f2', border: '#fecdd3', text: '#be123c' },
@@ -27,11 +28,12 @@ const cardVariants = {
 };
 
 export default function QuizCard({ quiz, index, onStart, isStarting }) {
+  const navigate = useNavigate();
   const diff = getDiff(quiz.difficulty);
   const questionCount = quiz.questionCount ?? quiz.questions?.length ?? 0;
   const timeLimit = quiz.timeLimit || 30;
   const completion = Math.min(100, Math.max(0, Math.round(quiz.completionPercent ?? 0)));
-  const isCompleted = completion >= 100;
+  const isCompleted = quiz.isCompleted === true || completion >= 100 || (quiz.myStatus && quiz.myStatus !== 'NOT_STARTED');
   const hasResult = !!quiz.myResult;   // trainer published results → score available
   const isAI = quiz.isAI === true || !!quiz.documentId || !!quiz.document_id
     || quiz.createdBy !== null || quiz.created_by !== null;
@@ -127,7 +129,7 @@ export default function QuizCard({ quiz, index, onStart, isStarting }) {
           fontSize: '12px', color: '#92400e', fontWeight: '500'
         }}>
           <span>⏳</span>
-          <span>Awaiting result publication from trainer</span>
+          <span>Result Pending - Waiting for Trainer to Publish Results</span>
         </div>
       )}
 
@@ -159,12 +161,20 @@ export default function QuizCard({ quiz, index, onStart, isStarting }) {
       {/* ── CTA button ── */}
       <button
         type="button"
-        onClick={() => !isStarting && !isCompleted && onStart(quiz)}
-        disabled={isStarting || isCompleted}
+        onClick={() => {
+          if (isCompleted) {
+            if (hasResult) {
+              navigate(`/trainings/${quiz.trainingId || 0}/quizzes/${quiz.id}/result`);
+            }
+          } else if (!isStarting) {
+            onStart(quiz);
+          }
+        }}
+        disabled={isStarting || (isCompleted && !hasResult)}
         className="qz-card__cta"
         data-done={isCompleted ? 'true' : 'false'}
         data-loading={isStarting ? 'true' : 'false'}
-        style={isCompleted ? { opacity: 0.75, cursor: 'not-allowed' } : {}}
+        style={(isCompleted && !hasResult) ? { opacity: 0.75, cursor: 'not-allowed' } : { cursor: 'pointer' }}
       >
         <span className="qz-card__cta-label">
           {isStarting ? (
@@ -173,10 +183,16 @@ export default function QuizCard({ quiz, index, onStart, isStarting }) {
               Starting…
             </>
           ) : isCompleted ? (
-            <>
-              <Check size={15} strokeWidth={2.5} aria-hidden />
-              {hasResult ? 'Completed · Results Available' : 'Completed · Awaiting Results'}
-            </>
+            hasResult ? (
+              <>
+                <Check size={15} strokeWidth={2.5} aria-hidden />
+                View Result
+              </>
+            ) : (
+              <>
+                Attempted
+              </>
+            )
           ) : (
             <>
               Start quiz

@@ -61,6 +61,8 @@ const QuizAssignment = require('./quizAssignment');
 const DiscussionPost = require('./discussionPost');
 const Certificate = require('./certificate');
 const ParticipantTracking = require('./participantTracking');
+const QuizResultsAudit = require('./quizResultsAudit');
+
 
 // --- Core LMS Associations ---
 
@@ -269,6 +271,11 @@ PlagiarismReport.belongsTo(CodingQuestion, { foreignKey: 'questionId', as: 'ques
 PlagiarismReport.belongsTo(User, { foreignKey: 'participantAId', as: 'participantA' });
 PlagiarismReport.belongsTo(User, { foreignKey: 'participantBId', as: 'participantB' });
 
+// --- Quiz Results Audit associations ---
+QuizResultsAudit.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
+QuizResultsAudit.belongsTo(User, { foreignKey: 'performedBy', as: 'performer' });
+AIQuiz.hasMany(QuizResultsAudit, { foreignKey: 'quizId', as: 'auditLogs' });
+
 module.exports = {
   sequelize,
   User,
@@ -324,5 +331,6 @@ module.exports = {
   QuizAssignment,
   DiscussionPost,
   Certificate,
-  ParticipantTracking
+  ParticipantTracking,
+  QuizResultsAudit,
 };

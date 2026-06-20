@@ -97,7 +97,7 @@ function ProgressRing({ percent, size = 132 }) {
 /* ──────────────────────────────────────────────────────────────────────────
    MAIN COMPONENT
    ────────────────────────────────────────────────────────────────────────── */
-function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
+function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isStandardQuiz = false }) {
   const { error: showError, success: showSuccess } = useToast()
 
   /* ── Question / answer state ─────────────────────────────────────────── */
@@ -149,7 +149,11 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
         const headers = { ...getAuthHeaders(), 'Content-Type': 'application/json' }
         if (token) headers['X-Assessment-Session'] = token
 
-        const r = await fetch(`${API_BASE}/ai-quiz/participant/submit/${attemptId}`, {
+        const submitUrl = isStandardQuiz
+          ? `${API_BASE}/quizzes/${quizId}/attempts/${attemptId}/submit`
+          : `${API_BASE}/ai-quiz/participant/submit/${attemptId}`
+
+        const r = await fetch(submitUrl, {
           method: 'POST',
           headers,
           body: JSON.stringify({ answers: answerArray }),
@@ -159,7 +163,8 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
         // Best-effort exit fullscreen so result summary renders normally.
         if (fsApi.element()) { try { await fsApi.exit() } catch { /* ignore */ } }
         if (!silent) showSuccess('Quiz submitted successfully!')
-        setResultData(d.result)
+        // Don't pass score data — results are hidden until trainer publishes.
+        setResultData({ status: 'PENDING_RESULT' })
       } catch (err) {
         submittedRef.current = false
         if (!silent) showError('Failed to submit quiz: ' + err.message)
@@ -167,7 +172,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [answers, attemptId, onSubmit, submitting, showError, showSuccess]
+    [answers, attemptId, isStandardQuiz, quizId, onSubmit, submitting, showError, showSuccess]
   )
 
   /* ── Auto-fullscreen on mount ────────────────────────────────────────── */
@@ -784,7 +789,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
         )}
       </AnimatePresence>
 
-      {/* ─── Post-submit result summary ────────────────────────────────── */}
+      {/* ─── Post-submit success page ──────────────────────────────────── */}
       <AnimatePresence>
         {resultData && (
           <motion.div
@@ -808,8 +813,8 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                 className="qt-modal__icon-wrap"
                 style={{
                   width: 64, height: 64, borderRadius: '50%',
-                  background: resultData.percentage >= 50 ? '#ecfdf5' : '#fef2f2',
-                  color: resultData.percentage >= 50 ? '#16a34a' : '#dc2626',
+                  background: '#ecfdf5',
+                  color: '#16a34a',
                   margin: '0 auto 16px', display: 'flex',
                   alignItems: 'center', justifyContent: 'center',
                 }}
@@ -817,33 +822,35 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit }) {
                 <CheckCircle2 size={32} />
               </div>
               <h2 id="qt-result-title" className="qt-modal__title" style={{ fontSize: 20 }}>
-                Quiz Submitted
+                Quiz Submitted Successfully
               </h2>
-              <div style={{ margin: '20px 0', display: 'flex', justifyContent: 'center', gap: 32 }}>
-                <div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
-                    {Math.round(resultData.percentage)}%
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Score
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
-                    {resultData.totalScore?.toFixed(0) ?? 0}/{resultData.maxScore ?? 0}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Points
-                  </div>
-                </div>
+              <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6, marginTop: 12, marginBottom: 4 }}>
+                Your answers have been saved successfully.
+              </p>
+              <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>
+                Please wait until your trainer publishes the results.
+              </p>
+              <div style={{
+                background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+                padding: '12px 16px', marginBottom: 16, display: 'inline-flex',
+                alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#92400e'
+              }}>
+                <span style={{ fontSize: 16 }}>🟡</span>
+                Waiting for Result Publication
+              </div>
+              <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.7, marginBottom: 20 }}>
+                Once the results are published, you will be able to view:<br />
+                • Your Score &amp; Percentage<br />
+                • Rank &amp; Leaderboard<br />
+                • Correct Answers (if enabled)
               </div>
               <button
                 type="button"
                 className="qt-foot__btn qt-foot__btn--primary"
                 onClick={() => { setResultData(null); onSubmit?.(resultData) }}
-                style={{ marginTop: 8, width: '100%', justifyContent: 'center' }}
+                style={{ marginTop: 4, width: '100%', justifyContent: 'center' }}
               >
-                Back to quizzes
+                Back to Dashboard
               </button>
             </motion.div>
           </motion.div>

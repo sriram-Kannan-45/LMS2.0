@@ -17,12 +17,14 @@ import ForgotPassword from './pages/ForgotPassword'
 import Login from './pages/Login'
 import ParticipantDashboard from './pages/ParticipantDashboard'
 import ParticipantLogin from './pages/ParticipantLogin'
-import ParticipantQuizzes from './pages/ParticipantQuizzes'
+import ParticipantQuizAttemptPage from './pages/ParticipantQuizAttemptPage'
+import ParticipantQuizResultPage from './pages/ParticipantQuizResultPage'
 import PreExamReadiness from './pages/PreExamReadiness'
 import Register from './pages/Register'
 import TrainerDashboard from './pages/TrainerDashboard'
 import TrainerLogin from './pages/TrainerLogin'
 import TrainerProctoringPage from './pages/TrainerProctoringPage'
+import TrainerQuizDetails from './pages/TrainerQuizDetails'
 
 // ─── Coding Assessment route wrappers ────────────────────────────────────────
 function ParticipantCodingPage() {
@@ -108,8 +110,23 @@ function App() {
         const urlStr = response.url || ''
         const isAuthEndpoint = urlStr.includes('/api/auth/login') || urlStr.includes('/api/auth/register')
         if (!isAuthEndpoint) {
-          localStorage.removeItem('user')
-          setUser(null)
+          let shouldLogout = response.status === 401; // Always log out on 401
+          if (response.status === 403) {
+            try {
+              const clone = response.clone();
+              const data = await clone.json();
+              const errMsg = (data?.error || '').toLowerCase();
+              if (errMsg.includes('token') || errMsg.includes('expired') || errMsg.includes('auth')) {
+                shouldLogout = true;
+              }
+            } catch (e) {
+              // Ignore JSON parse errors for non-JSON 403 responses
+            }
+          }
+          if (shouldLogout) {
+            localStorage.removeItem('user')
+            setUser(null)
+          }
         }
       }
       return response
@@ -270,13 +287,39 @@ function AppRoutes({ user, onLogin, onLogout }) {
 
       <Route
         path="/participant/quizzes"
+        element={<Navigate to="/participant" replace />}
+      />
+
+      <Route
+        path="/quizzes"
+        element={<Navigate to="/participant" replace />}
+      />
+
+      <Route
+        path="/trainings/:trainingId/quizzes/:quizId/attempt"
         element={
           user?.role === 'PARTICIPANT' ? (
-            <Layout user={user} onLogout={onLogout}>
-              <ParticipantQuizzes user={user} />
+            <ParticipantQuizAttemptPage user={user} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      <Route
+        path="/trainings/:trainingId/quizzes/:quizId/result"
+        element={
+          user?.role === 'PARTICIPANT' ? (
+            <Layout
+              user={user}
+              onLogout={onLogout}
+              activeTab="myEnrollments"
+              onTabChange={() => window.location.href = '/participant'}
+            >
+              <ParticipantQuizResultPage user={user} />
             </Layout>
           ) : (
-            <Navigate to="/participant" />
+            <Navigate to="/login" replace />
           )
         }
       />
@@ -298,6 +341,15 @@ function AppRoutes({ user, onLogin, onLogout }) {
         element={
           (user?.role === 'TRAINER' || user?.role === 'ADMIN')
             ? <TrainerProctoringPage />
+            : <Navigate to="/trainer" />
+        }
+      />
+
+      <Route
+        path="/trainer/quiz/:quizId"
+        element={
+          (user?.role === 'TRAINER' || user?.role === 'ADMIN')
+            ? <TrainerQuizDetails user={user} onLogout={onLogout} />
             : <Navigate to="/trainer" />
         }
       />

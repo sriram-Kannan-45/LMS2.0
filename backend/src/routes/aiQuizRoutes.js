@@ -807,9 +807,16 @@ router.post('/trainer/quiz/:id/publish-result',
         return res.status(400).json({ error: 'Quiz must be sent to participants before publishing results.' });
       }
 
+      const now = new Date();
+      await QuizResult.update(
+        { resultPublished: true, publishedAt: now, publishedBy: req.user.id },
+        { where: { quizId: quiz.id } }
+      );
+
       await quiz.update({
         isResultPublished: true,
-        resultPublishedAt: new Date(),
+        resultPublishedAt: now,
+        resultStatus: 'PUBLISHED',
       });
 
       // Emit real-time update
@@ -836,6 +843,19 @@ router.post('/participant/start/:quizId',
   async (req, res) => {
     try {
       const { Course, Training, QuizAssignment } = require('../models');
+
+      // Check if any attempt already exists to prevent duplicate attempt records
+      const existingAttempt = await QuizAttempt.findOne({
+        where: { quizId: req.params.quizId, participantId: req.user.id }
+      });
+      if (existingAttempt) {
+        console.log(`[aiQuiz/start] Rejecting start: attempt already exists for quiz #${req.params.quizId}, participant #${req.user.id}`);
+        return res.status(400).json({
+          success: false,
+          message: "You have already attempted this quiz."
+        });
+      }
+
       const quiz = await AIQuiz.findOne({
         where: { id: req.params.quizId, status: 'PUBLISHED' },
         include: [
@@ -846,12 +866,34 @@ router.post('/participant/start/:quizId',
 
       if (!quiz) return res.status(404).json({ error: 'Quiz not found or not available' });
 
-      // Verify participant has a pending assignment for this quiz
-      const assignment = await QuizAssignment.findOne({
+      // Verify participant has access — either via QuizAssignment or enrollment
+      let assignment = await QuizAssignment.findOne({
         where: { quizId: quiz.id, participantId: req.user.id, status: 'PENDING' }
       });
+
+      // Fallback: check if participant is enrolled in the quiz's course/training
       if (!assignment) {
-        return res.status(403).json({ error: 'This quiz has not been assigned to you' });
+        const { Enrollment } = require('../models');
+        const enrollmentCheck = await Enrollment.findOne({
+          where: {
+            participantId: req.user.id,
+            status: 'ENROLLED',
+            [Op.or]: [
+              ...(quiz.courseId ? [{ courseId: quiz.courseId }] : []),
+              ...(quiz.trainingId ? [{ trainingId: quiz.trainingId }] : []),
+            ]
+          }
+        });
+        if (!enrollmentCheck) {
+          return res.status(403).json({ error: 'This quiz has not been assigned to you' });
+        }
+        // Create a pending QuizAssignment on-the-fly for tracking
+        assignment = await QuizAssignment.create({
+          quizId: quiz.id,
+          participantId: req.user.id,
+          status: 'PENDING'
+        });
+        console.log(`[participant/start] Created QuizAssignment on-the-fly for participant #${req.user.id}, quiz #${quiz.id}`);
       }
 
       // Time window check on the quiz itself
@@ -952,20 +994,40 @@ router.post('/participant/start/:quizId',
           }
         }
 
-        // No session row yet for the existing attempt — create one now.
+        // Find existing session for the attempt (Active, Expired, or Reset)
+        session = await AssessmentSession.findOne({ where: { attemptId: existing.id } });
         const newToken = crypto.randomBytes(32).toString('hex');
-        session = await AssessmentSession.create({
-          attemptId: existing.id,
-          quizId: quiz.id,
-          participantId: req.user.id,
-          ipAddress: ipAddress || null,
-          userAgent: userAgent || null,
-          deviceFingerprint,
-          sessionToken: newToken,
-          status: 'ACTIVE',
-          lockedAt: now,
-          expiresAt,
-        });
+
+        if (session) {
+          console.log(`[aiQuizRoutes/start] Found existing session #${session.id} for attempt #${existing.id}. Updating...`);
+          await session.update({
+            quizId: quiz.id,
+            participantId: req.user.id,
+            ipAddress: ipAddress || null,
+            userAgent: userAgent || null,
+            deviceFingerprint,
+            sessionToken: newToken,
+            status: 'ACTIVE',
+            lockedAt: now,
+            expiresAt,
+          });
+          console.log(`[aiQuizRoutes/start] Successfully updated session #${session.id}`);
+        } else {
+          console.log(`[aiQuizRoutes/start] No existing session found for attempt #${existing.id}. Creating...`);
+          session = await AssessmentSession.create({
+            attemptId: existing.id,
+            quizId: quiz.id,
+            participantId: req.user.id,
+            ipAddress: ipAddress || null,
+            userAgent: userAgent || null,
+            deviceFingerprint,
+            sessionToken: newToken,
+            status: 'ACTIVE',
+            lockedAt: now,
+            expiresAt,
+          });
+          console.log(`[aiQuizRoutes/start] Successfully created session #${session.id}`);
+        }
         return res.json({ attemptId: existing.id, quiz, sessionToken: session.sessionToken });
       }
 
@@ -1129,48 +1191,14 @@ router.post('/participant/submit/:attemptId',
         totalScore,
         maxScore,
         percentage,
-        evaluatedAt: new Date()
+        evaluatedAt: new Date(),
+        resultPublished: false
       });
 
-      // ─── Realtime: broadcast updated leaderboards to subscribed clients ────
-      // Best-effort emit only — never let socket failures break the response.
-      try {
-        const io = req.app.get('io');
-        if (io) {
-          const buildLeaderboard = async (where) => {
-            const rows = await QuizResult.findAll({
-              where,
-              include: [{ model: User, as: 'participant', attributes: ['id', 'name'] }],
-              order: [['percentage', 'DESC']]
-            });
-            return rows.map((r, idx) => ({
-              rank: idx + 1,
-              userId: r.participantId,
-              name: r.participant?.name || 'Unknown',
-              score: parseFloat(r.percentage),
-              totalScore: parseFloat(r.totalScore),
-              maxScore: parseFloat(r.maxScore)
-            }));
-          };
-          // Quiz-scoped
-          const quizLb = (await buildLeaderboard({ quizId: quiz.id })).slice(0, 50);
-          io.to(`leaderboard:quiz:${quiz.id}`).emit('leaderboard:update', { scope: 'quiz', id: String(quiz.id), leaderboard: quizLb });
-          // Training-scoped (if quiz attached to a training)
-          if (quiz.trainingId) {
-            const trainingQuizIds = (await AIQuiz.findAll({
-              where: { trainingId: quiz.trainingId },
-              attributes: ['id']
-            })).map(q => q.id);
-            const trainLb = (await buildLeaderboard({ quizId: trainingQuizIds })).slice(0, 50);
-            io.to(`leaderboard:training:${quiz.trainingId}`).emit('leaderboard:update', { scope: 'training', id: String(quiz.trainingId), leaderboard: trainLb });
-          }
-          // Global
-          const globalLb = (await buildLeaderboard({})).slice(0, 50);
-          io.to('leaderboard:global').emit('leaderboard:update', { scope: 'global', id: '', leaderboard: globalLb });
-        }
-      } catch (emitErr) {
-        console.warn('[submit] leaderboard emit failed:', emitErr.message);
-      }
+      // Leaderboard broadcasts are NOT sent here — results must first be
+      // published by the trainer.  See POST /:id/publish-result and
+      // POST /:id/publish-participant/:participantId which set
+      // resultPublished=true and then emit the leaderboard.
 
       // Mark quiz_assignment as COMPLETED
       try {
@@ -1195,7 +1223,11 @@ router.post('/participant/submit/:attemptId',
         console.warn('[submit] session free failed:', e.message);
       }
 
-      res.json({ message: 'Quiz submitted successfully', result });
+      res.json({
+        success: true,
+        message: 'Quiz submitted successfully. Please wait for trainer to publish results.',
+        status: 'PENDING_RESULT'
+      });
     } catch (error) {
       console.error('Submit error:', error);
       res.status(500).json({ error: error.message });
@@ -1204,12 +1236,13 @@ router.post('/participant/submit/:attemptId',
 );
 
 // GET /api/ai-quiz/leaderboard/:quizId
+// Only returns published results (resultPublished=true).
 router.get('/leaderboard/:quizId',
   authenticateToken,
   async (req, res) => {
     try {
       const results = await QuizResult.findAll({
-        where: { quizId: req.params.quizId },
+        where: { quizId: req.params.quizId, resultPublished: true },
         include: [
           { model: User, as: 'participant', attributes: ['id', 'name'] }
         ],
@@ -1241,7 +1274,7 @@ router.get('/participant/quizzes',
   roleMiddleware('PARTICIPANT'),
   async (req, res) => {
     try {
-      const { QuizAssignment, AIQuestion, Training, QuizResult } = require('../models');
+      const { QuizAssignment, AIQuestion, Training, QuizResult, Enrollment, Course } = require('../models');
 
       const participantId = req.user.id;
       const now = new Date();
@@ -1261,18 +1294,55 @@ router.get('/participant/quizzes',
       const pendingQuizIds = pendingAssignments.map(a => a.quizId);
       const completedQuizIds = completedAssignments.map(a => a.quizId);
 
-      // Available quizzes: PUBLISHED + within time window + assigned
-      const quizzes = pendingQuizIds.length > 0
+      // ── Enrollment-based fallback ────────────────────────────────────
+      // If no assignments exist yet (quiz was published without per-participant
+      // assignments), find quizzes via the participant's enrolled courses.
+      const enrollments = await Enrollment.findAll({
+        where: { participantId, status: 'ENROLLED' },
+        attributes: ['courseId', 'trainingId']
+      });
+      const enrolledCourseIds = [...new Set(enrollments.map(e => e.courseId).filter(Boolean))];
+      const enrolledTrainingIds = [...new Set(enrollments.map(e => e.trainingId).filter(Boolean))];
+
+      // Compute completed quiz IDs (for exclusion from available + display in completed)
+      const participantResults = await QuizResult.findAll({
+        where: { participantId },
+        attributes: ['quizId'],
+      });
+      const allAttempts = await QuizAttempt.findAll({
+        where: { participantId },
+        attributes: ['quizId']
+      });
+      const attemptedQuizIds = allAttempts.map(a => a.quizId);
+
+      const allQuizIdsForParticipant = new Set([
+        ...completedQuizIds,
+        ...attemptedQuizIds,
+        ...participantResults.map(r => r.quizId)
+      ]);
+      const completedQuizIdArray = [...allQuizIdsForParticipant];
+
+      // Available quizzes: PUBLISHED + within time window + not yet completed
+      const quizWherePublished = {
+        status: 'PUBLISHED',
+        isActive: true,
+        [Op.and]: [
+          sequelize.where(sequelize.fn('COALESCE', sequelize.col('start_time'), sequelize.fn('NOW')), '<=', now),
+          sequelize.where(sequelize.fn('COALESCE', sequelize.col('end_time'), sequelize.fn('NOW')), '>=', now),
+        ]
+      };
+
+      const enrolledOrConds = [];
+      if (pendingQuizIds.length > 0) enrolledOrConds.push({ id: pendingQuizIds });
+      if (enrolledCourseIds.length > 0) enrolledOrConds.push({ courseId: enrolledCourseIds });
+      if (enrolledTrainingIds.length > 0) enrolledOrConds.push({ trainingId: enrolledTrainingIds });
+
+      const availableWhere = { ...quizWherePublished, [Op.or]: enrolledOrConds };
+      if (completedQuizIdArray.length > 0) availableWhere.id = { [Op.notIn]: completedQuizIdArray };
+
+      const quizzes = enrolledOrConds.length > 0
         ? await AIQuiz.findAll({
-            where: {
-              id: pendingQuizIds,
-              status: 'PUBLISHED',
-              isActive: true,
-              [Op.and]: [
-                sequelize.where(sequelize.fn('COALESCE', sequelize.col('start_time'), sequelize.fn('NOW')), '<=', now),
-                sequelize.where(sequelize.fn('COALESCE', sequelize.col('end_time'), sequelize.fn('NOW')), '>=', now),
-              ]
-            },
+            where: availableWhere,
             include: [
               { model: AIQuestion, as: 'questions', attributes: ['id', 'questionText', 'questionType', 'options', 'difficulty', 'order', 'marks'] },
               { model: Training, as: 'training', attributes: ['id', 'title'] }
@@ -1281,11 +1351,11 @@ router.get('/participant/quizzes',
           })
         : [];
 
-      // Completed quizzes with results gating
+      // Completed quizzes
       let completedQuizzes = [];
-      if (completedQuizIds.length > 0) {
+      if (completedQuizIdArray.length > 0) {
         const quizRows = await AIQuiz.findAll({
-          where: { id: completedQuizIds, isActive: true },
+          where: { id: completedQuizIdArray, isActive: true },
           include: [
             { model: AIQuestion, as: 'questions', attributes: ['id', 'questionText', 'questionType', 'options', 'difficulty', 'order', 'marks'] },
             { model: Training, as: 'training', attributes: ['id', 'title'] }
@@ -1293,10 +1363,9 @@ router.get('/participant/quizzes',
           order: [['created_at', 'DESC']]
         });
 
-        // Fetch participant's best result for each completed quiz
         const resultRows = await QuizResult.findAll({
-          where: { participantId, quizId: completedQuizIds },
-          attributes: ['quizId', 'percentage', 'totalScore', 'maxScore', 'evaluatedAt'],
+          where: { participantId, quizId: completedQuizIdArray },
+          attributes: ['quizId', 'percentage', 'totalScore', 'maxScore', 'evaluatedAt', 'resultPublished'],
           order: [['percentage', 'DESC']]
         });
         const bestResultByQuiz = {};
@@ -1307,18 +1376,22 @@ router.get('/participant/quizzes',
               totalScore: parseFloat(r.totalScore),
               maxScore: parseFloat(r.maxScore),
               evaluatedAt: r.evaluatedAt,
+              resultPublished: r.resultPublished,
             };
           }
         }
 
         completedQuizzes = quizRows.map(q => {
           const json = q.toJSON();
-          const canSeeResult = areResultsVisible(q);
+          const result = bestResultByQuiz[q.id] || null;
+          // Show result if either: quiz has showResultImmediately (legacy), OR per-result is published
+          const canSeeResult = q.showResultImmediately === true || (result?.resultPublished === true);
           return {
             ...json,
-            myResult: canSeeResult ? (bestResultByQuiz[q.id] || null) : null,
-            completionPercent: bestResultByQuiz[q.id]?.percentage ?? 100,
+            myResult: canSeeResult ? result : null,
+            completionPercent: result?.percentage ?? 100,
             _resultLocked: !canSeeResult,
+            isCompleted: true,
           };
         });
       }
@@ -1350,20 +1423,29 @@ router.get('/participant/stats',
   async (req, res) => {
     try {
       const { Op, fn, col, literal } = require('sequelize');
+      const { QuizAttempt, QuizResult, AIQuiz } = require('../models');
       const userId = req.user.id;
 
-      // All results for this participant (with quiz title)
+      // Count of all submitted attempts (regardless of whether results are published)
+      const totalQuizzes = await QuizAttempt.count({
+        where: {
+          participantId: userId,
+          status: { [Op.in]: ['SUBMITTED', 'EVALUATED', 'COMPLETED', 'GRADED'] }
+        }
+      });
+
+      // Only published results appear in participant analytics
       const myResults = await QuizResult.findAll({
-        where: { participantId: userId },
+        where: { participantId: userId, resultPublished: true },
         include: [{ model: AIQuiz, as: 'quiz', attributes: ['id', 'title', 'trainingId'] }],
         order: [['evaluated_at', 'ASC']]
       });
 
-      const totalQuizzes = myResults.length;
-      const averageScore = totalQuizzes > 0
-        ? Number((myResults.reduce((s, r) => s + parseFloat(r.percentage), 0) / totalQuizzes).toFixed(2))
+      const publishedCount = myResults.length;
+      const averageScore = publishedCount > 0
+        ? Number((myResults.reduce((s, r) => s + parseFloat(r.percentage), 0) / publishedCount).toFixed(2))
         : 0;
-      const bestScore = totalQuizzes > 0
+      const bestScore = publishedCount > 0
         ? Number(Math.max(...myResults.map(r => parseFloat(r.percentage))).toFixed(2))
         : 0;
 
@@ -1380,7 +1462,7 @@ router.get('/participant/stats',
           ...myResults.filter(x => x.quizId === r.quizId).map(x => parseFloat(x.percentage))
         );
         const higherCount = await QuizResult.count({
-          where: { quizId: r.quizId, percentage: { [Op.gt]: myBest } },
+          where: { quizId: r.quizId, percentage: { [Op.gt]: myBest }, resultPublished: true },
           distinct: true,
           col: 'participantId'
         });
@@ -1439,8 +1521,8 @@ router.get('/participant/global-leaderboard',
       const scope = (req.query.scope || 'global').toLowerCase();
       const id = req.query.id ? String(req.query.id) : null;
 
-      // Build the where-clause for QuizResult
-      const where = {};
+      // Build the where-clause for QuizResult — only published results appear
+      const where = { resultPublished: true };
       if (scope === 'quiz' && id) {
         where.quizId = id;
       } else if (scope === 'training' && id) {
@@ -1604,22 +1686,35 @@ router.post('/admin/reset-session/:sessionId',
   }
 );
 
-// Helper: ensure a quiz_assignment record exists for a quiz + training
+// Helper: create per-participant QuizAssignment records for all enrolled participants
 async function ensureQuizAssignment(quizId, trainingId) {
   if (!quizId) return;
   if (!trainingId) {
     console.log(`[quizAssignment] Skipping — no trainingId for quiz #${quizId}`);
     return;
   }
-  const existing = await QuizAssignment.findOne({
-    where: { quizId, trainingId }
+  const { Enrollment } = require('../models');
+  const enrollments = await Enrollment.findAll({
+    where: { trainingId, status: 'ENROLLED' }
   });
-  if (!existing) {
-    await QuizAssignment.create({ quizId, trainingId });
-    console.log(`[quizAssignment] ✅ Created assignment: quiz #${quizId} → training #${trainingId}`);
-  } else {
-    console.log(`[quizAssignment] ℹ️  Assignment already exists: quiz #${quizId} → training #${trainingId}`);
+  if (enrollments.length === 0) {
+    console.log(`[quizAssignment] No enrolled participants for training #${trainingId}`);
+    return;
   }
+  const now = new Date();
+  let count = 0;
+  for (const enrollment of enrollments) {
+    try {
+      await QuizAssignment.findOrCreate({
+        where: { quizId, participantId: enrollment.participantId },
+        defaults: { quizId, participantId: enrollment.participantId, status: 'PENDING', assignedAt: now }
+      });
+      count++;
+    } catch (e) {
+      // skip duplicate
+    }
+  }
+  console.log(`[quizAssignment] Created ${count} assignment(s) for quiz #${quizId} → training #${trainingId}`);
 }
 
 // Helper: if trainingId is null, try to auto-assign from the trainer's first training
