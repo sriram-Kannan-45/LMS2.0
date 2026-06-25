@@ -187,30 +187,77 @@ export default function ParticipantQuizResultPage({ user }) {
           border: '1px solid #e2e8f0',
           boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
         }}>
-          <Clock size={48} color="#f59e0b" style={{ margin: '0 auto 16px', animation: 'pulse 2s infinite' }} />
-          <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
-            Quiz Submitted Successfully
-          </h2>
-          <p style={{ margin: '0 0 24px', color: '#64748b', fontSize: 14, lineHeight: 1.6, maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
-            {result?.message || 'Your quiz has been submitted. The trainer has not published the results yet. You will be notified once they are available.'}
-          </p>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '10px 18px',
-            background: '#fffbeb',
-            border: '1px solid #fef3c7',
-            borderRadius: 8,
-            fontSize: 13,
-            fontWeight: 600,
-            color: '#b45309'
-          }}>
-            <span style={{ fontSize: 16 }}>🟡</span> Result Pending - Waiting for Trainer to Publish Results
-          </div>
+          {result?.attemptStatus === 'disqualified_copy_violation' ? (
+            <>
+              <XCircle size={48} color="#dc2626" style={{ margin: '0 auto 16px', animation: 'pulse 2s infinite' }} />
+              <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: '#dc2626' }}>
+                Quiz Terminated & Disqualified
+              </h2>
+              <p style={{ margin: '0 0 24px', color: '#64748b', fontSize: 14, lineHeight: 1.6, maxWidth: 460, marginLeft: 'auto', marginRight: 'auto' }}>
+                🚫 You have been disqualified for repeated copy attempts. Your attempt has been submitted and flagged for review. Results are currently pending review by your trainer.
+              </p>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 18px',
+                background: '#fee2e2',
+                border: '1px solid #fecaca',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#b91c1c'
+              }}>
+                <span style={{ fontSize: 16 }}>🚫</span> Attempt Flagged for Security Violations
+              </div>
+            </>
+          ) : (
+            <>
+              <Clock size={48} color="#f59e0b" style={{ margin: '0 auto 16px', animation: 'pulse 2s infinite' }} />
+              <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
+                Quiz Submitted Successfully
+              </h2>
+              <p style={{ margin: '0 0 24px', color: '#64748b', fontSize: 14, lineHeight: 1.6, maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
+                {result?.message || 'Your quiz has been submitted. The trainer has not published the results yet. You will be notified once they are available.'}
+              </p>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 18px',
+                background: '#fffbeb',
+                border: '1px solid #fef3c7',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#b45309'
+              }}>
+                <span style={{ fontSize: 16 }}>🟡</span> Result Pending - Waiting for Trainer to Publish Results
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div>
+          {result?.attemptStatus === 'disqualified_copy_violation' && (
+            <div style={{
+              background: '#fee2e2',
+              border: '1px solid #fecaca',
+              color: '#b91c1c',
+              padding: '14px 18px',
+              borderRadius: 12,
+              fontSize: 14,
+              fontWeight: 600,
+              marginBottom: 20,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10
+            }}>
+              <AlertCircle size={18} />
+              <span>This attempt was terminated and marked as disqualified due to security copy violations.</span>
+            </div>
+          )}
+
           {/* Scored Header */}
           <div style={{
             background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',

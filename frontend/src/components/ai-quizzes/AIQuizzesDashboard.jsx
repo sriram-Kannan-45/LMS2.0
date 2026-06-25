@@ -17,6 +17,7 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 import '../../styles/design-tokens.css';
 
@@ -40,6 +41,7 @@ const gridVariants = {
 };
 
 export default function AIQuizzesDashboard({ user, onStartQuiz, onLogout, embedded = true }) {
+  const navigate = useNavigate();
   const { quizzes, completedQuizzes, loading, error, startingId, fetchQuizzes, startQuiz } = useQuizzes();
 
   useSocketEvent('quiz:published', () => {
@@ -109,6 +111,17 @@ export default function AIQuizzesDashboard({ user, onStartQuiz, onLogout, embedd
     try {
       const result = await startQuiz(quiz);
       if (!result) return; // setError already raised in the hook
+      
+      if (result.quiz?.proctoringEnabled) {
+        navigate(`/participant/exam/${quiz.id}`, {
+          state: {
+            attemptId: result.attemptId,
+            quizData: result.quiz
+          }
+        });
+        return;
+      }
+
       setPendingQuiz(result.quiz);
       setPendingAttemptId(result.attemptId);
       setPendingSessionToken(result.sessionToken);
@@ -122,7 +135,7 @@ export default function AIQuizzesDashboard({ user, onStartQuiz, onLogout, embedd
       }
       // Anything else surfaces via the hook's `error` state already.
     }
-  }, [startQuiz, onStartQuiz]);
+  }, [startQuiz, onStartQuiz, navigate]);
 
   // Consent gate accepted → enter QuizTaking
   const handleConsented = useCallback((attemptId, quiz) => {

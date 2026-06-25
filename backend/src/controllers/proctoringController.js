@@ -5,7 +5,7 @@
  * events for trainer monitoring side-channels.
  */
 const proctoring = require('../services/proctoringService');
-const { ExamSession, AIQuiz, AIQuestion, QuizAnswer, QuizAttempt, QuizResult, User } = require('../models');
+const { ExamSession, AIQuiz, AIQuestion, QuizAnswer, QuizAttempt, QuizResult, User, Screenshot } = require('../models');
 const aiService = require('../services/aiService');
 const logger = require('../utils/logger');
 
@@ -551,5 +551,55 @@ exports.getResult = async (req, res, next) => {
       } : null,
       breakdown,
     });
+  } catch (err) { next(err); }
+};
+
+/**
+ * GET /api/proctor/quiz/:quizId/report
+ * Aggregated monitoring report for all participants in a quiz.
+ */
+exports.getQuizReport = async (req, res, next) => {
+  try {
+    if (req.user.role !== 'TRAINER' && req.user.role !== 'ADMIN') {
+      return fail(res, 403, 'Trainer only');
+    }
+    const report = await proctoring.getQuizReport(req.params.quizId);
+    ok(res, report);
+  } catch (err) { next(err); }
+};
+
+/**
+ * GET /api/proctor/quiz/:quizId/report/csv
+ * CSV export of the monitoring report.
+ */
+exports.exportReportCSV = async (req, res, next) => {
+  try {
+    if (req.user.role !== 'TRAINER' && req.user.role !== 'ADMIN') {
+      return fail(res, 403, 'Trainer only');
+    }
+    const csv = await proctoring.getQuizReportCSV(req.params.quizId);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="proctor-report-quiz-${req.params.quizId}.csv"`,
+    );
+    res.send(csv);
+  } catch (err) { next(err); }
+};
+
+/**
+ * GET /api/proctor/sessions/:sessionId/screenshots
+ * Get screenshot history for a session (trainer only).
+ */
+exports.getScreenshots = async (req, res, next) => {
+  try {
+    if (req.user.role !== 'TRAINER' && req.user.role !== 'ADMIN') {
+      return fail(res, 403, 'Trainer only');
+    }
+    const screenshots = await Screenshot.findAll({
+      where: { sessionId: req.params.sessionId },
+      order: [['capturedAt', 'ASC']],
+    });
+    ok(res, screenshots);
   } catch (err) { next(err); }
 };

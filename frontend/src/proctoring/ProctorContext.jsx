@@ -13,7 +13,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { proctorApi } from './api';
 import useAuthUser from './hooks/useAuthUser';
 import { useSocket, useSocketEvent } from '../hooks/useSocket';
-import { HEARTBEAT_INTERVAL_MS, VIOLATION_LABELS } from './constants';
+import { HEARTBEAT_INTERVAL_MS, VIOLATION_LABELS, STUN_SERVERS } from './constants';
+import { captureFrame } from '../utils/captureFrame';
 
 const ProctorContext = createContext(null);
 
@@ -35,8 +36,23 @@ export function ProctorProvider({ children }) {
   const [session, setSession] = useState(null);
   const [lastWarning, setLastWarning] = useState(null);
   const [error, setError] = useState(null);
+  const [cameraGranted, setCameraGranted] = useState(false);
+  const [micGranted, setMicGranted] = useState(false);
+  const [violationLog, setViolationLog] = useState([]);
+  const [proctorStream, setProctorStream] = useState(null);
+  const [screenStream, setScreenStream] = useState(null);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [reconnectionCountdown, setReconnectionCountdown] = useState(null);
+  const [trainerMessages, setTrainerMessages] = useState([]);
   const lastReportRef = useRef(new Map());
+  const reconnectionTimerRef = useRef(null);
+  const viewerPcsRef = useRef(new Map()); // Map<viewerId, RTCPeerConnection>
   const { socket } = useSocket();
+
+  // Clean up reconnection timer
+  useEffect(() => () => {
+    if (reconnectionTimerRef.current) clearInterval(reconnectionTimerRef.current);
+  }, []);
 
   // Resume any active session — only after auth is ready and we have a userId
   useEffect(() => {
@@ -57,6 +73,28 @@ export function ProctorProvider({ children }) {
     }, HEARTBEAT_INTERVAL_MS);
     return () => clearInterval(id);
   }, [session?.sessionId, session?.sessionToken, session?.status, socket]);
+
+  // Periodic screen capture uploads (every 30 seconds)
+  useEffect(() => {
+    if (!socket || !session || session.status !== 'ACTIVE' || !screenStream) return;
+
+    const captureInterval = setInterval(async () => {
+      try {
+        const dataUrl = await captureFrame(screenStream, 0.4);
+        if (dataUrl) {
+          socket.emit('proctor:screen-frame', {
+            sessionId: session.sessionId,
+            imageBase64: dataUrl,
+            timestamp: Date.now()
+          });
+        }
+      } catch (err) {
+        console.warn('Screen capture failed', err);
+      }
+    }, 30000);
+
+    return () => clearInterval(captureInterval);
+  }, [socket, session?.sessionId, session?.status, screenStream]);
 
   // Join session room as soon as we have a session
   useEffect(() => {
@@ -79,6 +117,94 @@ export function ProctorProvider({ children }) {
     setSession(prev => prev ? {
       ...prev, status: 'TERMINATED', terminationReason: 'Logged in from another device',
     } : prev);
+  }, []);
+
+  // ── Grace period reconnection ──────────────────────────────────────────
+  useSocketEvent('proctor:reconnected', (msg) => {
+    if (msg?.session) {
+      setSession(prev => ({ ...prev, ...msg.session }));
+      setIsReconnecting(false);
+      setReconnectionCountdown(null);
+      if (reconnectionTimerRef.current) clearInterval(reconnectionTimerRef.current);
+    }
+  }, []);
+
+  // ── Trainer message ────────────────────────────────────────────────────
+  useSocketEvent('proctor:trainerMessage', (msg) => {
+    if (msg?.message) {
+      setTrainerMessages(prev => [...prev, { ...msg, id: Date.now() }]);
+      setLastWarning({ type: 'TRAINER_WARNING', message: msg.message, at: Date.now() });
+    }
+  }, []);
+
+  // ── WebRTC: observe-request from trainer (participant side) ────────────
+  useSocketEvent('proctor:observe-request', async ({ sessionId, viewerId }) => {
+    if (!socket) return;
+    // Need at least the screen stream to share
+    const screen = screenStream;
+    const webcam = proctorStream;
+    if (!screen) return;
+    try {
+      const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+      viewerPcsRef.current.set(viewerId, pc);
+
+      // Add screen share tracks
+      screen.getTracks().forEach(track => pc.addTrack(track, screen));
+      // Optionally add webcam tracks
+      if (webcam) {
+        webcam.getTracks().forEach(track => pc.addTrack(track, webcam));
+      }
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          socket.emit('proctor:ice-candidate', { sessionId, viewerId, candidate: e.candidate.toJSON() });
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState)) {
+          viewerPcsRef.current.delete(viewerId);
+          pc.close();
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('proctor:webrtc-offer', { sessionId, viewerId, sdp: pc.localDescription });
+    } catch (err) {
+      console.warn('WebRTC offer creation failed', err);
+    }
+  }, [socket, screenStream, proctorStream]);
+
+  // ── WebRTC: answer from trainer ────────────────────────────────────────
+  useSocketEvent('proctor:webrtc-answer', ({ sessionId, viewerId, sdp }) => {
+    const pc = viewerPcsRef.current.get(viewerId);
+    if (!pc) return;
+    try {
+      pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    } catch (err) {
+      console.warn('WebRTC setRemote failed', err);
+    }
+  }, []);
+
+  // ── WebRTC: ICE candidate from trainer ─────────────────────────────────
+  useSocketEvent('proctor:ice-candidate', ({ sessionId, viewerId, candidate }) => {
+    const pc = viewerPcsRef.current.get(viewerId);
+    if (!pc || !candidate) return;
+    try {
+      pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (err) {
+      console.warn('WebRTC addIceCandidate failed', err);
+    }
+  }, []);
+
+  // ── WebRTC: unobserve-request from trainer ─────────────────────────────
+  useSocketEvent('proctor:unobserve-request', ({ sessionId, viewerId }) => {
+    const pc = viewerPcsRef.current.get(viewerId);
+    if (pc) {
+      pc.close();
+      viewerPcsRef.current.delete(viewerId);
+    }
   }, []);
 
   const start = useCallback(async ({ quizId, attemptId, fingerprintHash, screenSharing }) => {
@@ -135,7 +261,13 @@ export function ProctorProvider({ children }) {
     if (now - last < 1500) return;
     lastReportRef.current.set(type, now);
 
-    setLastWarning({ type, message: message || VIOLATION_LABELS[type], at: now });
+    const logMsg = message || VIOLATION_LABELS[type];
+    setLastWarning({ type, message: logMsg, at: now });
+
+    setViolationLog(prev => [
+      ...prev,
+      { type, timestamp: now, meta: metadata || {} }
+    ]);
 
     socket?.emit('proctor:violation', {
       sessionId: session.sessionId, type, message, metadata,
@@ -155,6 +287,7 @@ export function ProctorProvider({ children }) {
 
   const reset = useCallback(() => {
     setSession(null); setLastWarning(null); setError(null);
+    setCameraGranted(false); setMicGranted(false); setViolationLog([]);
     lastReportRef.current.clear();
   }, []);
 
@@ -168,12 +301,33 @@ export function ProctorProvider({ children }) {
     isPending: session?.status === 'PENDING',
     isTerminated: ['TERMINATED', 'EXPIRED'].includes(session?.status),
     isSubmitted: session?.status === 'SUBMITTED',
+    isLocked: ['TERMINATED', 'EXPIRED'].includes(session?.status) || session?.isLocked || false,
     error,
     errorMessage: humanise(error),
     lastWarning,
+    cameraGranted,
+    setCameraGranted,
+    micGranted,
+    setMicGranted,
+    violationLog,
+    setViolationLog,
+    proctorStream,
+    setProctorStream,
+    screenStream,
+    setScreenStream,
+    isReconnecting,
+    reconnectionCountdown,
+    trainerMessages,
+    // Category violation counters synced from session view
+    fullscreenViolations: session?.fullscreenViolations || 0,
+    tabSwitchViolations: session?.tabSwitchViolations || 0,
+    screenshotViolations: session?.screenshotViolations || 0,
+    devToolsViolations: session?.devToolsViolations || 0,
+    windowBlurViolations: session?.windowBlurViolations || 0,
     start, activate, submit, terminate, report, pushState, reset,
   }), [
-    session, userId, authReady, error, lastWarning,
+    session, userId, authReady, error, lastWarning, cameraGranted, micGranted,
+    violationLog, proctorStream, screenStream, isReconnecting, reconnectionCountdown, trainerMessages,
     start, activate, submit, terminate, report, pushState, reset,
   ]);
 

@@ -5,10 +5,11 @@ import {
   ArrowLeft, Settings, BookOpen, Users, BarChart3, Trophy, FileText, ListChecks,
   Plus, Pencil, Trash2, Save, X, Check, Send, Loader2, AlertTriangle, Eye, Star,
   Download, Search, ChevronDown, ChevronUp, GripVertical, Clock, Calendar, User,
-  HelpCircle, CheckCircle2, AlertCircle, RefreshCw,
+  HelpCircle, CheckCircle2, AlertCircle, RefreshCw, Monitor,
 } from 'lucide-react'
 import { API, API_BASE } from '../api/api'
 import { useToast } from '../components/Toast'
+import { TrainerProctoringDashboard } from '../proctoring'
 
 const STATUS_BADGE = {
   DRAFT:     { bg: '#f1f5f9', fg: '#475569', label: 'Draft' },
@@ -141,6 +142,17 @@ export default function TrainerQuizDetails({ user, onLogout }) {
   const statusV = STATUS_BADGE[quiz.status] || STATUS_BADGE.DRAFT
   const resultV = RESULT_STATUS_BADGE[quiz.resultStatus] || RESULT_STATUS_BADGE.HIDDEN
 
+  const tabs = [
+    { key: 'general',    label: 'General',    icon: FileText },
+    { key: 'questions',  label: 'Questions',  icon: HelpCircle },
+    { key: 'participants', label: 'Participants', icon: Users },
+    ...(quiz.proctoringEnabled ? [{ key: 'proctor', label: 'Monitor Live', icon: Monitor }] : []),
+    { key: 'results',    label: 'Results',    icon: BarChart3 },
+    { key: 'leaderboard', label: 'Leaderboard', icon: Trophy },
+    { key: 'analytics',  label: 'Analytics',  icon: Star },
+    { key: 'settings',   label: 'Settings',   icon: Settings },
+  ]
+
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 20px' }}>
       {/* Header */}
@@ -165,7 +177,7 @@ export default function TrainerQuizDetails({ user, onLogout }) {
 
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid #e2e8f0', marginBottom: 24, overflow: 'auto' }}>
-        {TABS.map(tab => {
+        {tabs.map(tab => {
           const Icon = tab.icon
           const active = activeTab === tab.key
           return (
@@ -207,6 +219,9 @@ export default function TrainerQuizDetails({ user, onLogout }) {
           )}
           {activeTab === 'participants' && (
             <ParticipantsTab quiz={quiz} auth={auth} toast={toast} />
+          )}
+          {activeTab === 'proctor' && (
+            <TrainerProctoringDashboard quizId={Number(quizId)} quizTitle={quiz.title} />
           )}
           {activeTab === 'results' && (
             <ResultsTab quiz={quiz} onRefresh={fetchQuiz} auth={auth} toast={toast} />
@@ -691,7 +706,7 @@ function ParticipantsTab({ quiz, auth, toast }) {
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
+  const fetchParticipants = useCallback(() => {
     setLoading(true)
     fetch(API.TRAINER_COURSES.QUIZ_PARTICIPANTS(quiz.id), { headers: auth() })
       .then(r => r.json())
@@ -700,6 +715,29 @@ function ParticipantsTab({ quiz, auth, toast }) {
       .finally(() => setLoading(false))
   }, [quiz.id])
 
+  useEffect(() => {
+    fetchParticipants()
+  }, [fetchParticipants])
+
+  const handleReinstate = async (attemptId) => {
+    if (!confirm('Are you sure you want to reinstate this participant? Their warning count will be reset, copy violations cleared, and they will be allowed to resume the attempt.')) return
+    try {
+      const res = await fetch(`${API_BASE}/quizzes/attempts/${attemptId}/reinstate`, {
+        method: 'POST',
+        headers: auth()
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        toast?.success(data.message || 'Participant reinstated successfully.')
+        fetchParticipants()
+      } else {
+        toast?.error(data.error || 'Failed to reinstate participant.')
+      }
+    } catch (err) {
+      toast?.error('Failed to reinstate participant.')
+    }
+  }
+
   const STATUS_STYLES = {
     NOT_STARTED:    { bg: '#f1f5f9', fg: '#64748b', label: 'Not Started' },
     IN_PROGRESS:    { bg: '#dbeafe', fg: '#1d4ed8', label: 'In Progress' },
@@ -707,6 +745,7 @@ function ParticipantsTab({ quiz, auth, toast }) {
     SUBMITTED:      { bg: '#fef3c7', fg: '#92400e', label: 'Submitted' },
     WAITING_RESULT: { bg: '#fef3c7', fg: '#92400e', label: 'Waiting Result' },
     RESULT_PUBLISHED: { bg: '#dcfce7', fg: '#15803d', label: 'Result Published' },
+    DISQUALIFIED:   { bg: '#fee2e2', fg: '#dc2626', label: 'Disqualified' },
   }
 
   const filtered = participants.filter(p => {
@@ -745,6 +784,7 @@ function ParticipantsTab({ quiz, auth, toast }) {
             <option value="NOT_STARTED">Not Started</option>
             <option value="IN_PROGRESS">In Progress</option>
             <option value="COMPLETED">Completed</option>
+            <option value="DISQUALIFIED">Disqualified</option>
             <option value="RESULT_PUBLISHED">Result Published</option>
           </select>
         </div>
@@ -769,6 +809,7 @@ function ParticipantsTab({ quiz, auth, toast }) {
                 <th style={th}>Status</th>
                 <th style={th}>Submitted</th>
                 <th style={{ ...th, textAlign: 'right' }}>Score</th>
+                <th style={{ ...th, textAlign: 'right', paddingRight: 20 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -780,15 +821,44 @@ function ParticipantsTab({ quiz, auth, toast }) {
                     <td style={{ ...td, fontWeight: 600, color: '#0f172a' }}>{p.name}</td>
                     <td style={{ ...td, color: '#64748b', fontSize: 12 }}>{p.email}</td>
                     <td style={td}>
-                      <span style={{ padding: '3px 10px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: sv.bg, color: sv.fg }}>
-                        {sv.label}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                        <span style={{ padding: '3px 10px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: sv.bg, color: sv.fg }}>
+                          {sv.label}
+                        </span>
+                        {p.violationCount > 0 && (
+                          <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 2 }}>
+                            ⚠️ {p.violationCount} violation{p.violationCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ ...td, fontSize: 12, color: '#64748b' }}>
                       {p.submittedAt ? new Date(p.submittedAt).toLocaleDateString() : '—'}
                     </td>
                     <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: showScore ? '#0f172a' : '#94a3b8' }}>
                       {showScore ? `${p.percentage}%` : '—'}
+                    </td>
+                    <td style={{ ...td, textAlign: 'right', paddingRight: 20 }}>
+                      {p.status === 'DISQUALIFIED' && p.attemptId && (
+                        <button
+                          onClick={() => handleReinstate(p.attemptId)}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#10b981',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: 6,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s',
+                          }}
+                          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+                          onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
+                        >
+                          Reinstate
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )
@@ -811,6 +881,8 @@ function ResultsTab({ quiz, onRefresh, auth, toast }) {
   const [publishing, setPublishing] = useState(false)
   const [showOverride, setShowOverride] = useState(false)
   const [overrideReason, setOverrideReason] = useState('')
+  const [violationModal, setViolationModal] = useState(null)
+  const [violationsLoading, setViolationsLoading] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -945,6 +1017,7 @@ function ResultsTab({ quiz, onRefresh, auth, toast }) {
                 <th style={th}>Pass/Fail</th>
                 <th style={th}>Submitted</th>
                 <th style={th}>Status</th>
+                <th style={{ ...th, textAlign: 'right', paddingRight: 20 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -954,7 +1027,21 @@ function ResultsTab({ quiz, onRefresh, auth, toast }) {
                 const passed = pct != null && pct >= 50
                 return (
                   <tr key={entry.participantId}>
-                    <td style={{ ...td, fontWeight: 600, color: '#0f172a' }}>{entry.participantName}</td>
+                    <td style={{ ...td, fontWeight: 600, color: '#0f172a' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                        <span>{entry.participantName}</span>
+                        {(entry.attemptStatus === 'disqualified_copy_violation' || entry.attemptStatus === 'disqualified_policy_violation') && (
+                          <span style={{ padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#fee2e2', color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            🚫 Disqualified
+                          </span>
+                        )}
+                        {entry.violationCount > 0 && (
+                          <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>
+                            ⚠️ {entry.violationCount} violation{entry.violationCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#475569' }}>
                       {entry.totalScore != null ? `${entry.totalScore}/${entry.maxScore}` : '-'}
                     </td>
@@ -983,11 +1070,193 @@ function ResultsTab({ quiz, onRefresh, auth, toast }) {
                         {isPending ? '🟡 Pending' : '✅ Published'}
                       </span>
                     </td>
+                    <td style={{ ...td, textAlign: 'right', paddingRight: 20 }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        {entry.violationCount > 0 && entry.attemptId && (
+                          <button
+                            onClick={async () => {
+                              setViolationsLoading(true)
+                              setViolationModal({ participantName: entry.participantName, attemptId: entry.attemptId, violations: [] })
+                              try {
+                                const res = await fetch(`${API_BASE}/quizzes/attempts/${entry.attemptId}/violations`, { headers: auth() })
+                                const data = await res.json()
+                                if (res.ok && data.success) {
+                                  setViolationModal(prev => ({ ...prev, violations: data.violations }))
+                                }
+                              } catch (err) {
+                                toast?.error('Failed to fetch violations.')
+                              }
+                              setViolationsLoading(false)
+                            }}
+                            style={{
+                              padding: '6px 10px',
+                              background: '#f1f5f9',
+                              color: '#475569',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s',
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                          >
+                            📋 View
+                          </button>
+                        )}
+                        {(entry.attemptStatus === 'disqualified_copy_violation' || entry.attemptStatus === 'disqualified_policy_violation') && entry.attemptId && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Are you sure you want to reinstate ${entry.participantName}? Their warning count will be reset, copy violations cleared, and they will be allowed to resume the attempt.`)) return
+                              try {
+                                const res = await fetch(`${API_BASE}/quizzes/attempts/${entry.attemptId}/reinstate`, {
+                                  method: 'POST',
+                                  headers: auth()
+                                })
+                                const data = await res.json()
+                                if (res.ok && data.success) {
+                                  toast?.success(data.message || 'Participant reinstated successfully.')
+                                  fetchData()
+                                  onRefresh?.()
+                                } else {
+                                  toast?.error(data.error || 'Failed to reinstate participant.')
+                                }
+                              } catch (err) {
+                                toast?.error('Failed to reinstate participant.')
+                              }
+                            }}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#10b981',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s',
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+                            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
+                          >
+                            Reinstate
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ─── Violation detail modal ──────────────────────────────── */}
+      {violationModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(15,23,42,0.55)',
+          backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '80vh',
+            overflow: 'auto', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', padding: 28,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+                Violation Log — {violationModal.participantName}
+              </h3>
+              <button
+                onClick={() => setViolationModal(null)}
+                style={{
+                  width: 30, height: 30, border: 'none', borderRadius: 8,
+                  background: '#f1f5f9', cursor: 'pointer', fontSize: 16, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {violationsLoading ? (
+              <p style={{ color: '#94a3b8', fontSize: 14 }}>Loading violations...</p>
+            ) : violationModal.violations.length === 0 ? (
+              <p style={{ color: '#94a3b8', fontSize: 14 }}>No violations recorded.</p>
+            ) : (
+              <>
+                <div style={{
+                  display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap',
+                }}>
+                  <div style={{
+                    flex: 1, minWidth: 120, padding: '10px 14px', borderRadius: 10,
+                    background: '#fef2f2', border: '1px solid #fecaca',
+                  }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#dc2626' }}>
+                      {violationModal.violations.filter(v => (v.weight || 1.0) >= 1.0).length}
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#b91c1c' }}>
+                      Hard violations
+                    </div>
+                  </div>
+                  <div style={{
+                    flex: 1, minWidth: 120, padding: '10px 14px', borderRadius: 10,
+                    background: '#fffbeb', border: '1px solid #fde68a',
+                  }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#d97706' }}>
+                      {violationModal.violations.filter(v => (v.weight || 1.0) < 1.0).length}
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e' }}>
+                      Soft violations
+                    </div>
+                  </div>
+                  <div style={{
+                    flex: 1, minWidth: 120, padding: '10px 14px', borderRadius: 10,
+                    background: '#f0f9ff', border: '1px solid #bae6fd',
+                  }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: '#0369a1' }}>
+                      {violationModal.violations.length}
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#075985' }}>
+                      Total
+                    </div>
+                  </div>
+                </div>
+
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                      <th style={{ textAlign: 'left', padding: '8px 8px 8px 0', fontWeight: 700, color: '#475569' }}>Type</th>
+                      <th style={{ textAlign: 'center', padding: 8, fontWeight: 700, color: '#475569' }}>Weight</th>
+                      <th style={{ textAlign: 'center', padding: 8, fontWeight: 700, color: '#475569' }}>Question</th>
+                      <th style={{ textAlign: 'right', padding: '8px 0 8px 8px', fontWeight: 700, color: '#475569' }}>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {violationModal.violations.map((v, i) => (
+                      <tr key={v.id || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '8px 8px 8px 0', fontWeight: 600, color: '#0f172a' }}>
+                          <span style={{
+                            display: 'inline-block', padding: '2px 6px', borderRadius: 4, fontSize: 11,
+                            background: (v.weight || 1.0) >= 1.0 ? '#fee2e2' : '#fffbeb',
+                            color: (v.weight || 1.0) >= 1.0 ? '#dc2626' : '#d97706',
+                            fontWeight: 700,
+                          }}>
+                            {v.type}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center', padding: 8, color: '#64748b' }}>{v.weight || 1.0}</td>
+                        <td style={{ textAlign: 'center', padding: 8, color: '#64748b' }}>Q{v.questionNumber || '-'}</td>
+                        <td style={{ textAlign: 'right', padding: '8px 0 8px 8px', color: '#94a3b8', fontSize: 12 }}>
+                          {v.occurredAt ? new Date(v.occurredAt).toLocaleString() : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1183,6 +1452,14 @@ function SettingsTab({ quiz, onRefresh, auth, toast }) {
     difficulty: quiz.difficulty || 'MIXED',
     timeLimit: quiz.timeLimit || 30,
     isMandatory: quiz.isMandatory !== false,
+    copyProtectionEnabled: quiz.copyProtectionEnabled || false,
+    maxCopyWarnings: quiz.maxCopyWarnings || 3,
+    copyViolationActions: quiz.copyViolationActions || ['COPY', 'CUT', 'RIGHT_CLICK', 'PRINT', 'BLOCKED_SHORTCUT'],
+    copyWarningMessage: quiz.copyWarningMessage || '',
+    copyDisqualifyAction: quiz.copyDisqualifyAction || 'AUTO_SUBMIT',
+    proctoringEnabled: quiz.proctoringEnabled || false,
+    proctoringLevel: quiz.proctoringLevel || 'MEDIUM',
+    gracePeriodMinutes: quiz.gracePeriodMinutes || 2,
   })
   const [saving, setSaving] = useState(false)
 
@@ -1225,6 +1502,79 @@ function SettingsTab({ quiz, onRefresh, auth, toast }) {
           <label style={labelStyle}>Time Limit (minutes)</label>
           <input style={inputStyle} type="number" min={1} value={form.timeLimit} onChange={e => setForm({ ...form, timeLimit: parseInt(e.target.value) || 30 })} />
         </div>
+
+        <ToggleRow label="Enable Copy Protection" desc="Prevent copying questions, blocking shortcuts, context menus" checked={form.copyProtectionEnabled} onChange={v => setForm({ ...form, copyProtectionEnabled: v })} />
+        {form.copyProtectionEnabled && (
+          <div style={{ paddingLeft: 44, display: 'flex', flexDirection: 'column', gap: 16, borderLeft: '2px solid #e2e8f0', marginTop: 8 }}>
+            <div>
+              <label style={labelStyle}>Max Warnings</label>
+              <input style={inputStyle} type="number" min={1} max={10} value={form.maxCopyWarnings} onChange={e => setForm({ ...form, maxCopyWarnings: parseInt(e.target.value) || 3 })} />
+            </div>
+            <div>
+              <label style={labelStyle}>Warning Message Text</label>
+              <textarea
+                style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
+                placeholder="Use {violationCount} and {maxWarnings} for placeholders. Leave blank for default message."
+                value={form.copyWarningMessage}
+                onChange={e => setForm({ ...form, copyWarningMessage: e.target.value })}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Disqualification Action</label>
+              <select style={selectStyle} value={form.copyDisqualifyAction} onChange={e => setForm({ ...form, copyDisqualifyAction: e.target.value })}>
+                <option value="AUTO_SUBMIT">Auto-Submit Attempt</option>
+                <option value="LOCK">Lock Screen Only</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Restricted Actions</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                {[
+                  { key: 'COPY', label: 'Prevent Copying' },
+                  { key: 'CUT', label: 'Prevent Cutting' },
+                  { key: 'RIGHT_CLICK', label: 'Disable Right-Click' },
+                  { key: 'PRINT', label: 'Prevent Printing' },
+                  { key: 'BLOCKED_SHORTCUT', label: 'Block DevTools/SelectAll Shortcuts' },
+                ].map(act => {
+                  const checked = form.copyViolationActions.includes(act.key)
+                  return (
+                    <label key={act.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={e => {
+                          const nextActions = e.target.checked
+                            ? [...form.copyViolationActions, act.key]
+                            : form.copyViolationActions.filter(x => x !== act.key)
+                          setForm({ ...form, copyViolationActions: nextActions })
+                        }}
+                      />
+                      {act.label}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <ToggleRow label="Enable Screen Monitoring & Live Proctoring" desc="Require participants to share their screen and be monitored live by the trainer" checked={form.proctoringEnabled} onChange={v => setForm({ ...form, proctoringEnabled: v })} />
+        {form.proctoringEnabled && (
+          <div style={{ paddingLeft: 44, display: 'flex', flexDirection: 'column', gap: 16, borderLeft: '2px solid #e2e8f0', marginTop: 8 }}>
+            <div>
+              <label style={labelStyle}>Proctoring / Monitoring Level</label>
+              <select style={selectStyle} value={form.proctoringLevel} onChange={e => setForm({ ...form, proctoringLevel: e.target.value })}>
+                <option value="LOW">Low (Permissive constraints)</option>
+                <option value="MEDIUM">Medium (Standard constraints)</option>
+                <option value="HIGH">High (Strict constraints)</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Reconnection Grace Period (minutes)</label>
+              <input style={inputStyle} type="number" min={1} max={10} value={form.gracePeriodMinutes} onChange={e => setForm({ ...form, gracePeriodMinutes: parseInt(e.target.value) || 2 })} />
+            </div>
+          </div>
+        )}
       </div>
       <button onClick={handleSave} disabled={saving} style={{ ...btnPrimary, marginTop: 24, opacity: saving ? 0.6 : 1 }}>
         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}

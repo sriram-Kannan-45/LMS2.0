@@ -631,11 +631,33 @@ router.put('/trainer/quiz/:id',
       });
       if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
-      const { title, timeLimit, status } = req.body;
+      const {
+        title, timeLimit, status,
+        showResultImmediately, showCorrectAnswersOnResult, shuffleQuestions,
+        allowMultipleAttempts, maxAttempts, difficulty, isMandatory,
+        copyProtectionEnabled, maxCopyWarnings, copyViolationActions,
+        copyWarningMessage, copyDisqualifyAction,
+        proctoringLevel, gracePeriodMinutes, proctoringEnabled
+      } = req.body;
       const update = {};
-      if (title) update.title = title;
-      if (timeLimit) update.timeLimit = parseInt(timeLimit);
+      if (title !== undefined) update.title = title;
+      if (timeLimit !== undefined) update.timeLimit = timeLimit ? parseInt(timeLimit) : null;
       if (status && ['DRAFT', 'PUBLISHED', 'CLOSED'].includes(status)) update.status = status;
+      if (showResultImmediately !== undefined) update.showResultImmediately = showResultImmediately;
+      if (showCorrectAnswersOnResult !== undefined) update.showCorrectAnswersOnResult = showCorrectAnswersOnResult;
+      if (shuffleQuestions !== undefined) update.shuffleQuestions = shuffleQuestions;
+      if (allowMultipleAttempts !== undefined) update.allowMultipleAttempts = allowMultipleAttempts;
+      if (maxAttempts !== undefined) update.maxAttempts = parseInt(maxAttempts);
+      if (difficulty !== undefined) update.difficulty = difficulty;
+      if (isMandatory !== undefined) update.isMandatory = isMandatory;
+      if (copyProtectionEnabled !== undefined) update.copyProtectionEnabled = copyProtectionEnabled;
+      if (maxCopyWarnings !== undefined) update.maxCopyWarnings = parseInt(maxCopyWarnings);
+      if (copyViolationActions !== undefined) update.copyViolationActions = copyViolationActions;
+      if (copyWarningMessage !== undefined) update.copyWarningMessage = copyWarningMessage;
+      if (copyDisqualifyAction !== undefined) update.copyDisqualifyAction = copyDisqualifyAction;
+      if (proctoringLevel !== undefined) update.proctoringLevel = proctoringLevel;
+      if (gracePeriodMinutes !== undefined) update.gracePeriodMinutes = parseInt(gracePeriodMinutes);
+      if (proctoringEnabled !== undefined) update.proctoringEnabled = proctoringEnabled;
 
       await quiz.update(update);
       res.json({ message: 'Quiz updated', quiz });
@@ -844,9 +866,13 @@ router.post('/participant/start/:quizId',
     try {
       const { Course, Training, QuizAssignment } = require('../models');
 
-      // Check if any attempt already exists to prevent duplicate attempt records
+      // Check if any completed/disqualified attempt already exists to prevent duplicate attempt records
       const existingAttempt = await QuizAttempt.findOne({
-        where: { quizId: req.params.quizId, participantId: req.user.id }
+        where: { 
+          quizId: req.params.quizId, 
+          participantId: req.user.id,
+          status: { [Op.ne]: 'IN_PROGRESS' }
+        }
       });
       if (existingAttempt) {
         console.log(`[aiQuiz/start] Rejecting start: attempt already exists for quiz #${req.params.quizId}, participant #${req.user.id}`);
@@ -973,10 +999,12 @@ router.post('/participant/start/:quizId',
 
           if (fpMatches && ipMatches) {
             console.log(`[participant/start] Resuming attempt #${existing.id} with existing session #${session.id}`);
+            console.log(`[ATTEMPT_STATUS_CHANGE] Attempt #${existing.id} status set to IN_PROGRESS at ${new Date().toISOString()}`);
             return res.json({
               attemptId: existing.id,
               quiz,
               sessionToken: session.sessionToken,
+              violationCount: existing.violationCount || 0
             });
           }
 
@@ -1028,7 +1056,8 @@ router.post('/participant/start/:quizId',
           });
           console.log(`[aiQuizRoutes/start] Successfully created session #${session.id}`);
         }
-        return res.json({ attemptId: existing.id, quiz, sessionToken: session.sessionToken });
+        console.log(`[ATTEMPT_STATUS_CHANGE] Attempt #${existing.id} status set to IN_PROGRESS at ${new Date().toISOString()}`);
+        return res.json({ attemptId: existing.id, quiz, sessionToken: session.sessionToken, violationCount: existing.violationCount || 0 });
       }
 
       // No existing attempt — but maybe a session row for a new quiz exists
@@ -1048,6 +1077,7 @@ router.post('/participant/start/:quizId',
         participantId: req.user.id,
         status: 'IN_PROGRESS'
       });
+      console.log(`[ATTEMPT_STATUS_CHANGE] Attempt #${attempt.id} status set to IN_PROGRESS at ${new Date().toISOString()}`);
 
       const sessionToken = crypto.randomBytes(32).toString('hex');
       await AssessmentSession.create({
@@ -1091,137 +1121,150 @@ router.post('/participant/submit/:attemptId',
   async (req, res) => {
     try {
       const { answers } = req.body;
-      const attempt = await QuizAttempt.findOne({
-        where: { id: req.params.attemptId, participantId: req.user.id }
-      });
-      if (!attempt) return res.status(404).json({ error: 'Attempt not found' });
-
-      const { Course, Training } = require('../models');
-      const quiz = await AIQuiz.findByPk(attempt.quizId, {
-        include: [
-          { model: AIQuestion, as: 'questions' },
-          { model: Course, as: 'course', include: [{ model: Training, as: 'program' }] }
-        ]
-      });
-
-      if (!quiz || (quiz.status !== 'PUBLISHED' && quiz.status !== 'CLOSED')) {
-        return res.status(403).json({ error: 'Quiz is not available for submission' });
+      if (!Array.isArray(answers)) {
+        return res.status(422).json({ error: 'answers[] is required' });
       }
 
-      // Check availability
-      const training = quiz.course?.program || (quiz.trainingId ? await Training.findByPk(quiz.trainingId) : null);
-      if (training) {
-        const now = new Date();
-        if (training.startDate && now < new Date(training.startDate)) {
-          return res.status(403).json({ error: 'Quiz is not yet available (training program has not started)' });
-        }
-      }
-
-      let totalScore = 0;
-      let maxScore = 0;
-      const questionsMap = {};
-      quiz.questions.forEach(q => { questionsMap[q.id] = q; maxScore += (q.marks || 1); });
-
-      for (const ans of answers) {
-        const question = questionsMap[ans.questionId];
-        if (!question) continue;
-
-        let score = 0;
-        let feedback = '';
-        let isCorrect = false;
-        const qMarks = question.marks || 1;
-
-        if (['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING'].includes(question.questionType)) {
-          const result = gradeAnswer(question, {
-            selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
-            answer: ans.answerText || ans.answer || '',
-            answerText: ans.answerText || ans.answer || '',
-            matches: ans.matches
-          });
-          isCorrect = result.isCorrect;
-          score = result.score > 0 ? (result.score / 100) * qMarks : 0;
-          if (question.questionType === 'MATCHING') {
-            feedback = `Score: ${result.score}%. Matched ${result.correctCount} of ${result.total} correctly.`;
-          } else {
-            feedback = isCorrect ? 'Correct!' : `Incorrect. Correct answer: ${question.correctAnswer}`;
-          }
-        } else {
-          const evaluation = await aiService.evaluateShortAnswer(
-            question.questionText,
-            question.correctAnswer,
-            ans.answerText || ''
-          );
-          score = evaluation.score || 0;
-          feedback = evaluation.feedback || '';
-          isCorrect = evaluation.isCorrect || false;
+      await sequelize.transaction(async (t) => {
+        const attempt = await QuizAttempt.findOne({
+          where: { id: req.params.attemptId, participantId: req.user.id },
+          lock: t.LOCK.UPDATE,
+          transaction: t
+        });
+        if (!attempt) {
+          const err = new Error('Attempt not found');
+          err.status = 404;
+          throw err;
         }
 
-        await QuizAnswer.create({
-          attemptId: attempt.id,
-          questionId: ans.questionId,
-          answerText: ans.answerText || '',
-          selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
-          isCorrect,
-          score,
-          feedback,
-          evaluatedByAI: true
+        if (attempt.status !== 'IN_PROGRUS') {
+          const err = new Error('Quiz has already been submitted');
+          err.status = 409;
+          throw err;
+        }
+
+        const { Course, Training } = require('../models');
+        const quiz = await AIQuiz.findByPk(attempt.quizId, {
+          include: [
+            { model: AIQuestion, as: 'questions' },
+            { model: Course, as: 'course', include: [{ model: Training, as: 'program' }] }
+          ],
+          transaction: t
         });
 
-        totalScore += score;
-      }
-
-      const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-
-      // Compute time taken (seconds) if attempt has a startedAt timestamp.
-      // The QuizAttempt.timeTaken column already exists but was previously unused.
-      const submittedAt = new Date();
-      let timeTaken = null;
-      try {
-        if (attempt.startedAt) {
-          timeTaken = Math.max(0, Math.round((submittedAt.getTime() - new Date(attempt.startedAt).getTime()) / 1000));
+        if (!quiz || (quiz.status !== 'PUBLISHED' && quiz.status !== 'CLOSED')) {
+          const err = new Error('Quiz is not available for submission');
+          err.status = 403;
+          throw err;
         }
-      } catch (e) { /* non-fatal */ }
 
-      await attempt.update({ status: 'EVALUATED', submittedAt, ...(timeTaken != null ? { timeTaken } : {}) });
+        // Check availability
+        const training = quiz.course?.program || (quiz.trainingId ? await Training.findByPk(quiz.trainingId, { transaction: t }) : null);
+        if (training) {
+          const now = new Date();
+          if (training.startDate && now < new Date(training.startDate)) {
+            const err = new Error('Quiz is not yet available (training program has not started)');
+            err.status = 403;
+            throw err;
+          }
+        }
 
-      const result = await QuizResult.create({
-        attemptId: attempt.id,
-        quizId: quiz.id,
-        participantId: req.user.id,
-        totalScore,
-        maxScore,
-        percentage,
-        evaluatedAt: new Date(),
-        resultPublished: false
-      });
+        // Wipe any prior partial answers for this attempt then recreate.
+        await QuizAnswer.destroy({ where: { attemptId: attempt.id }, transaction: t });
 
-      // Leaderboard broadcasts are NOT sent here — results must first be
-      // published by the trainer.  See POST /:id/publish-result and
-      // POST /:id/publish-participant/:participantId which set
-      // resultPublished=true and then emit the leaderboard.
+        let totalScore = 0;
+        let maxScore = 0;
+        const questionsMap = {};
+        quiz.questions.forEach(q => { questionsMap[q.id] = q; maxScore += (q.marks || 1); });
 
-      // Mark quiz_assignment as COMPLETED
-      try {
+        for (const ans of answers) {
+          const question = questionsMap[ans.questionId];
+          if (!question) continue;
+
+          let score = 0;
+          let feedback = '';
+          let isCorrect = false;
+          const qMarks = question.marks || 1;
+
+          if (['MCQ', 'TRUE_FALSE', 'FILL_BLANK', 'MATCHING'].includes(question.questionType)) {
+            const result = gradeAnswer(question, {
+              selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
+              answer: ans.answerText || ans.answer || '',
+              answerText: ans.answerText || ans.answer || '',
+              matches: ans.matches
+            });
+            isCorrect = result.isCorrect;
+            score = result.score > 0 ? (result.score / 100) * qMarks : 0;
+            if (question.questionType === 'MATCHING') {
+              feedback = `Score: ${result.score}%. Matched ${result.correctCount} of ${result.total} correctly.`;
+            } else {
+              feedback = isCorrect ? 'Correct!' : `Incorrect. Correct answer: ${question.correctAnswer}`;
+            }
+          } else {
+            const evaluation = await aiService.evaluateShortAnswer(
+              question.questionText,
+              question.correctAnswer,
+              ans.answerText || ''
+            );
+            score = evaluation.score || 0;
+            feedback = evaluation.feedback || '';
+            isCorrect = evaluation.isCorrect || false;
+          }
+
+          await QuizAnswer.create({
+            attemptId: attempt.id,
+            questionId: ans.questionId,
+            answerText: ans.answerText || '',
+            selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
+            isCorrect,
+            score,
+            feedback,
+            evaluatedByAI: true
+          }, { transaction: t });
+
+          totalScore += score;
+        }
+
+        const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+        const submittedAt = new Date();
+        let timeTaken = null;
+        try {
+          if (attempt.startedAt) {
+            timeTaken = Math.max(0, Math.round((submittedAt.getTime() - new Date(attempt.startedAt).getTime()) / 1000));
+          }
+        } catch (e) { /* non-fatal */ }
+
+        await attempt.update({
+          status: 'SUBMITTED',
+          submittedAt,
+          ...(timeTaken != null ? { timeTaken } : {})
+        }, { transaction: t });
+        console.log(`[ATTEMPT_STATUS_CHANGE] Attempt #${attempt.id} status changed to SUBMITTED at ${submittedAt.toISOString()}`);
+
+        await QuizResult.create({
+          attemptId: attempt.id,
+          quizId: quiz.id,
+          participantId: req.user.id,
+          totalScore,
+          maxScore,
+          percentage,
+          evaluatedAt: submittedAt,
+          resultPublished: false
+        }, { transaction: t });
+
+        // Mark quiz_assignment as COMPLETED
         const { QuizAssignment } = require('../models');
         await QuizAssignment.update(
           { status: 'COMPLETED' },
-          { where: { quizId: quiz.id, participantId: req.user.id } }
+          { where: { quizId: quiz.id, participantId: req.user.id }, transaction: t }
         );
         console.log(`[submit] ✅ Quiz assignment marked COMPLETED for participant #${req.user.id}, quiz #${quiz.id}`);
-      } catch (qaErr) {
-        console.warn('[submit] Failed to update quiz_assignment:', qaErr.message);
-      }
 
-      // Best-effort: mark the assessment session EXPIRED so the participant
-      // is no longer locked to this device. Skipped if no session existed
-      // (legacy / proctored flow without X-Assessment-Session).
-      try {
+        // Mark the assessment session EXPIRED
         if (req.assessmentSession) {
-          await req.assessmentSession.update({ status: 'EXPIRED' });
+          await req.assessmentSession.update({ status: 'EXPIRED' }, { transaction: t });
         }
-      } catch (e) {
-        console.warn('[submit] session free failed:', e.message);
-      }
+      });
 
       res.json({
         success: true,
@@ -1230,6 +1273,9 @@ router.post('/participant/submit/:attemptId',
       });
     } catch (error) {
       console.error('Submit error:', error);
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message });
+      }
       res.status(500).json({ error: error.message });
     }
   }

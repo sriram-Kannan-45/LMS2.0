@@ -226,6 +226,26 @@ const connectDB = async () => {
           logger.info('➕ Adding shuffle_questions column to ai_quizzes...');
           await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `shuffle_questions` TINYINT(1) NOT NULL DEFAULT 0");
         }
+        if (!columnNames.includes('copy_protection_enabled')) {
+          logger.info('➕ Adding copy_protection_enabled column to ai_quizzes...');
+          await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `copy_protection_enabled` TINYINT(1) NOT NULL DEFAULT 0");
+        }
+        if (!columnNames.includes('max_copy_warnings')) {
+          logger.info('➕ Adding max_copy_warnings column to ai_quizzes...');
+          await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `max_copy_warnings` INT NOT NULL DEFAULT 3");
+        }
+        if (!columnNames.includes('copy_violation_actions')) {
+          logger.info('➕ Adding copy_violation_actions column to ai_quizzes...');
+          await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `copy_violation_actions` JSON NULL");
+        }
+        if (!columnNames.includes('copy_warning_message')) {
+          logger.info('➕ Adding copy_warning_message column to ai_quizzes...');
+          await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `copy_warning_message` TEXT NULL");
+        }
+        if (!columnNames.includes('copy_disqualify_action')) {
+          logger.info('➕ Adding copy_disqualify_action column to ai_quizzes...');
+          await sequelize.query("ALTER TABLE `ai_quizzes` ADD COLUMN `copy_disqualify_action` ENUM('LOCK', 'AUTO_SUBMIT') NOT NULL DEFAULT 'AUTO_SUBMIT'");
+        }
 
         // Update status ENUM — MySQL doesn't support DROP ENUM VALUE, so we
         // MODIFY the column to include RESULTS_PUBLISHED, ARCHIVED.
@@ -251,6 +271,56 @@ const connectDB = async () => {
         } catch (_) {}
       } catch (migQuizError) {
         logger.error('⚠️ Error applying manual schema migrations to ai_quizzes', { error: migQuizError.message });
+      }
+
+      // Manual database migration for quiz_attempts (add violation_count column and update status ENUM)
+      try {
+        const [qaCols] = await sequelize.query("SHOW COLUMNS FROM `quiz_attempts`");
+        const qaColNames = qaCols.map(c => c.Field);
+        if (!qaColNames.includes('violation_count')) {
+          logger.info('➕ Adding violation_count column to quiz_attempts...');
+          await sequelize.query("ALTER TABLE `quiz_attempts` ADD COLUMN `violation_count` INT NOT NULL DEFAULT 0");
+        }
+
+        const statusCol = qaCols.find(c => c.Field === 'status');
+        if (statusCol) {
+          const typeStr = String(statusCol.Type).toUpperCase();
+          if (!typeStr.includes('DISQUALIFIED_COPY_VIOLATION')) {
+            logger.info('🔄 Updating status ENUM in quiz_attempts...');
+            await sequelize.query(
+              "ALTER TABLE `quiz_attempts` MODIFY COLUMN `status` ENUM('IN_PROGRESS', 'SUBMITTED', 'EVALUATED', 'AUTO_SUBMITTED', 'disqualified_copy_violation') NOT NULL DEFAULT 'IN_PROGRESS'"
+            );
+          }
+        }
+      } catch (qaErr) {
+        logger.error('⚠️ Error applying migration to quiz_attempts', { error: qaErr.message });
+      }
+
+      // Create quiz_copy_violations table if it does not exist
+      try {
+        const [tables] = await sequelize.query("SHOW TABLES LIKE 'quiz_copy_violations'");
+        if (tables.length === 0) {
+          logger.info('➕ Creating quiz_copy_violations table...');
+          await sequelize.query(`
+            CREATE TABLE quiz_copy_violations (
+              id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+              attempt_id BIGINT UNSIGNED NOT NULL,
+              quiz_id BIGINT UNSIGNED NOT NULL,
+              participant_id BIGINT UNSIGNED NOT NULL,
+              type VARCHAR(64) NOT NULL,
+              question_number INT DEFAULT NULL,
+              user_agent VARCHAR(500) DEFAULT NULL,
+              occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              CONSTRAINT fk_qcv_attempt FOREIGN KEY (attempt_id) REFERENCES quiz_attempts(id) ON DELETE CASCADE,
+              CONSTRAINT fk_qcv_quiz FOREIGN KEY (quiz_id) REFERENCES ai_quizzes(id) ON DELETE CASCADE,
+              CONSTRAINT fk_qcv_participant FOREIGN KEY (participant_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+          `);
+        }
+      } catch (qcvErr) {
+        logger.error('⚠️ Error creating quiz_copy_violations table', { error: qcvErr.message });
       }
 
       // Manual migration: quiz_assignments table (per-participant assignment with status)
@@ -325,6 +395,29 @@ const connectDB = async () => {
         }
       } catch (qrError) {
         logger.error('⚠️ Error applying migration to quiz_results', { error: qrError.message });
+      }
+
+      // Manual database migration for proctor_violations (add new types to enum)
+      try {
+        const [violationCols] = await sequelize.query("SHOW COLUMNS FROM `proctor_violations` LIKE 'type'");
+        if (violationCols.length > 0) {
+          const typeStr = String(violationCols[0].Type).toUpperCase();
+          if (!typeStr.includes('SCREENSHOT_ATTEMPT') || !typeStr.includes('MOUSE_LEAVE')) {
+            logger.info('🔄 Updating type ENUM values in proctor_violations...');
+            await sequelize.query(
+              "ALTER TABLE `proctor_violations` MODIFY COLUMN `type` ENUM(" +
+              "'FULLSCREEN_EXIT','TAB_SWITCH','WINDOW_BLUR','BROWSER_MINIMIZE'," +
+              "'SCREEN_SHARE_STOPPED','SCREEN_SHARE_DENIED','COPY_ATTEMPT','PASTE_ATTEMPT'," +
+              "'RIGHT_CLICK','BLOCKED_SHORTCUT','DEVTOOLS_OPENED','REFRESH_ATTEMPT'," +
+              "'NAVIGATION_ATTEMPT','MULTIPLE_LOGIN','NETWORK_LOST','HEARTBEAT_LOST'," +
+              "'TERMINATED','SCREENSHOT_ATTEMPT','MOUSE_LEAVE','CLIPBOARD_ATTEMPT'," +
+              "'NETWORK_TIMEOUT','FACE_ABSENT','FACE_MULTIPLE','LOOKING_AWAY','MOBILE_DETECTED'" +
+              ") NOT NULL"
+            );
+          }
+        }
+      } catch (pvError) {
+        logger.error('⚠️ Error applying migration to proctor_violations', { error: pvError.message });
       }
 
       logger.info('✅ Manual schema migration checks completed successfully');

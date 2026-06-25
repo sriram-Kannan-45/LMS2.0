@@ -4,7 +4,7 @@
  * Two-step modal shown after POST /api/ai-quiz/participant/start/:quizId
  * succeeds. Blocks the participant from entering <QuizTaking /> until they
  * have:
- *   1. Acknowledged the security/consent notice
+ *   1. Acknowledged the security/consent notice + quiz protection rules
  *   2. Granted fullscreen permission (must come from a user gesture click)
  *
  * Props:
@@ -45,6 +45,7 @@ export default function AssessmentConsentGate({ quiz, attemptId, onConsented, on
   const [step, setStep] = useState(STEP_CONSENT);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [protectionConsentChecked, setProtectionConsentChecked] = useState(false);
 
   // ESC = cancel, body scroll lock while open
   useEffect(() => {
@@ -59,6 +60,7 @@ export default function AssessmentConsentGate({ quiz, attemptId, onConsented, on
   }, [onCancel]);
 
   const handleAgree = () => {
+    if (!protectionConsentChecked) return;
     setError('');
     setStep(STEP_FULLSCREEN);
   };
@@ -168,11 +170,47 @@ export default function AssessmentConsentGate({ quiz, attemptId, onConsented, on
                   <li>Assessment start and activity timestamps</li>
                 </ul>
 
-                <p className="ac-step__fine">
-                  This data is used solely to ensure assessment integrity and prevent
-                  unauthorized access. By proceeding, you consent to this data
-                  collection in accordance with our privacy policy.
-                </p>
+                <div style={{
+                  background: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  borderRadius: '10px',
+                  padding: '14px 16px',
+                  marginTop: '16px',
+                  marginBottom: '12px',
+                }}>
+                  <p style={{
+                    fontSize: '13px',
+                    lineHeight: '1.6',
+                    color: '#92400e',
+                    margin: '0 0 10px 0',
+                    fontWeight: '500',
+                  }}>
+                    This quiz is monitored for academic integrity. Copying, right-clicking, taking screenshots, or sharing quiz content is strictly prohibited and will result in warnings and possible disqualification or certification revocation.
+                  </p>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    fontSize: '13px',
+                    color: '#92400e',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={protectionConsentChecked}
+                      onChange={(e) => setProtectionConsentChecked(e.target.checked)}
+                      style={{
+                        marginTop: '2px',
+                        width: '16px',
+                        height: '16px',
+                        accentColor: '#d97706',
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span>I understand and agree that my quiz activity will be monitored, and I accept the terms above.</span>
+                  </label>
+                </div>
 
                 <div className="ac-step__actions">
                   <button
@@ -184,12 +222,20 @@ export default function AssessmentConsentGate({ quiz, attemptId, onConsented, on
                   </button>
                   <button
                     type="button"
-                    className="ac-btn ac-btn--primary"
+                    className={`ac-btn ac-btn--primary ${!protectionConsentChecked ? 'ac-btn--disabled' : ''}`}
                     onClick={handleAgree}
-                    autoFocus
+                    disabled={!protectionConsentChecked}
+                    style={{
+                      opacity: protectionConsentChecked ? 1 : 0.5,
+                      cursor: protectionConsentChecked ? 'pointer' : 'not-allowed',
+                    }}
+                    autoFocus={protectionConsentChecked}
                   >
-                    I Agree, Continue
-                    <ArrowRight size={15} />
+                    {protectionConsentChecked ? (
+                      <>I Agree, Continue <ArrowRight size={15} /></>
+                    ) : (
+                      <>Please Accept Terms Above</>
+                    )}
                   </button>
                 </div>
               </motion.div>

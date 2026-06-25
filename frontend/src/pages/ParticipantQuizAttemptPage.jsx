@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import QuizTaking from '../components/QuizTaking'
+import AssessmentConsentGate from '../components/ai-quizzes/AssessmentConsentGate'
 import { API_BASE } from '../api/api'
 import { useToast } from '../components/Toast'
 import { Loader2, AlertCircle } from 'lucide-react'
@@ -14,22 +15,36 @@ export default function ParticipantQuizAttemptPage({ user }) {
   const navigate = useNavigate()
   const { trainingId, quizId } = useParams()
   const [searchParams] = useSearchParams()
-  const attemptId = searchParams.get('attemptId')
-  const sessionToken = searchParams.get('sessionToken')
   const { error: showError } = useToast()
+
+  let attemptId = searchParams.get('attemptId')
+  let sessionToken = searchParams.get('sessionToken')
+
+  if (quizId) {
+    const storageKey = `quiz_${quizId}_attempt`
+    if (attemptId && sessionToken) {
+      sessionStorage.setItem(storageKey, JSON.stringify({ attemptId, sessionToken }))
+    } else {
+      const cached = sessionStorage.getItem(storageKey)
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          attemptId = attemptId || parsed.attemptId
+          sessionToken = sessionToken || parsed.sessionToken
+        } catch (e) {
+          console.error('[ParticipantQuizAttemptPage] Error parsing cached session:', e)
+        }
+      }
+    }
+  }
 
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState(null)
   const [quizData, setQuizData] = useState(null)
+  const [consented, setConsented] = useState(false)
 
   useEffect(() => {
-    console.log(`[ParticipantQuizAttemptPage] Mounted with quizId: ${quizId}, attemptId: ${attemptId}, sessionToken: ${sessionToken}`)
-    console.log(`[ParticipantQuizAttemptPage] Logged-in user role:`, user?.role)
-    console.log(`[ParticipantQuizAttemptPage] Logged-in user email:`, user?.email)
-    console.log(`[ParticipantQuizAttemptPage] JWT token payload status:`, user?.token ? 'Present' : 'Absent')
-
     if (!quizId || !attemptId) {
-      console.warn('[ParticipantQuizAttemptPage] Missing quizId or attemptId. Navigation aborted.')
       setErrorMsg('Invalid quiz or attempt identifiers.')
       setLoading(false)
       return
@@ -40,38 +55,39 @@ export default function ParticipantQuizAttemptPage({ user }) {
       try {
         setLoading(true)
         const requestUrl = `${API_BASE}/quizzes/${quizId}/questions`
-        console.log(`[ParticipantQuizAttemptPage] Fetching questions from: ${requestUrl}`)
 
         const res = await fetch(requestUrl, {
           headers: authHeaders(user.token)
         })
 
-        console.log(`[ParticipantQuizAttemptPage] Fetch questions response status: ${res.status}`)
         const data = await res.json()
-        console.log(`[ParticipantQuizAttemptPage] Fetch questions response data:`, data)
 
-        if (aborted) {
-          console.log('[ParticipantQuizAttemptPage] Component unmounted before response processed. Aborting.')
-          return
-        }
+        if (aborted) return
 
         if (!res.ok) {
-          console.error(`[ParticipantQuizAttemptPage] Error received:`, data.error)
           setErrorMsg(data.error || 'Failed to load quiz questions.')
           setLoading(false)
           return
         }
 
-        // Build the structure that QuizTaking expects
         setQuizData({
           id: data.quiz.id,
           title: data.quiz.title,
           timeLimit: data.quiz.timeLimit,
+          copyProtectionEnabled: data.quiz.copyProtectionEnabled,
+          maxCopyWarnings: data.quiz.maxCopyWarnings,
+          copyViolationActions: data.quiz.copyViolationActions,
+          copyWarningMessage: data.quiz.copyWarningMessage,
+          copyDisqualifyAction: data.quiz.copyDisqualifyAction,
+          proctoringEnabled: data.quiz.proctoringEnabled,
+          proctoringLevel: data.quiz.proctoringLevel,
+          gracePeriodMinutes: data.quiz.gracePeriodMinutes,
+          initialViolationCount: data.attempt?.violationCount || 0,
+          initialStatus: data.attempt?.status || 'IN_PROGRESS',
           questions: data.questions || []
         })
         setLoading(false)
       } catch (err) {
-        console.error(`[ParticipantQuizAttemptPage] Fetch catch error:`, err)
         if (!aborted) {
           setErrorMsg(err.message || 'Server error loading quiz.')
           setLoading(false)
@@ -80,10 +96,28 @@ export default function ParticipantQuizAttemptPage({ user }) {
     }
 
     fetchQuestions()
-    return () => {
-      aborted = true
+    return () => { aborted = true }
+  }, [quizId, attemptId, user.token])
+
+  useEffect(() => {
+    if (quizData && quizData.proctoringEnabled) {
+      navigate(`/participant/exam/${quizId}`, {
+        state: {
+          attemptId: attemptId,
+          quizData: quizData
+        },
+        replace: true
+      })
     }
-  }, [quizId, attemptId, user.token, sessionToken])
+  }, [quizData, quizId, attemptId, navigate])
+
+  const handleConsented = useCallback(() => {
+    setConsented(true)
+  }, [])
+
+  const handleCancel = useCallback(() => {
+    navigate(`/trainings/${trainingId}`)
+  }, [navigate, trainingId])
 
   if (loading) {
     return (
@@ -140,6 +174,18 @@ export default function ParticipantQuizAttemptPage({ user }) {
           Return to Dashboard
         </button>
       </div>
+    )
+  }
+
+  // Show consent gate before starting the quiz
+  if (!consented && quizData) {
+    return (
+      <AssessmentConsentGate
+        quiz={quizData}
+        attemptId={parseInt(attemptId, 10)}
+        onConsented={handleConsented}
+        onCancel={handleCancel}
+      />
     )
   }
 

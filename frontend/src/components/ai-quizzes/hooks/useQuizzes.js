@@ -114,7 +114,11 @@ export function useQuizzes() {
 
         return {
           attemptId: data.attemptId,
-          quiz: data.quiz,
+          quiz: {
+            ...data.quiz,
+            initialViolationCount: data.violationCount || 0,
+            initialStatus: data.quiz?.status === 'disqualified_copy_violation' ? 'disqualified_copy_violation' : 'IN_PROGRESS'
+          },
           sessionToken: data.sessionToken || null,
         };
       } catch (err) {

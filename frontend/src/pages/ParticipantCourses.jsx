@@ -573,7 +573,16 @@ function QuizzesView({ user, courseId, trainingId }) {
         showError(response.error || 'Failed to start quiz');
         return;
       }
-      navigate(`/trainings/${trainingId}/quizzes/${quizId}/attempt?attemptId=${response.attemptId}&sessionToken=${response.sessionToken}`);
+      if (response.quiz?.proctoringEnabled) {
+        navigate(`/participant/exam/${quizId}`, {
+          state: {
+            attemptId: response.attemptId,
+            quizData: response.quiz
+          }
+        });
+      } else {
+        navigate(`/trainings/${trainingId}/quizzes/${quizId}/attempt?attemptId=${response.attemptId}&sessionToken=${response.sessionToken}`);
+      }
     } catch (err) {
       console.error("[handleStart] Error starting quiz attempt:", err);
       showError(err.message);
@@ -623,7 +632,11 @@ function QuizzesView({ user, courseId, trainingId }) {
             {q.lessonTitle || 'Course-level'} · {q.questionCount} question{q.questionCount !== 1 ? 's' : ''}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto', justifyContent: 'space-between' }}>
-            {q.myStatus !== 'NOT_STARTED' ? (
+            {q.myStatus === 'IN_PROGRESS' ? (
+              <span style={{ fontSize: 11, color: '#92400e', fontWeight: 600 }}>
+                In Progress
+              </span>
+            ) : q.myStatus !== 'NOT_STARTED' ? (
               q.resultStatus === 'PUBLISHED' ? (
                 <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>
                   ✓ Submitted{q.myScore != null ? ` · ${q.myScore.toFixed(0)}%` : ''}
@@ -638,7 +651,9 @@ function QuizzesView({ user, courseId, trainingId }) {
             )}
             <button
               onClick={() => {
-                if (q.myStatus !== 'NOT_STARTED') {
+                if (q.myStatus === 'IN_PROGRESS') {
+                  handleStart(q.quizId)
+                } else if (q.myStatus !== 'NOT_STARTED') {
                   if (q.resultStatus === 'PUBLISHED') {
                     navigate(`/trainings/${trainingId}/quizzes/${q.quizId}/result`)
                   }
@@ -646,23 +661,23 @@ function QuizzesView({ user, courseId, trainingId }) {
                   handleStart(q.quizId)
                 }
               }}
-              disabled={q.myStatus !== 'NOT_STARTED' && q.resultStatus !== 'PUBLISHED'}
+              disabled={q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED'}
               style={{
                 padding: '7px 12px',
-                background: (q.myStatus !== 'NOT_STARTED' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#4f46e5',
+                background: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#4f46e5',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 6,
                 fontSize: 12,
                 fontWeight: 600,
-                cursor: (q.myStatus !== 'NOT_STARTED' && q.resultStatus !== 'PUBLISHED') ? 'not-allowed' : 'pointer',
+                cursor: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? 'not-allowed' : 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 4,
               }}
             >
-              {q.myStatus !== 'NOT_STARTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
-              {q.myStatus !== 'NOT_STARTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Attempted') : 'Start'}
+              {q.myStatus === 'IN_PROGRESS' ? <PlayCircle size={12} /> : q.myStatus !== 'NOT_STARTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
+              {q.myStatus === 'IN_PROGRESS' ? 'Resume' : q.myStatus !== 'NOT_STARTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Attempted') : 'Start'}
             </button>
           </div>
         </div>
@@ -732,7 +747,16 @@ function LessonView({ user, lessonId, onBack }) {
         showError(response.error || 'Failed to start quiz');
         return;
       }
-      navigate(`/trainings/${currentTrainingId}/quizzes/${quizId}/attempt?attemptId=${response.attemptId}&sessionToken=${response.sessionToken}`);
+      if (response.quiz?.proctoringEnabled) {
+        navigate(`/participant/exam/${quizId}`, {
+          state: {
+            attemptId: response.attemptId,
+            quizData: response.quiz
+          }
+        });
+      } else {
+        navigate(`/trainings/${currentTrainingId}/quizzes/${quizId}/attempt?attemptId=${response.attemptId}&sessionToken=${response.sessionToken}`);
+      }
     } catch (err) {
       console.error("[handleStartQuiz] Error starting quiz attempt:", err);
       showError(err.message);
@@ -881,15 +905,17 @@ function LessonView({ user, lessonId, onBack }) {
                     <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
                       {q.questionCount} questions · {q.isMandatory ? 'Mandatory' : 'Optional'}
                       {q.myStatus !== 'NOT_STARTED' && (
-                        <> · <span style={{ fontWeight: 600, color: q.resultStatus === 'PUBLISHED' ? '#15803d' : '#f59e0b' }}>
-                          {q.resultStatus === 'PUBLISHED' ? `Submitted${q.myScore != null ? ` (${q.myScore.toFixed(0)}%)` : ''}` : 'Result Pending - Waiting for Trainer to Publish Results'}
+                        <> · <span style={{ fontWeight: 600, color: q.myStatus === 'IN_PROGRESS' ? '#92400e' : q.resultStatus === 'PUBLISHED' ? '#15803d' : '#f59e0b' }}>
+                          {q.myStatus === 'IN_PROGRESS' ? 'In Progress' : q.resultStatus === 'PUBLISHED' ? `Submitted${q.myScore != null ? ` (${q.myScore.toFixed(0)}%)` : ''}` : 'Result Pending - Waiting for Trainer to Publish Results'}
                         </span></>
                       )}
                     </div>
                   </div>
                   <button
                     onClick={() => {
-                      if (q.myStatus !== 'NOT_STARTED') {
+                      if (q.myStatus === 'IN_PROGRESS') {
+                        handleStartQuiz(q.quizId)
+                      } else if (q.myStatus !== 'NOT_STARTED') {
                         if (q.resultStatus === 'PUBLISHED') {
                           navigate(`/trainings/${data.trainingProgramId}/quizzes/${q.quizId}/result`)
                         }
@@ -897,23 +923,23 @@ function LessonView({ user, lessonId, onBack }) {
                         handleStartQuiz(q.quizId)
                       }
                     }}
-                    disabled={q.myStatus !== 'NOT_STARTED' && q.resultStatus !== 'PUBLISHED'}
+                    disabled={q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED'}
                     style={{
                       padding: '8px 14px',
-                      background: (q.myStatus !== 'NOT_STARTED' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#4f46e5',
+                      background: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#4f46e5',
                       color: '#fff',
                       border: 'none',
                       borderRadius: 6,
                       fontSize: 12,
                       fontWeight: 600,
-                      cursor: (q.myStatus !== 'NOT_STARTED' && q.resultStatus !== 'PUBLISHED') ? 'not-allowed' : 'pointer',
+                      cursor: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? 'not-allowed' : 'pointer',
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 4,
                     }}
                   >
-                    {q.myStatus !== 'NOT_STARTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
-                    {q.myStatus !== 'NOT_STARTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Attempted') : 'Start Quiz'}
+                    {q.myStatus === 'IN_PROGRESS' ? <PlayCircle size={12} /> : q.myStatus !== 'NOT_STARTED' ? <Eye size={12} /> : <PlayCircle size={12} />}
+                    {q.myStatus === 'IN_PROGRESS' ? 'Resume Quiz' : q.myStatus !== 'NOT_STARTED' ? (q.resultStatus === 'PUBLISHED' ? 'View Result' : 'Attempted') : 'Start Quiz'}
                   </button>
                 </div>
               ))}

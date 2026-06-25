@@ -18,9 +18,15 @@ const QuizAttempt = sequelize.define('QuizAttempt', {
     field: 'participant_id'
   },
   status: {
-    type: DataTypes.ENUM('IN_PROGRESS', 'SUBMITTED', 'EVALUATED', 'AUTO_SUBMITTED'),
+    type: DataTypes.ENUM('IN_PROGRESS', 'SUBMITTED', 'EVALUATED', 'AUTO_SUBMITTED', 'disqualified_copy_violation', 'disqualified_policy_violation'),
     allowNull: false,
     defaultValue: 'IN_PROGRESS'
+  },
+  violationCount: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    field: 'violation_count'
   },
   startedAt: {
     type: DataTypes.DATE,

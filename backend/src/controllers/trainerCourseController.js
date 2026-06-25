@@ -724,8 +724,15 @@ async function updateCourseQuiz(req, res) {
     if (!course) return;
     const quiz = await AIQuiz.findOne({ where: { id: req.params.quizId, courseId: course.id } });
     if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+    const {
+      title, lessonId, isMandatory, status, questions,
+      showResultImmediately, showCorrectAnswersOnResult, shuffleQuestions,
+      allowMultipleAttempts, maxAttempts, difficulty, timeLimit,
+      copyProtectionEnabled, maxCopyWarnings, copyViolationActions,
+      copyWarningMessage, copyDisqualifyAction,
+      proctoringEnabled, proctoringLevel, gracePeriodMinutes
+    } = req.body;
 
-    const { title, lessonId, isMandatory, status, questions } = req.body;
     if (status && !['DRAFT', 'PUBLISHED', 'CLOSED'].includes(status)) {
       return res.status(422).json({ error: 'Invalid status' });
     }
@@ -736,13 +743,27 @@ async function updateCourseQuiz(req, res) {
 
     await sequelize.transaction(async t => {
       await quiz.update({
-        title:       title       ?? quiz.title,
-        lessonId:    lessonId    !== undefined ? lessonId : quiz.lessonId,
-        isMandatory: isMandatory !== undefined ? isMandatory : quiz.isMandatory,
-        status:      status      ?? quiz.status,
+        title:                      title                      ?? quiz.title,
+        lessonId:                   lessonId                   !== undefined ? lessonId : quiz.lessonId,
+        isMandatory:                isMandatory                !== undefined ? isMandatory : quiz.isMandatory,
+        status:                     status                     ?? quiz.status,
+        showResultImmediately:      showResultImmediately      !== undefined ? showResultImmediately : quiz.showResultImmediately,
+        showCorrectAnswersOnResult: showCorrectAnswersOnResult !== undefined ? showCorrectAnswersOnResult : quiz.showCorrectAnswersOnResult,
+        shuffleQuestions:           shuffleQuestions           !== undefined ? shuffleQuestions : quiz.shuffleQuestions,
+        allowMultipleAttempts:      allowMultipleAttempts      !== undefined ? allowMultipleAttempts : quiz.allowMultipleAttempts,
+        maxAttempts:                maxAttempts                !== undefined ? maxAttempts : quiz.maxAttempts,
+        difficulty:                 difficulty                 ?? quiz.difficulty,
+        timeLimit:                  timeLimit                  !== undefined ? timeLimit : quiz.timeLimit,
+        copyProtectionEnabled:      copyProtectionEnabled      !== undefined ? copyProtectionEnabled : quiz.copyProtectionEnabled,
+        maxCopyWarnings:            maxCopyWarnings            !== undefined ? maxCopyWarnings : quiz.maxCopyWarnings,
+        copyViolationActions:       copyViolationActions       !== undefined ? copyViolationActions : quiz.copyViolationActions,
+        copyWarningMessage:         copyWarningMessage         !== undefined ? copyWarningMessage : quiz.copyWarningMessage,
+        copyDisqualifyAction:       copyDisqualifyAction       !== undefined ? copyDisqualifyAction : quiz.copyDisqualifyAction,
+        proctoringEnabled:          proctoringEnabled          !== undefined ? proctoringEnabled : quiz.proctoringEnabled,
+        proctoringLevel:            proctoringLevel            !== undefined ? proctoringLevel : quiz.proctoringLevel,
+        gracePeriodMinutes:         gracePeriodMinutes         !== undefined ? gracePeriodMinutes : quiz.gracePeriodMinutes,
       }, { transaction: t });
-
-      if (Array.isArray(questions)) {
+      if (questions) {
         // Replace all questions atomically — simplest correct semantics for
         // a JSON PUT.
         await AIQuestion.destroy({ where: { quizId: quiz.id }, transaction: t });

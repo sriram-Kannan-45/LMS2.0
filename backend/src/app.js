@@ -504,6 +504,39 @@ const startServer = async () => {
       } catch (jobErr) {
         logger.warn('Failed to start quiz auto-close job:', jobErr.message);
       }
+
+      // Start proctoring reapers
+      try {
+        const proctoringService = require('./services/proctoringService');
+        // Every 30 seconds: expire stale sessions (no heartbeat for 25s)
+        setInterval(async () => {
+          try {
+            await proctoringService.expireStaleSessions(io);
+          } catch (e) {
+            logger.warn('Failed to run expireStaleSessions reaper:', e.message);
+          }
+        }, 30000);
+
+        // Every 60 seconds: expire grace period sessions (disconnect timeout)
+        setInterval(async () => {
+          try {
+            await proctoringService.expireGracePeriodSessions(io);
+          } catch (e) {
+            logger.warn('Failed to run expireGracePeriodSessions reaper:', e.message);
+          }
+        }, 60000);
+
+        // Every 60 seconds: auto-submit sessions past endsAt absolute timer
+        setInterval(async () => {
+          try {
+            await proctoringService.autoSubmitExpiredSessions(io);
+          } catch (e) {
+            logger.warn('Failed to run autoSubmitExpiredSessions reaper:', e.message);
+          }
+        }, 60000);
+      } catch (proctorErr) {
+        logger.warn('Failed to start proctoring reapers:', proctorErr.message);
+      }
     });
 
     // Graceful shutdown

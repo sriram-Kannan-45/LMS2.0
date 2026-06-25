@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Calendar, Users, Star, FileText, CheckCircle, XCircle, Clock, MessageSquare, TrendingUp } from 'lucide-react'
+import { Calendar, Users, Star, FileText, CheckCircle, XCircle, Clock, MessageSquare, TrendingUp, Monitor, Shield } from 'lucide-react'
 import TrainerForm from '../components/TrainerForm'
 import NotesSection from '../components/trainer/notes/NotesSection'
 import ParticipantProfileView from '../components/shared/ParticipantProfileView'
@@ -15,6 +16,7 @@ import { API_BASE } from '../api/api'
 const API = API_BASE
 
 function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
+  const navigate = useNavigate()
   const { success, error: showError, info } = useToast()
   const tab = activeTab === 'trainings' ? 'courses' : (activeTab || 'courses')
   const [trainings, setTrainings] = useState([])
@@ -392,16 +394,20 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div>
-              <h3 style={{ margin: 0, fontFamily: "'Poppins', sans-serif" }}>Trainer Reports &amp; Analytics</h3>
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>View participant progress, quiz results, and review submissions</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div>
+                <h3 style={{ margin: 0, fontFamily: "'Poppins', sans-serif" }}>Trainer Reports &amp; Analytics</h3>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>View participant progress, quiz results, and review submissions</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-sm btn-secondary" onClick={() => navigate('/trainer/courses')}>
+                  <Monitor style={{ width: 14, height: 14, marginRight: 4 }} />
+                  Assessments
+                </button>
+                <button className="btn btn-sm btn-secondary" onClick={handleRegenerateCertificate}>Check/Issue Certificates</button>
+                <button className="btn btn-sm btn-primary" onClick={fetchTrainerReport}>Refresh Data</button>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-sm btn-secondary" onClick={handleRegenerateCertificate}>Check/Issue Certificates</button>
-              <button className="btn btn-sm btn-primary" onClick={fetchTrainerReport}>Refresh Data</button>
-            </div>
-          </div>
 
           {!trainerReport ? (
             <div className="card" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>

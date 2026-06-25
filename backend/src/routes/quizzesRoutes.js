@@ -18,7 +18,8 @@ const {
   Training,
   CourseTrainerAssignment,
   TrainingTrainerAssignment,
-  QuizAssignment
+  QuizAssignment,
+  QuizCopyViolation
 } = require('../models');
 const authenticateToken = require('../middleware/auth');
 const roleMiddleware = require('../middleware/roles');
@@ -36,7 +37,7 @@ async function verifyTrainerAccess(req, res, quiz) {
   const role = req.user.role;
 
   if (role === 'ADMIN') return true;
-  if (quiz.trainerId === trainerId) return true;
+  if (quiz.trainerId === trainerId || quiz.createdBy === trainerId) return true;
 
   if (quiz.courseId) {
     const courseAssigned = await CourseTrainerAssignment.findOne({
@@ -628,15 +629,19 @@ router.get('/:id/results', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) 
     const hasAccess = await verifyTrainerAccess(req, res, quiz);
     if (!hasAccess) return;
 
-    const { User } = require('../models');
+    const { User, QuizAttempt } = require('../models');
     const results = await QuizResult.findAll({
       where: { quizId: quiz.id },
-      include: [{ model: User, as: 'participant', attributes: ['id', 'name', 'email', 'profilePic'] }],
+      include: [
+        { model: User, as: 'participant', attributes: ['id', 'name', 'email', 'profilePic'] },
+        { model: QuizAttempt, as: 'attempt', attributes: ['id', 'status', 'violationCount'] }
+      ],
       order: [['percentage', 'DESC']]
     });
 
     const participantResults = results.map((r, idx) => ({
       id: r.id,
+      attemptId: r.attemptId,
       participantId: r.participantId,
       participantName: r.participant?.name || 'Unknown',
       participantEmail: r.participant?.email || '',
@@ -647,6 +652,8 @@ router.get('/:id/results', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) 
       evaluatedAt: r.evaluatedAt,
       resultPublished: r.resultPublished,
       publishedAt: r.publishedAt,
+      attemptStatus: r.attempt?.status || 'SUBMITTED',
+      violationCount: r.attempt?.violationCount || 0,
     }));
 
     res.json({ results: participantResults, quizTitle: quiz.title });
@@ -750,7 +757,11 @@ router.get('/:id/questions', async (req, res) => {
     console.log(`[GET /api/quizzes/${quizId}/questions] JWT Payload:`, req.user);
 
     const quiz = await AIQuiz.findByPk(quizId, {
-      attributes: ['id', 'courseId', 'trainingId', 'createdBy', 'status', 'timeLimit', 'title']
+      attributes: [
+        'id', 'courseId', 'trainingId', 'createdBy', 'status', 'timeLimit', 'title',
+        'copyProtectionEnabled', 'maxCopyWarnings', 'copyViolationActions', 'copyWarningMessage', 'copyDisqualifyAction',
+        'proctoringEnabled', 'proctoringLevel', 'gracePeriodMinutes'
+      ]
     });
     if (!quiz) {
       console.log(`[GET /api/quizzes/${quizId}/questions] Quiz not found: #${quizId}`);
@@ -823,7 +834,20 @@ router.get('/:id/questions', async (req, res) => {
         quiz: {
           id: quiz.id,
           title: quiz.title,
-          timeLimit: quiz.timeLimit
+          timeLimit: quiz.timeLimit,
+          copyProtectionEnabled: quiz.copyProtectionEnabled,
+          maxCopyWarnings: quiz.maxCopyWarnings,
+          copyViolationActions: quiz.copyViolationActions,
+          copyWarningMessage: quiz.copyWarningMessage,
+          copyDisqualifyAction: quiz.copyDisqualifyAction,
+          proctoringEnabled: quiz.proctoringEnabled,
+          proctoringLevel: quiz.proctoringLevel,
+          gracePeriodMinutes: quiz.gracePeriodMinutes
+        },
+        attempt: {
+          id: hasAttempt.id,
+          violationCount: hasAttempt.violationCount || 0,
+          status: hasAttempt.status
         },
         questions: questions.map(q => ({
           id: q.id,
@@ -997,6 +1021,10 @@ router.get('/:id/participants', roleMiddleware('TRAINER', 'ADMIN'), async (req, 
 
     const { User, QuizAssignment } = require('../models');
 
+    const assignments = await QuizAssignment.findAll({ where: { quizId: quiz.id } });
+    const attempts = await QuizAttempt.findAll({ where: { quizId: quiz.id } });
+    const results = await QuizResult.findAll({ where: { quizId: quiz.id } });
+
     // Find all enrolled participants
     const enrollmentWhere = [];
     if (quiz.courseId) enrollmentWhere.push({ courseId: quiz.courseId });
@@ -1006,7 +1034,12 @@ router.get('/:id/participants', roleMiddleware('TRAINER', 'ADMIN'), async (req, 
       ? await Enrollment.findAll({ where: { [Op.or]: enrollmentWhere, status: 'ENROLLED' } })
       : [];
 
-    const participantIds = [...new Set(enrollments.map(e => e.participantId))];
+    const participantIds = [...new Set([
+      ...enrollments.map(e => e.participantId),
+      ...assignments.map(a => a.participantId),
+      ...attempts.map(at => at.participantId),
+      ...results.map(r => r.participantId)
+    ])];
 
     if (participantIds.length === 0) {
       return res.json({ participants: [] });
@@ -1016,10 +1049,6 @@ router.get('/:id/participants', roleMiddleware('TRAINER', 'ADMIN'), async (req, 
       where: { id: participantIds, role: 'PARTICIPANT' },
       attributes: ['id', 'name', 'email']
     });
-
-    const assignments = await QuizAssignment.findAll({ where: { quizId: quiz.id } });
-    const attempts = await QuizAttempt.findAll({ where: { quizId: quiz.id } });
-    const results = await QuizResult.findAll({ where: { quizId: quiz.id } });
 
     const assignmentByUser = {};
     assignments.forEach(a => { assignmentByUser[a.participantId] = a; });
@@ -1048,6 +1077,10 @@ router.get('/:id/participants', roleMiddleware('TRAINER', 'ADMIN'), async (req, 
 
       if (attempt) {
         if (attempt.status === 'IN_PROGRESS') status = 'IN_PROGRESS';
+        else if (attempt.status === 'disqualified_copy_violation' || attempt.status === 'disqualified_policy_violation') {
+          status = 'DISQUALIFIED';
+          submittedAt = attempt.submittedAt;
+        }
         else if (['SUBMITTED', 'EVALUATED', 'AUTO_SUBMITTED', 'COMPLETED', 'GRADED', 'submitted', 'completed', 'evaluated', 'graded'].includes(attempt.status)) {
           status = 'COMPLETED';
           submittedAt = attempt.submittedAt;
@@ -1076,6 +1109,8 @@ router.get('/:id/participants', roleMiddleware('TRAINER', 'ADMIN'), async (req, 
         percentage,
         passed: result ? parseFloat(result.percentage) >= (50) : null,
         resultPublished: result ? result.resultPublished : false,
+        attemptId: attempt?.id || null,
+        violationCount: attempt?.violationCount || 0,
       };
     });
 
@@ -1216,18 +1251,80 @@ const startQuizAttempt = async (req, res) => {
     }
 
     // Check if completed attempt exists or resume/create in-progress attempt
-    let attempt;
-    // Check if any attempt already exists to prevent duplicate attempt records
-    const existingAttempt = await QuizAttempt.findOne({
+    let attempt = await QuizAttempt.findOne({
       where: { quizId: quiz.id, participantId }
     });
 
-    if (existingAttempt) {
-      console.log(`[startQuizAttempt] Rejecting start: attempt already exists for quiz #${quiz.id}, participant #${participantId}`);
-      return res.status(400).json({
-        success: false,
-        message: "You have already attempted this quiz."
-      });
+    if (attempt) {
+      if (attempt.status === 'IN_PROGRESS') {
+        console.log(`[startQuizAttempt] Resuming existing in-progress attempt #${attempt.id} for participant #${participantId}`);
+        console.log(`[ATTEMPT_STATUS_CHANGE] Attempt #${attempt.id} status set to IN_PROGRESS at ${new Date().toISOString()}`);
+        
+        // Handle AssessmentSession lock recovery
+        const crypto = require('crypto');
+        const ipAddress = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0].trim();
+        const userAgent = (req.headers['user-agent'] || '').slice(0, 1024);
+        const deviceFingerprint = (req.body?.deviceFingerprint || '').toString().slice(0, 512) || null;
+
+        const minutes = Number.isFinite(quiz.timeLimit) && quiz.timeLimit > 0 ? quiz.timeLimit : 0;
+        const ttlMs = minutes > 0 ? (minutes + 15) * 60_000 : 3 * 60 * 60_000;
+        const expiresAt = new Date(Date.now() + ttlMs);
+
+        let session = await AssessmentSession.findOne({ where: { attemptId: attempt.id } });
+        const sessionToken = crypto.randomBytes(32).toString('hex');
+
+        if (session) {
+          console.log(`[startQuizAttempt] Found existing assessment session #${session.id} for attempt #${attempt.id} with status: ${session.status}. Updating...`);
+          await session.update({
+            quizId: quiz.id,
+            participantId,
+            ipAddress: ipAddress || null,
+            userAgent: userAgent || null,
+            deviceFingerprint,
+            sessionToken,
+            status: 'ACTIVE',
+            lockedAt: new Date(),
+            expiresAt
+          });
+          console.log(`[startQuizAttempt] Successfully updated and reactivated session #${session.id} for attempt #${attempt.id}`);
+        } else {
+          console.log(`[startQuizAttempt] No session found for attempt #${attempt.id}. Creating new...`);
+          session = await AssessmentSession.create({
+            attemptId: attempt.id,
+            quizId: quiz.id,
+            participantId,
+            ipAddress: ipAddress || null,
+            userAgent: userAgent || null,
+            deviceFingerprint,
+            sessionToken,
+            status: 'ACTIVE',
+            lockedAt: new Date(),
+            expiresAt
+          });
+          console.log(`[startQuizAttempt] Successfully created new session #${session.id} for attempt #${attempt.id}`);
+        }
+
+        const apiResponse = {
+          success: true,
+          attemptId: attempt.id,
+          sessionToken: session.sessionToken,
+          quiz: {
+            id: quiz.id,
+            title: quiz.title,
+            timeLimit: quiz.timeLimit,
+            proctoringEnabled: quiz.proctoringEnabled
+          }
+        };
+
+        console.log(`[startQuizAttempt] Success resume response:`, apiResponse);
+        return res.json(apiResponse);
+      } else {
+        console.log(`[startQuizAttempt] Rejecting start: attempt already exists and is completed for quiz #${quiz.id}, participant #${participantId}`);
+        return res.status(400).json({
+          success: false,
+          message: "You have already attempted this quiz."
+        });
+      }
     }
 
     // Since no attempt exists, create a new in-progress attempt
@@ -1238,6 +1335,7 @@ const startQuizAttempt = async (req, res) => {
       startedAt: new Date()
     });
     console.log(`[startQuizAttempt] Created new attempt #${attempt.id} for participant #${participantId}`);
+    console.log(`[ATTEMPT_STATUS_CHANGE] Attempt #${attempt.id} status set to IN_PROGRESS at ${new Date().toISOString()}`);
 
     // Handle AssessmentSession lock
     const crypto = require('crypto');
@@ -1295,7 +1393,8 @@ const startQuizAttempt = async (req, res) => {
       quiz: {
         id: quiz.id,
         title: quiz.title,
-        timeLimit: quiz.timeLimit
+        timeLimit: quiz.timeLimit,
+        proctoringEnabled: quiz.proctoringEnabled
       }
     };
 
@@ -1355,11 +1454,20 @@ router.post('/:quizId/attempts/:attemptId/submit', async (req, res) => {
       return res.status(422).json({ error: 'answers[] is required' });
     }
 
-    const attempt = await QuizAttempt.findOne({
+    let attempt = await QuizAttempt.findOne({
       where: { id: attemptId, quizId, participantId }
     });
     if (!attempt) {
-      return res.status(404).json({ error: 'Attempt not found' });
+      console.log(`[submit] Attempt #${attemptId} not found. Attempting recovery for participant #${participantId}, quiz #${quizId}`);
+      attempt = await QuizAttempt.findOne({
+        where: { quizId, participantId, status: 'IN_PROGRESS' },
+        order: [['createdAt', 'DESC']]
+      });
+      if (!attempt) {
+        console.log(`[submit] Recovery failed. No IN_PROGRESS attempt found for participant #${participantId}, quiz #${quizId}`);
+        return res.status(404).json({ error: 'Attempt not found' });
+      }
+      console.log(`[submit] Recovery successful. Found active attempt #${attempt.id} for participant #${participantId}, quiz #${quizId}`);
     }
     if (attempt.status === 'SUBMITTED' || attempt.status === 'EVALUATED') {
       return res.status(409).json({ error: 'Quiz already submitted' });
@@ -1452,6 +1560,8 @@ router.post('/:quizId/attempts/:attemptId/submit', async (req, res) => {
         ...(timeTaken != null ? { timeTaken } : {})
       }, { transaction: t });
 
+      console.log(`[ATTEMPT_STATUS_CHANGE] Attempt #${attempt.id} status changed from IN_PROGRESS to SUBMITTED at ${new Date().toISOString()}`);
+
       const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
 
       await QuizResult.create({
@@ -1493,6 +1603,247 @@ router.post('/:quizId/attempts/:attemptId/submit', async (req, res) => {
   } catch (err) {
     console.error('Error submitting quiz attempt:', err);
     return res.status(500).json({ error: 'Failed to submit quiz attempt' });
+  }
+});
+
+/**
+ * POST /api/quizzes/attempts/:attemptId/violation
+ * Logs a quiz copy violation, increments warning counter, and disqualifies participant if limit reached.
+ */
+router.post('/attempts/:attemptId/violation', async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    const { type, weight, questionNumber } = req.body;
+    const participantId = req.user.id;
+    const userAgent = req.headers['user-agent'] || '';
+
+    const attempt = await QuizAttempt.findOne({
+      where: { id: attemptId, participantId }
+    });
+    if (!attempt) {
+      return res.status(404).json({ error: 'Attempt not found' });
+    }
+
+    const isDisqualifiedStatus = attempt.status === 'disqualified_copy_violation' || attempt.status === 'disqualified_policy_violation';
+    if (isDisqualifiedStatus || attempt.status === 'SUBMITTED' || attempt.status === 'EVALUATED') {
+      return res.json({
+        success: true,
+        disqualified: isDisqualifiedStatus,
+        violationCount: attempt.violationCount || 0,
+        message: isDisqualifiedStatus ? 'You have been disqualified for repeated policy violations.' : 'Quiz already submitted'
+      });
+    }
+
+    const quiz = await AIQuiz.findByPk(attempt.quizId);
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    const violationWeight = typeof weight === 'number' ? weight : 1.0;
+    const isHard = violationWeight >= 1.0;
+    const newViolationCount = (attempt.violationCount || 0) + (isHard ? 1 : 0);
+    let disqualified = false;
+
+    const { sequelize } = require('../models');
+    const { gradeAnswer } = require('../utils/gradeAnswer');
+
+    await sequelize.transaction(async t => {
+      // 1. Create QuizCopyViolation record with weight
+      await QuizCopyViolation.create({
+        attemptId: attempt.id,
+        quizId: quiz.id,
+        participantId,
+        type: type || 'COPY_ATTEMPT',
+        weight: violationWeight,
+        questionNumber: questionNumber || null,
+        userAgent,
+        occurredAt: new Date()
+      }, { transaction: t });
+
+      // 2. Update QuizAttempt violationCount (only hard violations increment)
+      await attempt.update({ violationCount: newViolationCount }, { transaction: t });
+
+      // 3. Disqualify policy check
+      if (newViolationCount >= (quiz.maxCopyWarnings || 3)) {
+        disqualified = true;
+
+        const newStatus = 'disqualified_policy_violation';
+
+        // Mark status as disqualified
+        await attempt.update({
+          status: newStatus,
+          submittedAt: new Date()
+        }, { transaction: t });
+
+        console.log(`[ATTEMPT_STATUS_CHANGE] Attempt #${attempt.id} status changed from IN_PROGRESS to ${newStatus} at ${new Date().toISOString()}`);
+
+        // If auto-submit is configured (default), run grading logic
+        if (quiz.copyDisqualifyAction === 'AUTO_SUBMIT' || !quiz.copyDisqualifyAction) {
+          const questions = await AIQuestion.findAll({ where: { quizId: quiz.id }, transaction: t });
+
+          let totalScore = 0;
+          let maxScore = 0;
+          const questionsMap = {};
+          questions.forEach(q => {
+            questionsMap[q.id] = q;
+            maxScore += (q.marks || 1);
+          });
+
+          const submittedAnswers = req.body.answers || [];
+          if (submittedAnswers.length > 0) {
+            // Wipe prior answers
+            await QuizAnswer.destroy({ where: { attemptId: attempt.id }, transaction: t });
+
+            for (const ans of submittedAnswers) {
+              const question = questionsMap[ans.questionId];
+              if (!question) continue;
+
+              let score = 0;
+              let isCorrect = false;
+              const qMarks = question.marks || 1;
+
+              const result = gradeAnswer(question, {
+                selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
+                answer: ans.answerText || ans.answer || '',
+                answerText: ans.answerText || ans.answer || '',
+                matches: ans.matches
+              });
+              isCorrect = result.isCorrect;
+              score = result.score > 0 ? (result.score / 100) * qMarks : 0;
+
+              await QuizAnswer.create({
+                attemptId: attempt.id,
+                questionId: ans.questionId,
+                answerText: ans.answerText || ans.answer || '',
+                selectedOption: ans.selectedOption !== undefined ? ans.selectedOption : null,
+                isCorrect,
+                score,
+                feedback: isCorrect ? 'Correct!' : `Incorrect. Correct answer: ${question.correctAnswer}`
+              }, { transaction: t });
+
+              totalScore += score;
+            }
+          } else {
+            // Just sum the scores from already saved QuizAnswer rows
+            const savedAnswers = await QuizAnswer.findAll({ where: { attemptId: attempt.id }, transaction: t });
+            savedAnswers.forEach(ans => {
+              totalScore += (ans.score || 0);
+            });
+          }
+
+          const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+
+          await QuizResult.upsert({
+            attemptId: attempt.id,
+            quizId: quiz.id,
+            participantId,
+            totalScore,
+            maxScore,
+            percentage: Number(percentage.toFixed(2)),
+            evaluatedAt: new Date(),
+            resultPublished: false
+          }, { transaction: t });
+
+          // Mark quiz_assignment as COMPLETED
+          await QuizAssignment.update(
+            { status: 'COMPLETED' },
+            { where: { quizId: quiz.id, participantId }, transaction: t }
+          );
+        }
+      }
+    });
+
+    return res.json({
+      success: true,
+      disqualified,
+      violationCount: newViolationCount,
+      message: disqualified ? 'You have been disqualified for repeated policy violations.' : 'Violation recorded'
+    });
+  } catch (error) {
+    console.error('Error recording quiz violation:', error);
+    return res.status(500).json({ error: 'Failed to record violation' });
+  }
+});
+
+/**
+ * POST /api/quizzes/attempts/:attemptId/reinstate
+ * Reinstates a disqualified attempt, resetting its violationCount and status.
+ */
+router.post('/attempts/:attemptId/reinstate', roleMiddleware('TRAINER', 'ADMIN'), async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    const attempt = await QuizAttempt.findByPk(attemptId);
+    if (!attempt) {
+      return res.status(404).json({ error: 'Attempt not found' });
+    }
+
+    const { sequelize } = require('../models');
+
+    await sequelize.transaction(async t => {
+      // 1. Reset attempt status back to 'IN_PROGRESS' and violationCount to 0
+      await attempt.update({
+        status: 'IN_PROGRESS',
+        violationCount: 0,
+        submittedAt: null
+      }, { transaction: t });
+
+      console.log(`[ATTEMPT_STATUS_CHANGE] Attempt #${attempt.id} status changed from ${attempt.status} to IN_PROGRESS at ${new Date().toISOString()}`);
+
+      // 2. Delete corresponding QuizResult
+      await QuizResult.destroy({
+        where: { attemptId: attempt.id, quizId: attempt.quizId, participantId: attempt.participantId },
+        transaction: t
+      });
+
+      // 3. Delete any QuizCopyViolation records
+      await QuizCopyViolation.destroy({
+        where: { attemptId: attempt.id },
+        transaction: t
+      });
+
+      // 4. Reset quiz assignment status back to 'PENDING'
+      await QuizAssignment.update(
+        { status: 'PENDING' },
+        { where: { quizId: attempt.quizId, participantId: attempt.participantId }, transaction: t }
+      );
+    });
+
+    return res.json({ success: true, message: 'Attempt has been reinstated successfully.' });
+  } catch (error) {
+    console.error('Error reinstating quiz attempt:', error);
+    return res.status(500).json({ error: 'Failed to reinstate attempt' });
+  }
+});
+
+/**
+ * GET /api/quizzes/attempts/:attemptId/violations
+ * Returns all violation records for a given attempt.
+ */
+router.get('/attempts/:attemptId/violations', async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    const participantId = req.user.id;
+
+    const attempt = await QuizAttempt.findByPk(attemptId);
+    if (!attempt) {
+      return res.status(404).json({ error: 'Attempt not found' });
+    }
+
+    // TRAINER / ADMIN can view any attempt's violations; PARTICIPANT only own
+    if (req.user.role === 'PARTICIPANT' && attempt.participantId !== participantId) {
+      return res.status(403).json({ error: 'Permission denied' });
+    }
+
+    const violations = await QuizCopyViolation.findAll({
+      where: { attemptId },
+      order: [['occurred_at', 'ASC']],
+      attributes: ['id', 'type', 'weight', 'questionNumber', 'userAgent', 'occurredAt']
+    });
+
+    return res.json({ success: true, violations });
+  } catch (error) {
+    console.error('Error fetching violations:', error);
+    return res.status(500).json({ error: 'Failed to fetch violations' });
   }
 });
 

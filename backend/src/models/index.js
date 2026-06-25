@@ -54,10 +54,12 @@ const ExamSession = require('./examSession');
 const Violation = require('./violation');
 const DeviceFingerprint = require('./deviceFingerprint');
 const ProctorActivity = require('./proctorActivity');
+const Screenshot = require('./screenshot');
 
 // New Enhancements
 const TrainingTrainerAssignment = require('./trainingTrainerAssignment');
 const QuizAssignment = require('./quizAssignment');
+const QuizCopyViolation = require('./quizCopyViolation');
 const DiscussionPost = require('./discussionPost');
 const Certificate = require('./certificate');
 const ParticipantTracking = require('./participantTracking');
@@ -182,6 +184,11 @@ QuizResult.belongsTo(QuizAttempt, { foreignKey: 'attemptId', as: 'attempt' });
 QuizResult.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
 QuizResult.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
 
+QuizAttempt.hasMany(QuizCopyViolation, { foreignKey: 'attemptId', as: 'copyViolations' });
+QuizCopyViolation.belongsTo(QuizAttempt, { foreignKey: 'attemptId', as: 'attempt' });
+QuizCopyViolation.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
+QuizCopyViolation.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
+
 // --- Proctoring Associations ---
 ExamSession.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
 ExamSession.belongsTo(AIQuiz, { foreignKey: 'quizId', as: 'quiz' });
@@ -189,9 +196,13 @@ ExamSession.belongsTo(QuizAttempt, { foreignKey: 'attemptId', as: 'attempt' });
 ExamSession.belongsTo(DeviceFingerprint, { foreignKey: 'deviceFingerprintId', as: 'device' });
 ExamSession.hasMany(Violation, { foreignKey: 'sessionId', as: 'violations' });
 ExamSession.hasMany(ProctorActivity, { foreignKey: 'sessionId', as: 'activities' });
+ExamSession.hasMany(Screenshot, { foreignKey: 'sessionId', as: 'screenshots' });
 
 Violation.belongsTo(ExamSession, { foreignKey: 'sessionId', as: 'session' });
 Violation.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
+
+Screenshot.belongsTo(ExamSession, { foreignKey: 'sessionId', as: 'session' });
+Screenshot.belongsTo(User, { foreignKey: 'participantId', as: 'participant' });
 
 ProctorActivity.belongsTo(ExamSession, { foreignKey: 'sessionId', as: 'session' });
 
@@ -304,6 +315,7 @@ module.exports = {
   Violation,
   DeviceFingerprint,
   ProctorActivity,
+  Screenshot,
   PasswordResetOtp,
   // Secure Assessment session lock
   AssessmentSession,
@@ -333,4 +345,5 @@ module.exports = {
   Certificate,
   ParticipantTracking,
   QuizResultsAudit,
+  QuizCopyViolation,
 };

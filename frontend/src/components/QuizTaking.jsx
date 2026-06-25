@@ -34,6 +34,8 @@ import {
 import { useToast } from './Toast'
 import { API_BASE } from '../api/api'
 import { getAuthHeaders } from '../api/request'
+import { useQuizProtection } from '../hooks/useQuizProtection.jsx'
+import QuizWatermark from './ai-quizzes/QuizWatermark'
 import '../styles/quiz-taking.css'
 
 const MAX_WARNINGS = 3
@@ -106,6 +108,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
   const [timeLeft, setTimeLeft] = useState((quizData?.timeLimit || 30) * 60)
   const [submitting, setSubmitting] = useState(false)
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false)
+  const [attemptInvalidMsg, setAttemptInvalidMsg] = useState(null)
   const timerRef = useRef(null)
 
   /* ── Post-submit result state ────────────────── */
@@ -123,6 +126,32 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
   const enteredFullscreenOnce = useRef(!!fsApi.element())
   const submittedRef = useRef(false)
 
+  const userData = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || '{}')
+    } catch {
+      return {}
+    }
+  }, [])
+
+  const { containerRef, renderModals, violationCount: copyViolationCount, disqualified: isCopyDisqualified } = useQuizProtection({
+    attemptId,
+    quiz: quizData,
+    initialViolationCount: quizData?.initialViolationCount || 0,
+    initialStatus: quizData?.initialStatus || 'IN_PROGRESS',
+    answers,
+    onSubmit: () => {
+      if (fsApi.element()) {
+        try { fsApi.exit() } catch {}
+      }
+      onSubmit?.(null)
+    },
+    currentQ,
+    enabled: quizData?.copyProtectionEnabled ?? true,
+    participantName: userData?.name || '',
+    participantId: String(userData?.id || ''),
+  })
+
   const questions = quizData?.questions || []
   const total = questions.length
   const q = questions[currentQ]
@@ -133,6 +162,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
       if (submitting || submittedRef.current) return
       submittedRef.current = true
       setSubmitting(true)
+      setShowConfirmSubmit(false)
       const answerArray = Object.entries(answers).map(([questionId, val]) => ({
         questionId: parseInt(questionId),
         selectedOption: val.selectedOption !== undefined ? val.selectedOption : null,
@@ -150,16 +180,21 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
         if (token) headers['X-Assessment-Session'] = token
 
         const submitUrl = isStandardQuiz
-          ? `${API_BASE}/quizzes/${quizId}/attempts/${attemptId}/submit`
+          ? `${API_BASE}/participant/quizzes/${quizId}/submit`
           : `${API_BASE}/ai-quiz/participant/submit/${attemptId}`
+
+        const body = isStandardQuiz
+          ? JSON.stringify({ attemptId, answers: answerArray })
+          : JSON.stringify({ answers: answerArray })
 
         const r = await fetch(submitUrl, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ answers: answerArray }),
+          body,
         })
         const d = await r.json()
         if (!r.ok) throw new Error(d.error || 'Submit failed')
+        
         // Best-effort exit fullscreen so result summary renders normally.
         if (fsApi.element()) { try { await fsApi.exit() } catch { /* ignore */ } }
         if (!silent) showSuccess('Quiz submitted successfully!')
@@ -167,8 +202,11 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
         setResultData({ status: 'PENDING_RESULT' })
       } catch (err) {
         submittedRef.current = false
-        if (!silent) showError('Failed to submit quiz: ' + err.message)
         setSubmitting(false)
+        console.error('[QuizTaking] Submit failed:', err)
+        if (!silent) {
+          showError(err.message || 'Submission failed. Please try again.')
+        }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -242,8 +280,45 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
     }
   }, [terminated, handleSubmit, onSubmit])
 
+  /* ── Status verification on question change ────────────────────────── */
+  useEffect(() => {
+    if (submittedRef.current || terminated || !attemptId) return
+
+    const verifyAttemptStatus = async () => {
+      try {
+        console.log(`[QuizTaking] Verifying attempt status for attemptId: ${attemptId} on question change to: ${currentQ}`)
+        const res = await fetch(`${API_BASE}/quizzes/attempts/${attemptId}`, {
+          headers: getAuthHeaders()
+        })
+        if (!res.ok) {
+          if (res.status === 404) {
+            setAttemptInvalidMsg('This attempt was not found on the server.')
+            setTerminated(true)
+          }
+          return
+        }
+        const data = await res.json()
+        const attempt = data.attempt
+        if (attempt) {
+          if (attempt.status === 'SUBMITTED' || attempt.status === 'EVALUATED') {
+            setAttemptInvalidMsg('This attempt has already been submitted.')
+            setTerminated(true)
+          } else if (attempt.status === 'disqualified_copy_violation' || attempt.status === 'disqualified_policy_violation') {
+            setAttemptInvalidMsg('You have been disqualified for repeated policy violations.')
+            setTerminated(true)
+          }
+        }
+      } catch (err) {
+        console.error('[QuizTaking] Failed to verify attempt status:', err)
+      }
+    }
+
+    verifyAttemptStatus()
+  }, [currentQ, attemptId, terminated])
+
   /* ── Countdown timer ─────────────────────────────────────────────────── */
   useEffect(() => {
+    if (isCopyDisqualified) return
     if (timeLeft <= 0) {
       handleSubmit()
       return
@@ -260,7 +335,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
     }, 1000)
     return () => clearInterval(timerRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isCopyDisqualified])
 
   /* ── Autosave to localStorage ─────────────────────────────────────────── */
   const PROGRESS_KEY = `quiz_progress_${attemptId}`
@@ -279,6 +354,8 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
           setCurrentQ(parsed.currentQ)
         }
       }
+
+
     } catch { /* ignore corrupt data */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -303,8 +380,10 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
   }, [PROGRESS_KEY])
 
   /* ── Helpers / derived state ─────────────────────────────────────────── */
-  const handleAnswer = (questionId, value) =>
+  const handleAnswer = (questionId, value) => {
+    if (submitting || isCopyDisqualified) return
     setAnswers((prev) => ({ ...prev, [questionId]: value }))
+  }
 
   const answeredCount = Object.keys(answers).length
   const unansweredCount = Math.max(0, total - answeredCount)
@@ -361,6 +440,11 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
   /* ── Render ─────────────────────────────────────────────────────────── */
   return (
     <div className="qt-app" role="main" aria-label="Exam in progress">
+      <QuizWatermark
+        participantName={userData?.name || ''}
+        participantId={String(userData?.id || '')}
+      />
+      {renderModals()}
       {/* ─── HEADER ──────────────────────────────────────────────────── */}
       <header className="qt-header">
         <div className="qt-header__row">
@@ -372,16 +456,18 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
           </div>
 
           <div className="qt-header__meta">
-            {warnings > 0 && (
+            {(warnings > 0 || copyViolationCount > 0) && (
               <span
                 className={[
                   'qt-warn-badge',
-                  warnings >= 2 ? 'qt-warn-badge--danger' : 'qt-warn-badge--warn',
+                  (warnings >= 2 || copyViolationCount >= (quizData?.maxCopyWarnings || 3) - 1) ? 'qt-warn-badge--danger' : 'qt-warn-badge--warn',
                 ].join(' ')}
                 aria-live="assertive"
               >
                 <AlertTriangle size={13} aria-hidden />
-                {warnings}/{MAX_WARNINGS} warnings
+                {warnings > 0 && `Exit: ${warnings}/${MAX_WARNINGS}`}
+                {warnings > 0 && copyViolationCount > 0 && ' | '}
+                {copyViolationCount > 0 && `Copy: ${copyViolationCount}/${quizData?.maxCopyWarnings || 3}`}
               </span>
             )}
             <span
@@ -420,6 +506,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
         <main className="qt-main">
           <AnimatePresence mode="wait">
             <motion.article
+              ref={containerRef}
               key={q.id}
               initial={{ opacity: 0, x: 12 }}
               animate={{ opacity: 1, x: 0 }}
@@ -446,6 +533,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
                         <button
                           type="button"
                           role="radio"
+                          disabled={submitting || isCopyDisqualified}
                           aria-checked={selected}
                           onClick={() => handleAnswer(q.id, { selectedOption: idx })}
                           className={['qt-option', selected ? 'qt-option--selected' : ''].join(' ')}
@@ -464,6 +552,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
                 <div className="qt-fillblank-container">
                   <input
                     type="text"
+                    disabled={submitting || isCopyDisqualified}
                     className="qt-textarea"
                     style={{ height: '48px', padding: '12px 16px', resize: 'none' }}
                     placeholder="Type the word that fits the blank..."
@@ -488,6 +577,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
                           <div className="qt-matching-row__arrow" style={{ color: '#94a3b8' }}>→</div>
                           <div className="qt-matching-row__right" style={{ flex: '1.5' }}>
                             <select
+                              disabled={submitting || isCopyDisqualified}
                               value={selectedRight}
                               onChange={(e) => {
                                 const currentMatches = answers[q.id]?.matches || {};
@@ -524,6 +614,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
                 </div>
               ) : (
                 <textarea
+                  disabled={submitting || isCopyDisqualified}
                   className="qt-textarea"
                   placeholder="Type your answer here…"
                   value={answers[q.id]?.answerText || ''}
@@ -540,7 +631,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
               type="button"
               className="qt-foot__btn qt-foot__btn--ghost"
               onClick={goPrev}
-              disabled={currentQ === 0}
+              disabled={currentQ === 0 || submitting || isCopyDisqualified}
             >
               <ChevronLeft size={16} /> Previous
             </button>
@@ -550,6 +641,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
                 <button
                   key={idx}
                   type="button"
+                  disabled={submitting || isCopyDisqualified}
                   onClick={() => setCurrentQ(idx)}
                   aria-label={`Go to question ${idx + 1}`}
                   className={[
@@ -569,6 +661,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
                 type="button"
                 className="qt-foot__btn qt-foot__btn--primary"
                 onClick={goNext}
+                disabled={submitting || isCopyDisqualified}
               >
                 Next <ChevronRight size={16} />
               </button>
@@ -577,7 +670,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
                 type="button"
                 className="qt-foot__btn qt-foot__btn--primary"
                 onClick={() => setShowConfirmSubmit(true)}
-                disabled={submitting}
+                disabled={submitting || isCopyDisqualified}
               >
                 <Send size={15} /> Submit
               </button>
@@ -612,6 +705,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
                   <button
                     key={question.id}
                     type="button"
+                    disabled={submitting || isCopyDisqualified}
                     onClick={() => setCurrentQ(idx)}
                     aria-label={`Question ${idx + 1}${answered ? ' answered' : ''}${current ? ' current' : ''}`}
                     aria-current={current ? 'true' : undefined}
@@ -632,7 +726,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
             type="button"
             className="qt-submit-btn"
             onClick={() => setShowConfirmSubmit(true)}
-            disabled={submitting}
+            disabled={submitting || submittedRef.current || isCopyDisqualified}
           >
             <CheckCircle2 size={15} /> Submit quiz
           </button>
@@ -704,8 +798,8 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
                 <button
                   type="button"
                   className="qt-foot__btn qt-foot__btn--primary"
-                  onClick={() => { setShowConfirmSubmit(false); handleSubmit() }}
-                  disabled={submitting}
+                  onClick={() => { handleSubmit() }}
+                  disabled={submitting || submittedRef.current}
                 >
                   {submitting ? (<><Loader size={15} className="qt-spin" /> Submitting…</>) : (<><CheckCircle2 size={15} /> Submit now</>)}
                 </button>
@@ -778,11 +872,24 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
               </div>
               <h2 id="qt-term-title" className="qt-modal__title">Exam terminated</h2>
               <p className="qt-modal__desc">
-                You exited fullscreen {MAX_WARNINGS} times. Your attempt has been
-                automatically submitted with the answers you provided.
+                {attemptInvalidMsg || `You exited fullscreen ${MAX_WARNINGS} times. Your attempt has been automatically submitted with the answers you provided.`}
               </p>
               <div className="qt-modal__hint">
-                <Loader size={14} className="qt-spin" /> Returning to your dashboard…
+                {attemptInvalidMsg ? (
+                  <button
+                    type="button"
+                    className="qt-foot__btn qt-foot__btn--primary"
+                    onClick={() => {
+                      if (fsApi.element()) { try { fsApi.exit() } catch {} }
+                      onSubmit?.(null)
+                    }}
+                    style={{ margin: '12px auto 0', justifyContent: 'center' }}
+                  >
+                    Return to Dashboard
+                  </button>
+                ) : (
+                  <><Loader size={14} className="qt-spin" /> Returning to your dashboard…</>
+                )}
               </div>
             </motion.div>
           </motion.div>

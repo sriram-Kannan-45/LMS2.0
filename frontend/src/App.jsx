@@ -24,6 +24,7 @@ import Register from './pages/Register'
 import TrainerDashboard from './pages/TrainerDashboard'
 import TrainerLogin from './pages/TrainerLogin'
 import TrainerProctoringPage from './pages/TrainerProctoringPage'
+import TrainerMonitoringReportPage from './pages/TrainerMonitoringReportPage'
 import TrainerQuizDetails from './pages/TrainerQuizDetails'
 
 // ─── Coding Assessment route wrappers ────────────────────────────────────────
@@ -341,6 +342,15 @@ function AppRoutes({ user, onLogin, onLogout }) {
         element={
           (user?.role === 'TRAINER' || user?.role === 'ADMIN')
             ? <TrainerProctoringPage />
+            : <Navigate to="/trainer" />
+        }
+      />
+
+      <Route
+        path="/trainer/proctor/:quizId/report"
+        element={
+          (user?.role === 'TRAINER' || user?.role === 'ADMIN')
+            ? <TrainerMonitoringReportPage />
             : <Navigate to="/trainer" />
         }
       />

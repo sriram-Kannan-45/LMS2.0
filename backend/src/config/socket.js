@@ -53,13 +53,14 @@ const initializeSocket = (server) => {
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret');
-      const user = await User.findByPk(decoded.userId);
+      const userId = decoded.id || decoded.userId;
+      const user = await User.findByPk(userId);
 
       if (!user) {
         return next(new Error('Authentication error: User not found'));
       }
 
-      socket.userId = decoded.userId;
+      socket.userId = userId;
       socket.userRole = user.role;
       socket.userName = user.name;
 

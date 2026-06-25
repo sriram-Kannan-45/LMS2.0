@@ -177,6 +177,52 @@ const AIQuiz = sequelize.define('AIQuiz', {
     allowNull: false,
     defaultValue: false,
     field: 'is_result_published'
+  },
+  copyProtectionEnabled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'copy_protection_enabled'
+  },
+  maxCopyWarnings: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 3,
+    field: 'max_copy_warnings'
+  },
+  copyViolationActions: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    field: 'copy_violation_actions'
+  },
+  copyWarningMessage: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'copy_warning_message'
+  },
+  copyDisqualifyAction: {
+    type: DataTypes.ENUM('LOCK', 'AUTO_SUBMIT'),
+    allowNull: false,
+    defaultValue: 'AUTO_SUBMIT',
+    field: 'copy_disqualify_action'
+  },
+  proctoringLevel: {
+    type: DataTypes.ENUM('LOW', 'MEDIUM', 'HIGH'),
+    allowNull: false,
+    defaultValue: 'MEDIUM',
+    field: 'proctoring_level'
+  },
+  gracePeriodMinutes: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 2,
+    field: 'grace_period_minutes'
+  },
+  proctoringEnabled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    field: 'proctoring_enabled'
   }
 }, {
   tableName: 'ai_quizzes',

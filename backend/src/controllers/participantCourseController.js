@@ -641,10 +641,12 @@ async function listCourseQuizzes(req, res) {
         myStatus: attempt?.status || 'NOT_STARTED', // IN_PROGRESS | SUBMITTED
         resultStatus: q.resultStatus,
         myScore: showScore ? Number(result.percentage) : null,
+        proctoringEnabled: q.proctoringEnabled,
+        proctoringLevel: q.proctoringLevel,
       };
     });
-    const available = out.filter(q => q.myStatus === 'NOT_STARTED');
-    const completed = out.filter(q => q.myStatus !== 'NOT_STARTED');
+    const available = out.filter(q => q.myStatus === 'NOT_STARTED' || q.myStatus === 'IN_PROGRESS');
+    const completed = out.filter(q => q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS');
     res.json({ success: true, quizzes: available, completedQuizzes: completed });
   } catch (e) {
     console.error('listCourseQuizzes:', e.message);
@@ -748,6 +750,8 @@ async function getLessonDetail(req, res) {
           myStatus: a?.status || 'NOT_STARTED',
           resultStatus: q.resultStatus,
           myScore: r ? Number(r.percentage) : null,
+          proctoringEnabled: q.proctoringEnabled,
+          proctoringLevel: q.proctoringLevel,
         };
       }),
       assessments: assessments.map(a => {
@@ -894,6 +898,8 @@ async function startQuiz(req, res) {
         quizId: quiz.id,
         title: quiz.title,
         timeLimit: quiz.timeLimit,
+        proctoringEnabled: quiz.proctoringEnabled,
+        proctoringLevel: quiz.proctoringLevel,
       },
       // NB: correctAnswer is NOT returned.
       questions: questions.map(q => ({
@@ -1039,7 +1045,7 @@ async function getQuizResult(req, res) {
       where: {
         quizId: quiz.id,
         participantId: req.user.id,
-        status: { [Op.in]: ['SUBMITTED', 'EVALUATED', 'AUTO_SUBMITTED', 'COMPLETED', 'GRADED', 'submitted', 'completed', 'evaluated', 'graded'] }
+        status: { [Op.in]: ['SUBMITTED', 'EVALUATED', 'AUTO_SUBMITTED', 'COMPLETED', 'GRADED', 'submitted', 'completed', 'evaluated', 'graded', 'disqualified_copy_violation'] }
       },
       order: [['id', 'DESC']],
     });
@@ -1054,6 +1060,7 @@ async function getQuizResult(req, res) {
         resultStatus: 'HIDDEN',
         message: 'Your quiz has been submitted successfully. Results will be published by the trainer.',
         submittedAt: attempt.submittedAt,
+        attemptStatus: attempt.status,
       });
     }
 
@@ -1073,6 +1080,7 @@ async function getQuizResult(req, res) {
       totalScore: result ? Number(result.totalScore) : null,
       maxScore: result ? Number(result.maxScore) : null,
       submittedAt: attempt.submittedAt,
+      attemptStatus: attempt.status,
       correctCount: myAnswers.filter(a => a.isCorrect).length,
       wrongCount: reviewQuestions.length - myAnswers.filter(a => a.isCorrect).length,
       passStatus: (result && Number(result.percentage) >= 50) ? 'Pass' : 'Fail',
