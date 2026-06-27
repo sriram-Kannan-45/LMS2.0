@@ -20,10 +20,21 @@ const ExamSession = sequelize.define('ExamSession', {
     autoIncrement: true,
     primaryKey: true,
   },
+  assessmentType: {
+    type: DataTypes.ENUM('quiz', 'coding_assessment'),
+    allowNull: false,
+    defaultValue: 'quiz',
+    field: 'assessment_type',
+  },
   quizId: {
     type: DataTypes.BIGINT.UNSIGNED,
-    allowNull: false,
+    allowNull: true,
     field: 'quiz_id',
+  },
+  assessmentId: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    allowNull: true,
+    field: 'assessment_id',
   },
   attemptId: {
     type: DataTypes.BIGINT.UNSIGNED,
