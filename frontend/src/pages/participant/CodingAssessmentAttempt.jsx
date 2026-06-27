@@ -51,6 +51,8 @@ function CodingAssessmentAttemptInner({ user }) {
     recording,
     stream: screenStream,
     startRecording,
+    stopRecording,
+    uploadRecording,
     cleanup: cleanupRecorder,
     error: recorderError,
   } = useScreenRecorder({
@@ -164,7 +166,10 @@ function CodingAssessmentAttemptInner({ user }) {
             state: {
               attempt,
               sessionToken: session.sessionToken,
+              sessionId: session.sessionId,
               screenStream,
+              stopRecording,
+              uploadRecording,
             },
           });
         }

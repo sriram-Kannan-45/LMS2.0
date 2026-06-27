@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import CodeEditor from '../../components/CodeEditor';
@@ -7,19 +7,19 @@ import TestResultsPanel from '../../components/TestResultsPanel';
 import useCodeExecution from '../../hooks/useCodeExecution';
 import { codingAttemptApi } from '../../api/api';
 import { formatRemainingTime, getRemainingMs } from '../../utils/examTime';
+import { ProctorProvider, useProctor } from '../../proctoring/ProctorContext';
 
-/**
- * Participant coding assessment shell.
- *
- * Props:
- *   - attempt: full attempt object from /api/coding-attempts/:id
- *   - onSubmit: callback invoked after the final submission succeeds
- */
-export default function CodingExamShell({ attempt: attemptProp, onSubmit }) {
+const fsApi = {
+  element: () =>
+    document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement,
+};
+
+function CodingExamShellInner({ attempt: attemptProp, onSubmit }) {
   const { trainingId, assessmentId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const startedRef = useRef(false);
+  const submittingRef = useRef(false);
 
   const [attempt, setAttempt] = useState(() => attemptProp || location.state?.attempt || null);
   const [loadingAttempt, setLoadingAttempt] = useState(!attemptProp && !location.state?.attempt);
@@ -27,6 +27,16 @@ export default function CodingExamShell({ attempt: attemptProp, onSubmit }) {
   const [currentProblemIdx, setCurrentProblemIdx] = useState(0);
   const [codeByProblem, setCodeByProblem] = useState({});
   const [remainingMs, setRemainingMs] = useState(0);
+  const [fullscreenExits, setFullscreenExits] = useState(0);
+
+  const proctor = useProctor();
+
+  const routeState = location.state || {};
+  const screenStream = attemptProp?.screenStream ?? routeState.screenStream ?? null;
+  const sessionToken = attemptProp?.sessionToken ?? routeState.sessionToken ?? null;
+  const sessionId = attemptProp?.sessionId ?? routeState.sessionId ?? null;
+  const stopRecording = attemptProp?.stopRecording ?? routeState.stopRecording;
+  const uploadRecording = attemptProp?.uploadRecording ?? routeState.uploadRecording;
 
   const { run, submit, results, loading: execLoading, clearResults } = useCodeExecution();
 
@@ -107,6 +117,130 @@ export default function CodingExamShell({ attempt: attemptProp, onSubmit }) {
     clearResults();
   }, [currentProblemIdx, clearResults]);
 
+  // Publish the screen stream to the proctor context so capture/WebRTC keep working.
+  useEffect(() => {
+    if (screenStream) {
+      proctor.setScreenStream(screenStream);
+    }
+  }, [screenStream, proctor]);
+
+  const finalizeSubmission = useCallback(
+    async (reason = 'final_submit') => {
+      if (!attempt || submittingRef.current) return;
+      submittingRef.current = true;
+
+      try {
+        let blob = null;
+        if (typeof stopRecording === 'function') {
+          blob = await stopRecording();
+        }
+        if (blob && typeof uploadRecording === 'function') {
+          await uploadRecording(blob);
+        }
+        if (sessionId && sessionToken) {
+          await proctor.submit(sessionId, sessionToken);
+        }
+
+        const res = await codingAttemptApi.submit(attempt.id);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Final submission failed');
+        }
+
+        if (typeof onSubmit === 'function') {
+          onSubmit();
+        } else {
+          navigate(`/trainings/${trainingId}/assessments/${assessmentId}/result`);
+        }
+      } catch (err) {
+        setLoadError(err.message);
+        submittingRef.current = false;
+      }
+    },
+    [
+      attempt,
+      stopRecording,
+      uploadRecording,
+      sessionId,
+      sessionToken,
+      proctor,
+      trainingId,
+      assessmentId,
+      navigate,
+      onSubmit,
+    ]
+  );
+
+  // Fullscreen violation handling.
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!fsApi.element()) {
+        setFullscreenExits((prev) => prev + 1);
+        proctor.report(
+          'FULLSCREEN_EXIT',
+          'Exited fullscreen during coding assessment',
+          null,
+          sessionId,
+          sessionToken
+        );
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
+    };
+  }, [proctor, sessionId, sessionToken]);
+
+  // Tab switch handling.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        proctor.report(
+          'TAB_SWITCH',
+          'Switched tab during coding assessment',
+          null,
+          sessionId,
+          sessionToken
+        );
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [proctor, sessionId, sessionToken]);
+
+  // Window blur handling.
+  useEffect(() => {
+    const handleBlur = () => {
+      proctor.report('WINDOW_BLUR', 'Left assessment window', null, sessionId, sessionToken);
+    };
+
+    window.addEventListener('blur', handleBlur);
+    return () => window.removeEventListener('blur', handleBlur);
+  }, [proctor, sessionId, sessionToken]);
+
+  // Auto-submit after 3 fullscreen exits.
+  useEffect(() => {
+    if (fullscreenExits >= 3 && !submittingRef.current) {
+      setLoadError('Maximum fullscreen violations reached. Submitting assessment.');
+      finalizeSubmission('max_fullscreen_violations');
+    }
+  }, [fullscreenExits, finalizeSubmission]);
+
+  // Auto-submit on timer expiry.
+  useEffect(() => {
+    if (!attempt) return;
+    if (remainingMs <= 0 && !submittingRef.current) {
+      finalizeSubmission('timer_expired');
+    }
+  }, [attempt, remainingMs, finalizeSubmission]);
+
   const handleCodeChange = (value) => {
     if (!problem) return;
     setCodeByProblem((prev) => ({ ...prev, [problem.id]: value ?? '' }));
@@ -123,28 +257,14 @@ export default function CodingExamShell({ attempt: attemptProp, onSubmit }) {
   };
 
   const handleFinalSubmit = async () => {
-    if (!attempt) return;
+    if (!attempt || submittingRef.current) return;
 
     const confirmed = window.confirm(
       'Are you sure you want to submit the entire assessment? This action cannot be undone.'
     );
     if (!confirmed) return;
 
-    try {
-      const res = await codingAttemptApi.submit(attempt.id);
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Final submission failed');
-      }
-
-      if (typeof onSubmit === 'function') {
-        onSubmit();
-      } else {
-        navigate('/participant');
-      }
-    } catch (err) {
-      setLoadError(err.message);
-    }
+    await finalizeSubmission('final_submit');
   };
 
   const problemTabs = useMemo(
@@ -275,7 +395,15 @@ export default function CodingExamShell({ attempt: attemptProp, onSubmit }) {
   );
 }
 
-CodingExamShell.propTypes = {
+CodingExamShellInner.propTypes = {
   attempt: PropTypes.object,
   onSubmit: PropTypes.func,
 };
+
+export default function CodingExamShell(props) {
+  return (
+    <ProctorProvider>
+      <CodingExamShellInner {...props} />
+    </ProctorProvider>
+  );
+}
