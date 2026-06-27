@@ -169,7 +169,13 @@ exports.getOne = async (req, res) => {
       include: [
         { model: User, as: 'participant', attributes: ['id', 'name', 'email'] },
         { model: User, as: 'trainer', attributes: ['id', 'name', 'email'] },
-        { model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] }
+        { model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] },
+        {
+          model: CodingAttempt,
+          as: 'codingAttempt',
+          attributes: ['id', 'assessmentId', 'participantId', 'status', 'totalScore', 'startedAt', 'submittedAt'],
+          include: [{ model: CodingAssessment, as: 'assessment', attributes: ['id', 'title'] }]
+        }
       ]
     });
 
