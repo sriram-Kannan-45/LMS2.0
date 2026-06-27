@@ -1,21 +1,40 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import QuizTaking from '../components/QuizTaking'
 import AssessmentConsentGate from '../components/ai-quizzes/AssessmentConsentGate'
 import { API_BASE } from '../api/api'
 import { useToast } from '../components/Toast'
 import { Loader2, AlertCircle } from 'lucide-react'
+import { ProctorProvider, useProctor } from '../proctoring/ProctorContext'
+import useDeviceFingerprint from '../proctoring/hooks/useDeviceFingerprint'
+import useScreenRecorder from '../hooks/useScreenRecorder'
+import RecordingIndicator from '../components/shared/RecordingIndicator'
 
 const authHeaders = (token) => ({
   'Content-Type': 'application/json',
   Authorization: `Bearer ${token}`
 })
 
-export default function ParticipantQuizAttemptPage({ user }) {
+function ParticipantQuizAttemptPageInner({ user }) {
   const navigate = useNavigate()
   const { trainingId, quizId } = useParams()
   const [searchParams] = useSearchParams()
   const { error: showError } = useToast()
+  const proctor = useProctor()
+  const fp = useDeviceFingerprint()
+  const {
+    recording: screenRecording,
+    startRecording,
+    stopRecording,
+    uploadRecording,
+    error: recorderError
+  } = useScreenRecorder({
+    assessmentType: 'quiz',
+    assessmentId: quizId,
+    participantId: user?.id,
+    sessionId: searchParams.get('sessionId') || `session_${Date.now()}`,
+    userToken: user?.token
+  })
 
   let attemptId = searchParams.get('attemptId')
   let sessionToken = searchParams.get('sessionToken')
@@ -42,6 +61,10 @@ export default function ParticipantQuizAttemptPage({ user }) {
   const [errorMsg, setErrorMsg] = useState(null)
   const [quizData, setQuizData] = useState(null)
   const [consented, setConsented] = useState(false)
+  const [screenStream, setScreenStream] = useState(null)
+  const [sessionError, setSessionError] = useState(null)
+  const [screenShareResuming, setScreenShareResuming] = useState(false)
+  const resumedStreamRef = useRef(null)
 
   useEffect(() => {
     if (!quizId || !attemptId) {
@@ -79,9 +102,9 @@ export default function ParticipantQuizAttemptPage({ user }) {
           copyViolationActions: data.quiz.copyViolationActions,
           copyWarningMessage: data.quiz.copyWarningMessage,
           copyDisqualifyAction: data.quiz.copyDisqualifyAction,
-          proctoringEnabled: data.quiz.proctoringEnabled,
-          proctoringLevel: data.quiz.proctoringLevel,
-          gracePeriodMinutes: data.quiz.gracePeriodMinutes,
+          proctoringEnabled: true,
+          proctoringLevel: data.quiz.proctoringLevel || 'MEDIUM',
+          gracePeriodMinutes: data.quiz.gracePeriodMinutes || 2,
           initialViolationCount: data.attempt?.violationCount || 0,
           initialStatus: data.attempt?.status || 'IN_PROGRESS',
           questions: data.questions || []
@@ -99,25 +122,78 @@ export default function ParticipantQuizAttemptPage({ user }) {
     return () => { aborted = true }
   }, [quizId, attemptId, user.token])
 
-  useEffect(() => {
-    if (quizData && quizData.proctoringEnabled) {
-      navigate(`/participant/exam/${quizId}`, {
-        state: {
-          attemptId: attemptId,
-          quizData: quizData
-        },
-        replace: true
+  const handleScreenShareReady = useCallback(async (stream) => {
+    if (!stream) return
+    console.log('[ParticipantQuizAttemptPage] Screen share ready, MediaStream created')
+    setScreenStream(stream)
+    setSessionError(null)
+    proctor.setScreenStream(stream)
+    try {
+      console.log('[ParticipantQuizAttemptPage] Starting proctor session...')
+      const s = await proctor.start({
+        quizId: Number(quizId),
+        attemptId: Number(attemptId),
+        fingerprintHash: fp,
+        screenSharing: true,
       })
+      console.log('[ParticipantQuizAttemptPage] Activating proctor session...')
+      await proctor.activate(s.sessionId, s.sessionToken)
+      console.log('[ParticipantQuizAttemptPage] Proctor session active:', proctor.session?.sessionId)
+      startRecording()
+    } catch (err) {
+      console.error('[ParticipantQuizAttemptPage] Failed to start proctor session:', err)
+      setSessionError(err?.message || 'Failed to start proctoring session.')
+      stream.getTracks().forEach(t => t.stop())
+      setScreenStream(null)
+      proctor.setScreenStream(null)
     }
-  }, [quizData, quizId, attemptId, navigate])
+  }, [quizId, attemptId, fp, proctor, startRecording])
+
+  const handleScreenShareResumed = useCallback((newStream) => {
+    if (!newStream) return
+    console.log('[ParticipantQuizAttemptPage] Screen share resumed, replacing stream')
+    setScreenStream(newStream)
+    proctor.setScreenStream(newStream)
+    proctor.pushState?.({ isScreenSharing: true })
+    resumedStreamRef.current = newStream
+    setScreenShareResuming(false)
+  }, [proctor])
 
   const handleConsented = useCallback(() => {
     setConsented(true)
   }, [])
 
   const handleCancel = useCallback(() => {
+    // Stop screen share if active
+    if (screenStream) {
+      screenStream.getTracks().forEach(t => t.stop())
+    }
     navigate(`/trainings/${trainingId}`)
-  }, [navigate, trainingId])
+  }, [navigate, trainingId, screenStream])
+
+  const handleRetrySession = useCallback(async () => {
+    setSessionError(null)
+    if (screenStream) {
+      await handleScreenShareReady(screenStream)
+    }
+  }, [screenStream, handleScreenShareReady])
+
+  const handleCancelFromSessionError = useCallback(() => {
+    if (screenStream) {
+      screenStream.getTracks().forEach(t => t.stop())
+    }
+    navigate(`/trainings/${trainingId}`)
+  }, [navigate, trainingId, screenStream])
+
+  const handleSubmit = useCallback(async () => {
+    if (screenRecording) {
+      const blob = await stopRecording()
+      if (blob) {
+        await uploadRecording(blob)
+      }
+    }
+    navigate(`/trainings/${trainingId}/quizzes/${quizId}/result`)
+  }, [screenRecording, stopRecording, uploadRecording, trainingId, quizId, navigate])
 
   if (loading) {
     return (
@@ -185,20 +261,78 @@ export default function ParticipantQuizAttemptPage({ user }) {
         attemptId={parseInt(attemptId, 10)}
         onConsented={handleConsented}
         onCancel={handleCancel}
+        onScreenShareReady={handleScreenShareReady}
       />
     )
   }
 
+  // Session start error overlay (non-blocking retry/cancel)
+  if (sessionError) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)',
+        zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}>
+        <div style={{
+          background: '#fff', borderRadius: 14, width: '100%', maxWidth: 440, padding: 24,
+          boxShadow: '0 20px 50px rgba(0,0,0,0.2)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <AlertCircle size={28} color="#dc2626" />
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
+              Screen sharing is mandatory to attend this assessment.
+            </h3>
+          </div>
+          <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 20px', lineHeight: 1.5 }}>
+            {sessionError}
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button
+              onClick={handleCancelFromSessionError}
+              style={{
+                padding: '10px 18px', background: '#fff', color: '#475569', border: '1px solid #e2e8f0',
+                borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Cancel Assessment
+            </button>
+            <button
+              onClick={handleRetrySession}
+              style={{
+                padding: '10px 18px', background: '#2563eb', color: '#fff', border: 'none',
+                borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <QuizTaking
-      quizId={parseInt(quizId, 10)}
-      attemptId={parseInt(attemptId, 10)}
-      quizData={quizData}
-      sessionToken={sessionToken}
-      isStandardQuiz={true}
-      onSubmit={() => {
-        navigate(`/trainings/${trainingId}/quizzes/${quizId}/result`)
-      }}
-    />
+    <>
+      <RecordingIndicator recording={screenRecording} />
+      <QuizTaking
+        quizId={parseInt(quizId, 10)}
+        attemptId={parseInt(attemptId, 10)}
+        quizData={quizData}
+        sessionToken={sessionToken}
+        isStandardQuiz={true}
+        screenStream={screenStream}
+        examSession={proctor.session}
+        onScreenShareResumed={handleScreenShareResumed}
+        onSubmit={handleSubmit}
+      />
+    </>
+  )
+}
+
+export default function ParticipantQuizAttemptPage({ user }) {
+  return (
+    <ProctorProvider>
+      <ParticipantQuizAttemptPageInner user={user} />
+    </ProctorProvider>
   )
 }
