@@ -10,6 +10,9 @@ export default function useScreenRecorder({
   userToken,
   autoStop = true,
 } = {}) {
+  // autoStop: when false, the recorder keeps running even if the React component
+  // unmounts. This is required for flows that navigate to a separate exam route
+  // while the screen recording must continue.
   const [recording, setRecording] = useState(false)
   const [stream, setStream] = useState(null)
   const [error, setError] = useState(null)
@@ -131,8 +134,9 @@ export default function useScreenRecorder({
   }, [])
 
   useEffect(() => {
+    if (autoStop === false) return
     return () => cleanup()
-  }, [cleanup])
+  }, [cleanup, autoStop])
 
   return {
     recording,

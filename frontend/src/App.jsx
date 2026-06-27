@@ -20,6 +20,7 @@ import ParticipantDashboard from './pages/ParticipantDashboard'
 import ParticipantLogin from './pages/ParticipantLogin'
 import ParticipantQuizAttemptPage from './pages/ParticipantQuizAttemptPage'
 import ParticipantQuizResultPage from './pages/ParticipantQuizResultPage'
+import CodingAssessmentAttempt from './pages/participant/CodingAssessmentAttempt'
 import CodingExamShell from './pages/participant/CodingExamShell'
 import PreExamReadiness from './pages/PreExamReadiness'
 import Register from './pages/Register'
@@ -500,6 +501,17 @@ function AppRoutes({ user, onLogin, onLogout }) {
       <Route
         path="/participant/coding/:assessmentId"
         element={user?.role === 'PARTICIPANT' ? <ParticipantCodingPage /> : <Navigate to="/participant" />}
+      />
+
+      <Route
+        path="/trainings/:trainingId/assessments/:assessmentId/attempt"
+        element={
+          user?.role === 'PARTICIPANT' ? (
+            <CodingAssessmentAttempt user={user} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
       />
 
       <Route
