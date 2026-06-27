@@ -1,3 +1,5 @@
+import { getAuthHeaders } from './request';
+
 /**
  * Centralized API configuration.
  *
@@ -97,7 +99,12 @@ export const API = {
     COMPLETE_QUIZ:      (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/complete`,
     SUBMIT_ASSESSMENT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/submit`,
     QUIZ_RESULT:        (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/result`,
-    ASSESSMENT_RESULT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/result`
+    ASSESSMENT_RESULT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/result`,
+    // Coding assessment
+    ATTACH_CODING:          (lessonId) => `${API_BASE}/lessons/${lessonId}/coding-assessments`,
+    PUBLISH_CODING:         (lessonCodingId) => `${API_BASE}/lessons/coding-assessments/${lessonCodingId}/publish`,
+    COMPLETE_CODING:        (lessonCodingId) => `${API_BASE}/lessons/coding-assessments/${lessonCodingId}/complete`,
+    CODING_RESULT:          (lessonCodingId) => `${API_BASE}/lessons/coding-assessments/${lessonCodingId}/result`
   },
 
   /**
@@ -179,6 +186,14 @@ export const API = {
   },
 
   /** Coding Assessment module (Judge0 sandbox + AI gen/review + plagiarism) */
+  RECORDINGS: {
+    LIST:        `${API_BASE}/recordings`,
+    DETAIL:      (id) => `${API_BASE}/recordings/${id}`,
+    STREAM:      (id) => `${API_BASE}/recordings/${id}/stream`,
+    UPLOAD:      `${API_BASE}/recordings/upload`,
+    DELETE:      (id) => `${API_BASE}/recordings/${id}`,
+  },
+
   CODING: {
     // Trainer
     ASSESSMENTS:          `${API_BASE}/coding/assessments`,
@@ -197,6 +212,27 @@ export const API = {
     REVIEW:      (subId) => `${API_BASE}/coding/participant/submissions/${subId}/review`,
     VIOLATION:(attemptId)=> `${API_BASE}/coding/participant/attempts/${attemptId}/violation`,
   }
+};
+
+export const codingAssessmentApi = {
+  create: (data) => fetch(`${API_BASE}/coding-assessments`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data) }),
+  list: () => fetch(`${API_BASE}/coding-assessments`, { headers: getAuthHeaders() }),
+  get: (id) => fetch(`${API_BASE}/coding-assessments/${id}`, { headers: getAuthHeaders() }),
+  update: (id, data) => fetch(`${API_BASE}/coding-assessments/${id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(data) }),
+  delete: (id) => fetch(`${API_BASE}/coding-assessments/${id}`, { method: 'DELETE', headers: getAuthHeaders() }),
+  publish: (id) => fetch(`${API_BASE}/coding-assessments/${id}/publish`, { method: 'POST', headers: getAuthHeaders() }),
+  close: (id) => fetch(`${API_BASE}/coding-assessments/${id}/close`, { method: 'POST', headers: getAuthHeaders() }),
+};
+
+export const codingAttemptApi = {
+  start: (assessmentId) => fetch(`${API_BASE}/coding-attempts/start`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ assessmentId }) }),
+  get: (id) => fetch(`${API_BASE}/coding-attempts/${id}`, { headers: getAuthHeaders() }),
+  submit: (id) => fetch(`${API_BASE}/coding-attempts/${id}/submit`, { method: 'POST', headers: getAuthHeaders() }),
+};
+
+export const codeExecutionApi = {
+  run: (data) => fetch(`${API_BASE}/code/run`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data) }),
+  submit: (data) => fetch(`${API_BASE}/code/submit`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data) }),
 };
 
 export { API_BASE, BACKEND_ORIGIN };
