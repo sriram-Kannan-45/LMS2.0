@@ -6,6 +6,7 @@ import ProblemPanel from '../../components/ProblemPanel';
 import TestResultsPanel from '../../components/TestResultsPanel';
 import useCodeExecution from '../../hooks/useCodeExecution';
 import { codingAttemptApi } from '../../api/api';
+import useScreenRecorder from '../../hooks/useScreenRecorder';
 import { formatRemainingTime, getRemainingMs } from '../../utils/examTime';
 import { ProctorProvider, useProctor } from '../../proctoring/ProctorContext';
 
@@ -32,15 +33,26 @@ function CodingExamShellInner({ attempt: attemptProp, onSubmit }) {
   const proctor = useProctor();
 
   const routeState = location.state || {};
-  const screenStream = attemptProp?.screenStream ?? routeState.screenStream ?? null;
   const sessionToken = attemptProp?.sessionToken ?? routeState.sessionToken ?? null;
   const sessionId = attemptProp?.sessionId ?? routeState.sessionId ?? null;
-  const stopRecording = attemptProp?.stopRecording ?? routeState.stopRecording;
-  const uploadRecording = attemptProp?.uploadRecording ?? routeState.uploadRecording;
+  const assessmentFromState = attemptProp?.assessment ?? routeState.assessment ?? null;
+
+  const {
+    stream: screenStream,
+    stopRecording,
+    uploadRecording,
+  } = useScreenRecorder({
+    assessmentType: 'coding_assessment',
+    assessmentId,
+    codingAttemptId: attempt?.id,
+    participantId: attempt?.participantId,
+    sessionId,
+    autoStop: false,
+  });
 
   const { run, submit, results, loading: execLoading, clearResults } = useCodeExecution();
 
-  const assessment = attempt?.assessment;
+  const assessment = attempt?.assessment || assessmentFromState;
   const questions = assessment?.questions || [];
   const problem = questions[currentProblemIdx];
   const language = assessment?.language || 'javascript';

@@ -11,7 +11,7 @@ import {
   MonitorPlay,
   ShieldCheck,
 } from 'lucide-react';
-import { codingAssessmentApi, codingAttemptApi } from '../../api/api';
+import { API_BASE, codingAttemptApi, getAuthHeaders } from '../../api/api';
 import { useToast } from '../../components/Toast';
 import useScreenRecorder from '../../hooks/useScreenRecorder';
 import { ProctorProvider, useProctor } from '../../proctoring/ProctorContext';
@@ -48,11 +48,8 @@ function CodingAssessmentAttemptInner({ user }) {
 
   const sessionId = `coding_${assessmentId}_${Date.now()}`;
   const {
-    recording,
     stream: screenStream,
     startRecording,
-    stopRecording,
-    uploadRecording,
     cleanup: cleanupRecorder,
     error: recorderError,
   } = useScreenRecorder({
@@ -77,30 +74,44 @@ function CodingAssessmentAttemptInner({ user }) {
     async function bootstrap() {
       try {
         setLoading(true);
-        const [assessmentRes, attemptRes] = await Promise.all([
-          codingAssessmentApi.get(assessmentId),
-          codingAttemptApi.start(assessmentId),
-        ]);
-
+        const assessmentRes = await fetch(
+          `${API_BASE}/coding-assessments/${assessmentId}/participant`,
+          { headers: getAuthHeaders() }
+        );
         const assessmentData = await assessmentRes.json();
-        const attemptData = await attemptRes.json();
-
-        if (aborted) return;
-
         if (!assessmentRes.ok) {
           throw new Error(assessmentData?.error || assessmentData?.message || 'Failed to load assessment.');
         }
+
+        const attemptRes = await codingAttemptApi.start(assessmentId);
+        const attemptData = await attemptRes.json();
         if (!attemptRes.ok) {
           throw new Error(attemptData?.error || attemptData?.message || 'Failed to start coding attempt.');
         }
 
-        const assessmentObj = normalizeAssessment(assessmentData);
-        const attemptObj = normalizeAttempt(attemptData);
+        if (aborted) return;
 
-        if (attemptObj?.status === 'SUBMITTED') {
+        const assessmentObj = normalizeAssessment(assessmentData);
+
+        if (attemptData?.status === 'SUBMITTED') {
           navigate(`/trainings/${trainingId}/assessments/${assessmentId}/result`, { replace: true });
           return;
         }
+
+        const attemptId = attemptData?.attemptId || attemptData?.attempt?.id || attemptData?.id;
+        if (!attemptId) {
+          throw new Error('No attempt id returned from start endpoint.');
+        }
+
+        sessionStorage.setItem(`coding_attempt_${assessmentId}`, String(attemptId));
+
+        const fullAttemptRes = await codingAttemptApi.get(attemptId);
+        const fullAttemptData = await fullAttemptRes.json();
+        if (!fullAttemptRes.ok) {
+          throw new Error(fullAttemptData?.error || fullAttemptData?.message || 'Failed to load attempt details.');
+        }
+
+        const attemptObj = normalizeAttempt(fullAttemptData);
 
         setAssessment(assessmentObj);
         setAttempt(attemptObj);
@@ -165,11 +176,9 @@ function CodingAssessmentAttemptInner({ user }) {
           navigate(`/trainings/${trainingId}/assessments/${assessmentId}/exam`, {
             state: {
               attempt,
+              assessment,
               sessionToken: session.sessionToken,
               sessionId: session.sessionId,
-              screenStream,
-              stopRecording,
-              uploadRecording,
             },
           });
         }
@@ -187,7 +196,7 @@ function CodingAssessmentAttemptInner({ user }) {
     return () => {
       aborted = true;
     };
-  }, [starting, screenStream, attempt, fingerprintHash, proctor, assessmentId, trainingId, navigate]);
+  }, [starting, screenStream, attempt, fingerprintHash, proctor, assessmentId, trainingId, navigate, assessment]);
 
   const handleStart = useCallback(async () => {
     if (!consented) {

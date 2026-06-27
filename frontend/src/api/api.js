@@ -1,5 +1,7 @@
 import { getAuthHeaders } from './request';
 
+export { getAuthHeaders };
+
 /**
  * Centralized API configuration.
  *

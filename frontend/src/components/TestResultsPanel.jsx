@@ -19,7 +19,16 @@ const TestResultsPanel = ({ results, loading }) => {
     );
   }
 
-  const { score, tests = [] } = results;
+  const { score, results: rawResults, tests: legacyTests } = results || {};
+  const tests = (rawResults || legacyTests || []).map((test, index) => ({
+    id: test?.id ?? index,
+    passed: test?.status === 'OK' || test?.passed === true,
+    input: test?.stdin ?? test?.input ?? '',
+    expected: test?.expectedOutput ?? test?.expected ?? '',
+    output: test?.actualOutput ?? test?.output ?? '',
+    isHidden: !!test?.isHidden,
+    message: test?.message ?? '',
+  }));
 
   return (
     <div className="h-full overflow-y-auto p-6">
@@ -132,6 +141,7 @@ TestResultsPanel.propTypes = {
   loading: PropTypes.bool,
   results: PropTypes.shape({
     score: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    results: PropTypes.arrayOf(PropTypes.object),
     tests: PropTypes.arrayOf(
       PropTypes.shape({
         id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),

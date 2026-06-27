@@ -1,5 +1,24 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { API_BASE } from '../api/api'
+
+function getAuthToken() {
+  try {
+    const raw = localStorage.getItem('user')
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed?.token || parsed?.accessToken || null
+  } catch { return null }
+}
+
+// Module-level singleton so the recorder can survive route navigations.
+let globalMediaRecorder = null
+let globalStream = null
+let globalChunks = []
+const listeners = new Set()
+
+function notify() {
+  listeners.forEach((cb) => cb())
+}
 
 export default function useScreenRecorder({
   assessmentType = 'quiz',
@@ -10,49 +29,55 @@ export default function useScreenRecorder({
   userToken,
   autoStop = true,
 } = {}) {
-  // autoStop: when false, the recorder keeps running even if the React component
-  // unmounts. This is required for flows that navigate to a separate exam route
-  // while the screen recording must continue.
-  const [recording, setRecording] = useState(false)
-  const [stream, setStream] = useState(null)
+  const [, forceUpdate] = useState(0)
   const [error, setError] = useState(null)
   const [chunks, setChunks] = useState([])
-  const mediaRecorderRef = useRef(null)
-  const chunksRef = useRef([])
-  const streamRef = useRef(null)
+
+  useEffect(() => {
+    const cb = () => forceUpdate((n) => n + 1)
+    listeners.add(cb)
+    return () => listeners.delete(cb)
+  }, [])
 
   const startRecording = useCallback(async () => {
     try {
+      if (globalMediaRecorder && globalMediaRecorder.state !== 'inactive') {
+        return true
+      }
+
       const mediaStream = await navigator.mediaDevices.getDisplayMedia({
         video: { mediaSource: 'screen' },
         audio: false
       })
-      streamRef.current = mediaStream
-      setStream(mediaStream)
+      globalStream = mediaStream
+      notify()
 
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
         ? 'video/webm;codecs=vp9'
         : 'video/webm'
 
       const recorder = new MediaRecorder(mediaStream, { mimeType })
-      mediaRecorderRef.current = recorder
-      chunksRef.current = []
+      globalMediaRecorder = recorder
+      globalChunks = []
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
-          chunksRef.current.push(e.data)
-          setChunks([...chunksRef.current])
+          globalChunks.push(e.data)
+          setChunks([...globalChunks])
         }
       }
 
       recorder.onstop = () => {
-        setRecording(false)
-        setStream(null)
+        notify()
+      }
+
+      recorder.onerror = (err) => {
+        setError(err.message || 'Recording error')
       }
 
       recorder.start(5000)
-      setRecording(true)
       setError(null)
+      notify()
       return true
     } catch (err) {
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
@@ -66,32 +91,37 @@ export default function useScreenRecorder({
 
   const stopRecording = useCallback(async () => {
     return new Promise((resolve) => {
-      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+      if (!globalMediaRecorder || globalMediaRecorder.state === 'inactive') {
         resolve(null)
         return
       }
 
-      const originalOnStop = mediaRecorderRef.current.onstop
-      mediaRecorderRef.current.onstop = () => {
-        setRecording(false)
-        setStream(null)
+      const originalOnStop = globalMediaRecorder.onstop
+      globalMediaRecorder.onstop = () => {
         if (originalOnStop) originalOnStop()
+        notify()
       }
 
-      mediaRecorderRef.current.stop()
+      globalMediaRecorder.stop()
 
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-        streamRef.current = null
+      if (globalStream) {
+        globalStream.getTracks().forEach(track => track.stop())
+        globalStream = null
+        notify()
       }
 
-      const blob = new Blob(chunksRef.current, { type: 'video/webm' })
+      const blob = new Blob(globalChunks, { type: 'video/webm' })
       resolve(blob)
     })
   }, [])
 
   const uploadRecording = useCallback(async (blob) => {
     if (!blob || !assessmentId || !participantId || !sessionId) return null
+    const token = userToken || getAuthToken()
+    if (!token) {
+      setError('Auth token missing')
+      return null
+    }
     try {
       const formData = new FormData()
       formData.append('recording', blob, `${assessmentType}_${assessmentId}_${participantId}_${Date.now()}.webm`)
@@ -107,7 +137,7 @@ export default function useScreenRecorder({
 
       const res = await fetch(`${API_BASE}/recordings/upload`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${userToken}` },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData
       })
       const data = await res.json()
@@ -120,17 +150,17 @@ export default function useScreenRecorder({
   }, [assessmentType, assessmentId, codingAttemptId, participantId, sessionId, userToken])
 
   const cleanup = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
+    if (globalStream) {
+      globalStream.getTracks().forEach(track => track.stop())
+      globalStream = null
     }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop()
+    if (globalMediaRecorder && globalMediaRecorder.state !== 'inactive') {
+      globalMediaRecorder.stop()
     }
-    mediaRecorderRef.current = null
-    chunksRef.current = []
-    setRecording(false)
-    setStream(null)
+    globalMediaRecorder = null
+    globalChunks = []
+    setChunks([])
+    notify()
   }, [])
 
   useEffect(() => {
@@ -139,8 +169,8 @@ export default function useScreenRecorder({
   }, [cleanup, autoStop])
 
   return {
-    recording,
-    stream,
+    recording: globalMediaRecorder && globalMediaRecorder.state !== 'inactive',
+    stream: globalStream,
     error,
     chunks,
     startRecording,

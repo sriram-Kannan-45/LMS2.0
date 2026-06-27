@@ -10,7 +10,7 @@ import {
   Trophy,
   XCircle,
 } from 'lucide-react';
-import { codingAssessmentApi, codingAttemptApi } from '../../api/api';
+import { API_BASE, codingAttemptApi, getAuthHeaders } from '../../api/api';
 import {
   calculateMaxScore,
   formatDateTime,
@@ -43,7 +43,10 @@ export default function CodingAssessmentResultPage() {
         setLoading(true);
         setErrorMsg(null);
 
-        const assessmentRes = await codingAssessmentApi.get(assessmentId);
+        const assessmentRes = await fetch(
+          `${API_BASE}/coding-assessments/${assessmentId}/participant`,
+          { headers: getAuthHeaders() }
+        );
         const assessmentData = await assessmentRes.json();
         if (!assessmentRes.ok) {
           throw new Error(
@@ -51,15 +54,12 @@ export default function CodingAssessmentResultPage() {
           );
         }
 
-        const startRes = await codingAttemptApi.start(assessmentId);
-        const startData = await startRes.json();
-        if (!startRes.ok) {
-          throw new Error(
-            startData?.error || startData?.message || 'Failed to load your attempt.'
-          );
+        const storedAttemptId = sessionStorage.getItem(`coding_attempt_${assessmentId}`);
+        if (!storedAttemptId) {
+          throw new Error('No attempt found. Please return to the training dashboard and start the assessment.');
         }
 
-        const attemptRes = await codingAttemptApi.get(startData.attemptId);
+        const attemptRes = await codingAttemptApi.get(storedAttemptId);
         const attemptData = await attemptRes.json();
         if (!attemptRes.ok) {
           throw new Error(
