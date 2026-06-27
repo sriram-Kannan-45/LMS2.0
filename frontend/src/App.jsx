@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams, useLocation } from 'react-router-dom'
 import AssessmentLobby from './components/coding-assessment/AssessmentLobby'
 import CodingAssessmentForm from './components/coding-assessment/CodingAssessmentForm'
 import CodingAssessmentResults from './components/coding-assessment/CodingAssessmentResults'
@@ -11,6 +11,7 @@ import { ToastProvider } from './components/Toast'
 import { AppThemeProvider } from './context/AppThemeContext'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminLogin from './pages/AdminLogin'
+import AdminRecordings from './pages/AdminRecordings'
 import ExamPage from './pages/ExamPage'
 import ExamResultPage from './pages/ExamResultPage'
 import ForgotPassword from './pages/ForgotPassword'
@@ -23,15 +24,35 @@ import PreExamReadiness from './pages/PreExamReadiness'
 import Register from './pages/Register'
 import TrainerDashboard from './pages/TrainerDashboard'
 import TrainerLogin from './pages/TrainerLogin'
+import TrainerRecordings from './pages/TrainerRecordings'
+import TrainerRecordingDetail from './pages/TrainerRecordingDetail'
 import TrainerProctoringPage from './pages/TrainerProctoringPage'
 import TrainerMonitoringReportPage from './pages/TrainerMonitoringReportPage'
 import TrainerQuizDetails from './pages/TrainerQuizDetails'
+import TestPage from './pages/TestPage'
+import TestResultPage from './pages/TestResultPage'
+import TrainerMonitoringDashboard from './pages/TrainerMonitoringDashboard'
+import CodingAssessmentBuilder from './pages/trainer/CodingAssessmentBuilder'
 
 // ─── Coding Assessment route wrappers ────────────────────────────────────────
 function ParticipantCodingPage() {
   const { assessmentId } = useParams()
   const navigate = useNavigate()
-  return <div className="p-4"><AssessmentLobby assessmentId={assessmentId} onExit={() => navigate('/participant')} /></div>
+  const location = useLocation()
+  const lessonCodingId = location.state?.lessonCodingId
+  const handleExit = async () => {
+    if (lessonCodingId) {
+      try {
+        const token = localStorage.getItem('token')
+        await fetch(`/api/lessons/coding-assessments/${lessonCodingId}/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+        })
+      } catch {}
+    }
+    navigate('/participant')
+  }
+  return <div className="p-4"><AssessmentLobby assessmentId={assessmentId} onExit={handleExit} /></div>
 }
 function TrainerCodingFormPage() {
   const navigate = useNavigate()
@@ -176,6 +197,56 @@ const DEFAULT_TABS = {
   PARTICIPANT: 'overview',
 }
 
+// ─── TrainerRecordingsWrapper ───────────────────────────────────────────────────
+function TrainerRecordingsWrapper({ user, onLogout, pageVariants }) {
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState('recordings')
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    navigate('/trainer')
+  }
+
+  return (
+    <Layout user={user} activeTab={activeTab} onTabChange={handleTabChange} onLogout={onLogout}>
+      <motion.div
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        variants={pageVariants}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <TrainerRecordings user={user} />
+      </motion.div>
+    </Layout>
+  )
+}
+
+// ─── RecordingDetailWrapper ─────────────────────────────────────────────────────
+function RecordingDetailWrapper({ user, onLogout, pageVariants }) {
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState('recordings')
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    navigate('/trainer')
+  }
+
+  return (
+    <Layout user={user} activeTab={activeTab} onTabChange={handleTabChange} onLogout={onLogout}>
+      <motion.div
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        variants={pageVariants}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <TrainerRecordingDetail user={user} />
+      </motion.div>
+    </Layout>
+  )
+}
+
 // ─── DashboardWrapper ─────────────────────────────────────────────────────────
 // activeTab state is LOCAL to each DashboardWrapper instance so it never bleeds
 // across routes. When navigating from /admin to /participant the old wrapper
@@ -219,14 +290,15 @@ function AppRoutes({ user, onLogin, onLogout }) {
 
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route path="/" element={<Login onLogin={onLogin} />} />
+      <Route path="/login" element={<Login onLogin={onLogin} />} />
       <Route
         path="/admin/login"
         element={
           user?.role === 'ADMIN' ? (
             <Navigate to="/admin" replace />
           ) : (
-            <AdminLogin onLogin={onLogin} />
+            <Login onLogin={onLogin} defaultRole="ADMIN" />
           )
         }
       />
@@ -236,7 +308,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'TRAINER' ? (
             <Navigate to="/trainer" replace />
           ) : (
-            <TrainerLogin onLogin={onLogin} />
+            <Login onLogin={onLogin} defaultRole="TRAINER" />
           )
         }
       />
@@ -246,7 +318,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'PARTICIPANT' ? (
             <Navigate to="/participant" replace />
           ) : (
-            <ParticipantLogin onLogin={onLogin} />
+            <Login onLogin={onLogin} defaultRole="PARTICIPANT" />
           )
         }
       />
@@ -259,7 +331,18 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'ADMIN' ? (
             <DashboardWrapper component={AdminDashboard} user={user} onLogout={onLogout} />
           ) : (
-            <Navigate to="/admin/login" replace />
+            <Navigate to="/login" state={{ fromRole: 'ADMIN' }} replace />
+          )
+        }
+      />
+
+      <Route
+        path="/admin/recordings"
+        element={
+          user?.role === 'ADMIN' ? (
+            <AdminRecordings user={user} />
+          ) : (
+            <Navigate to="/login" state={{ fromRole: 'ADMIN' }} replace />
           )
         }
       />
@@ -270,7 +353,29 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'TRAINER' ? (
             <DashboardWrapper component={TrainerDashboard} user={user} onLogout={onLogout} />
           ) : (
-            <Navigate to="/trainer/login" replace />
+            <Navigate to="/login" state={{ fromRole: 'TRAINER' }} replace />
+          )
+        }
+      />
+
+      <Route
+        path="/trainer/recordings"
+        element={
+          user?.role === 'TRAINER' ? (
+            <TrainerRecordingsWrapper user={user} onLogout={onLogout} pageVariants={pageVariants} />
+          ) : (
+            <Navigate to="/login" state={{ fromRole: 'TRAINER' }} replace />
+          )
+        }
+      />
+
+      <Route
+        path="/trainer/recordings/:id"
+        element={
+          user?.role === 'TRAINER' ? (
+            <RecordingDetailWrapper user={user} onLogout={onLogout} pageVariants={pageVariants} />
+          ) : (
+            <Navigate to="/login" state={{ fromRole: 'TRAINER' }} replace />
           )
         }
       />
@@ -281,7 +386,7 @@ function AppRoutes({ user, onLogin, onLogout }) {
           user?.role === 'PARTICIPANT' ? (
             <DashboardWrapper component={ParticipantDashboard} user={user} onLogout={onLogout} />
           ) : (
-            <Navigate to="/participant/login" replace />
+            <Navigate to="/login" state={{ fromRole: 'PARTICIPANT' }} replace />
           )
         }
       />
@@ -347,6 +452,33 @@ function AppRoutes({ user, onLogin, onLogout }) {
       />
 
       <Route
+        path="/trainer/monitoring"
+        element={
+          (user?.role === 'TRAINER' || user?.role === 'ADMIN')
+            ? <TrainerMonitoringDashboard user={user} />
+            : <Navigate to="/trainer" />
+        }
+      />
+
+      <Route
+        path="/test/:testId"
+        element={
+          user?.role === 'PARTICIPANT'
+            ? <TestPage user={user} />
+            : <Navigate to="/login" replace />
+        }
+      />
+
+      <Route
+        path="/test/:testId/result/:attemptId"
+        element={
+          user?.role === 'PARTICIPANT'
+            ? <TestResultPage />
+            : <Navigate to="/login" replace />
+        }
+      />
+
+      <Route
         path="/trainer/proctor/:quizId/report"
         element={
           (user?.role === 'TRAINER' || user?.role === 'ADMIN')
@@ -375,6 +507,11 @@ function AppRoutes({ user, onLogin, onLogout }) {
       <Route
         path="/trainer/coding/:assessmentId/results"
         element={(user?.role === 'TRAINER' || user?.role === 'ADMIN') ? <TrainerCodingResultsPage /> : <Navigate to="/trainer" />}
+      />
+
+      <Route
+        path="/trainer/trainings/:trainingId/assessments/create"
+        element={(user?.role === 'TRAINER' || user?.role === 'ADMIN') ? <CodingAssessmentBuilder /> : <Navigate to="/trainer" />}
       />
 
       <Route path="*" element={<Navigate to="/login" />} />
