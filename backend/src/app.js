@@ -32,10 +32,13 @@ const quizzesRoutes = require('./routes/quizzesRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const participantProfileRoutes = require('./routes/participantProfileRoutes');
 const proctoringRoutes = require('./routes/proctoringRoutes');
+const monitorRoutes = require('./routes/monitorRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
 const codingAssessmentRoutes = require('./routes/codingAssessmentRoutes');
+const codingAssessmentsRoutes = require('./routes/codingAssessmentsRoutes');
 const discussionRoutes = require('./routes/discussionRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const recordingRoutes = require('./routes/recordingRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -139,10 +142,13 @@ app.get('/api/attempts/:attemptId', authenticateToken, async (req, res) => {
 app.use('/api/profile', profileRoutes);
 app.use('/api/participant-profile', participantProfileRoutes);
 app.use('/api/proctor', proctoringRoutes);
+app.use('/api', monitorRoutes);
 app.use('/api/lessons', lessonRoutes);
 app.use('/api/coding', codingAssessmentRoutes);
+app.use('/api/coding-assessments', codingAssessmentsRoutes);
 app.use('/api/discussion', discussionRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/recordings', recordingRoutes);
 
 // Health check for AI service (separate path to avoid conflict with router)
 app.get('/api/ai/health', async (req, res) => {
@@ -250,6 +256,21 @@ const startServer = async () => {
       logger.error('Could not sync proctoring tables', { error: e.message });
     }
 
+    // Parallel monitor system tables — additive sync, scoped to module
+    try {
+      const {
+        MonitorAttempt,
+        MonitorViolation,
+        MonitorScreenshot,
+      } = require('./models');
+      await MonitorAttempt.sync({ alter: true });
+      await MonitorViolation.sync({ alter: true });
+      await MonitorScreenshot.sync({ alter: true });
+      logger.info('monitor system tables ready');
+    } catch (e) {
+      logger.error('Could not sync monitor system tables', { error: e.message });
+    }
+
     // OTP table for forgot-password flow
     try {
       const { PasswordResetOtp } = require('./models');
@@ -347,6 +368,7 @@ const startServer = async () => {
       const {
         Lesson, LessonQuiz, LessonAssessment,
         AssessmentSubmission, QuizProgress, LessonProgress,
+        LessonCodingAssessment,
         Enrollment, AIQuiz,
       } = require('./models');
       // FK checks off: altering lessons.training_id from NOT NULL to NULL
@@ -362,6 +384,7 @@ const startServer = async () => {
         await AssessmentSubmission.sync({ alter: true });
         await QuizProgress.sync({ alter: true });
         await LessonProgress.sync({ alter: true });
+        await LessonCodingAssessment.sync({ alter: true });
         await Enrollment.sync({ alter: true });
         await AIQuiz.sync({ alter: true });
       } finally {
@@ -391,6 +414,15 @@ const startServer = async () => {
       logger.error('Could not sync coding assessment tables', { error: e.message });
     }
 
+    // Quiz Recordings — screen recordings for proctored quiz sessions
+    try {
+      const { QuizRecording } = require('./models');
+      await QuizRecording.sync({ alter: true });
+      logger.info('quiz_recordings table ready');
+    } catch (e) {
+      logger.error('Could not sync quiz_recordings', { error: e.message });
+    }
+
     // Add course-centric indexes that were intentionally omitted from the
     // model definitions (to avoid racing the global sync). Idempotent.
     try {
@@ -407,6 +439,14 @@ const startServer = async () => {
       startAssessmentSessionExpiryJob({ intervalMs: 5 * 60_000, logger });
     } catch (e) {
       logger.warn('Could not start assessment session expiry job', { error: e.message });
+    }
+
+    // Parallel monitor system auto-submit cron (every minute)
+    try {
+      const { startMonitorAutoSubmitCron } = require('./jobs/monitorAutoSubmit');
+      startMonitorAutoSubmitCron(io);
+    } catch (e) {
+      logger.warn('Could not start monitor auto-submit cron', { error: e.message });
     }
 
     // Background heartbeat reaper (60s)
