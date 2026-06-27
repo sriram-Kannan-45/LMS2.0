@@ -35,6 +35,7 @@ import TestPage from './pages/TestPage'
 import TestResultPage from './pages/TestResultPage'
 import TrainerMonitoringDashboard from './pages/TrainerMonitoringDashboard'
 import CodingAssessmentBuilder from './pages/trainer/CodingAssessmentBuilder'
+import CodingRecordings from './pages/trainer/CodingRecordings'
 
 // ─── Coding Assessment route wrappers ────────────────────────────────────────
 function ParticipantCodingPage() {
@@ -197,6 +198,31 @@ const DEFAULT_TABS = {
   ADMIN: 'overview',
   TRAINER: 'courses',
   PARTICIPANT: 'overview',
+}
+
+// ─── TrainerCodingRecordingsWrapper ────────────────────────────────────────────
+function TrainerCodingRecordingsWrapper({ user, onLogout, pageVariants }) {
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState('recordings')
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    navigate('/trainer')
+  }
+
+  return (
+    <Layout user={user} activeTab={activeTab} onTabChange={handleTabChange} onLogout={onLogout}>
+      <motion.div
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        variants={pageVariants}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <CodingRecordings user={user} />
+      </motion.div>
+    </Layout>
+  )
 }
 
 // ─── TrainerRecordingsWrapper ───────────────────────────────────────────────────
@@ -365,6 +391,17 @@ function AppRoutes({ user, onLogin, onLogout }) {
         element={
           user?.role === 'TRAINER' ? (
             <TrainerRecordingsWrapper user={user} onLogout={onLogout} pageVariants={pageVariants} />
+          ) : (
+            <Navigate to="/login" state={{ fromRole: 'TRAINER' }} replace />
+          )
+        }
+      />
+
+      <Route
+        path="/trainer/assessments/recordings"
+        element={
+          user?.role === 'TRAINER' ? (
+            <TrainerCodingRecordingsWrapper user={user} onLogout={onLogout} pageVariants={pageVariants} />
           ) : (
             <Navigate to="/login" state={{ fromRole: 'TRAINER' }} replace />
           )
