@@ -190,16 +190,20 @@ The server stores `assessmentType='coding_assessment'`, `assessmentId`, and `att
 | `/trainer/trainings/:trainingId/assessments/create` | `CodingAssessmentBuilder.jsx` | Create/edit assessment |
 | `/trainings/:trainingId/assessments/:assessmentId/attempt` | `CodingAssessmentAttempt.jsx` | Pre-exam readiness screen |
 | `/trainings/:trainingId/assessments/:assessmentId/exam` | `CodingExamShell.jsx` | Coding shell |
+| `/trainings/:trainingId/assessments/:assessmentId/result` | `CodingAssessmentResultPage.jsx` | Participant result view |
 | `/trainer/assessments/recordings` | `CodingRecordings.jsx` | List recordings |
 | `/trainer/assessments/recordings/:id` | `CodingRecordingViewer.jsx` | View recording + code |
+| `/trainer/coding` | `CodingAssessmentForm.jsx` | Standalone trainer coding form |
+| `/trainer/coding/:assessmentId/results` | `CodingAssessmentResults.jsx` | Trainer results view |
+| `/participant/coding/:assessmentId` | `ParticipantCodingList.jsx` | Participant coding assessment list |
 
 ### 4.2 Components
 
-- `CodeEditor.jsx` — Monaco wrapper (`@monaco-editor/react`)
-- `ProblemPanel.jsx` — Renders markdown statement, I/O format, constraints, sample cases
-- `TestResultsPanel.jsx` — Shows pass/fail with output, expected, time
-- `CodeSubmissionTabs.jsx` — Read-only code + results per problem (trainer view)
-- `AssessmentViolationLog.jsx` — Reuse quiz violation log component
+- `src/components/coding-assessment/CodingEditor.jsx` — Monaco wrapper (`@monaco-editor/react`)
+- `src/components/ProblemPanel.jsx` — Renders markdown statement, I/O format, constraints, sample cases
+- `src/components/TestResultsPanel.jsx` — Shows pass/fail with output, expected, time
+- `src/components/CodeSubmissionTabs.jsx` — Read-only code + results per problem (trainer view)
+- Quiz violation log component — reused inline where needed
 
 ### 4.3 Hooks
 

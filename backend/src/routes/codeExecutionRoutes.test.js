@@ -26,6 +26,7 @@ let nextSubmissionId = 1;
 function resetStore() {
   Object.keys(questions).forEach((key) => delete questions[key]);
   Object.keys(attempts).forEach((key) => delete attempts[key]);
+  Object.keys(testCasesByQuestion).forEach((key) => delete testCasesByQuestion[key]);
   submissions.length = 0;
   nextSubmissionId = 1;
 }
@@ -34,7 +35,6 @@ function addQuestion(id, attrs) {
   questions[id] = {
     id,
     title: 'Q' + id,
-    timeLimitSec: 2,
     marks: 10,
     ...attrs,
   };
