@@ -51,7 +51,6 @@ const navItems = {
   TRAINER: [
     { key: 'courses', label: 'Trainings', icon: 'Trainings' },
     { key: 'notes', label: 'Notes & Resources', icon: 'Notes' },
-    { key: 'coding', label: 'Coding Tests', icon: 'Coding' },
     { key: 'enrollments', label: 'Enrollment Requests', icon: 'UserPlus' },
     { key: 'reports', label: 'Trainer Reports', icon: 'ClipboardList' },
     { key: 'feedback', label: 'Feedback Received', icon: 'Feedback' },
@@ -61,7 +60,6 @@ const navItems = {
   PARTICIPANT: [
     { key: 'overview', label: 'Overview', icon: 'Overview' },
     { key: 'myEnrollments', label: 'My Trainings', icon: 'Trainings' },
-    { key: 'coding', label: 'Coding Tests', icon: 'Coding' },
     { key: 'leaderboard', label: 'Leaderboard', icon: 'Leaderboard' },
     { key: 'achievements', label: 'Achievements', icon: 'Achievements' },
     { key: 'reports', label: 'My Reports', icon: 'Feedback' },

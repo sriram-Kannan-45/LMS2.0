@@ -102,11 +102,7 @@ export const API = {
     SUBMIT_ASSESSMENT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/submit`,
     QUIZ_RESULT:        (lessonQuizId) => `${API_BASE}/lessons/quizzes/${lessonQuizId}/result`,
     ASSESSMENT_RESULT:  (assessmentId) => `${API_BASE}/lessons/assessments/${assessmentId}/result`,
-    // Coding assessment
-    ATTACH_CODING:          (lessonId) => `${API_BASE}/lessons/${lessonId}/coding-assessments`,
-    PUBLISH_CODING:         (lessonCodingId) => `${API_BASE}/lessons/coding-assessments/${lessonCodingId}/publish`,
-    COMPLETE_CODING:        (lessonCodingId) => `${API_BASE}/lessons/coding-assessments/${lessonCodingId}/complete`,
-    CODING_RESULT:          (lessonCodingId) => `${API_BASE}/lessons/coding-assessments/${lessonCodingId}/result`
+
   },
 
   /**
@@ -185,6 +181,37 @@ export const API = {
 
     ASSESSMENT_SUBMIT: (assessmentId) => `${API_BASE}/participant/assessments/${assessmentId}/submit`,
     ASSESSMENT_RESULT: (assessmentId) => `${API_BASE}/participant/assessments/${assessmentId}/result`,
+    CODING_ASSESSMENTS: (courseId) => `${API_BASE}/participant/courses/${courseId}/coding-assessments`,
+  },
+
+  /** Coding Assessment module */
+  CODING: {
+    // Trainer
+    LIST:                  `${API_BASE}/coding/assessments`,
+    DETAIL:        (id) => `${API_BASE}/coding/assessments/${id}`,
+    CREATE:                `${API_BASE}/coding/assessments`,
+    UPDATE:        (id) => `${API_BASE}/coding/assessments/${id}`,
+    DELETE:        (id) => `${API_BASE}/coding/assessments/${id}`,
+    CREATE_PROBLEM:(id) => `${API_BASE}/coding/assessments/${id}/problems`,
+    UPDATE_PROBLEM:(id) => `${API_BASE}/coding/problems/${id}`,
+    DELETE_PROBLEM:(id) => `${API_BASE}/coding/problems/${id}`,
+    GENERATE:              `${API_BASE}/coding/generate-from-prompt`,
+    PUBLISH:       (id) => `${API_BASE}/coding/assessments/${id}/publish`,
+    CLOSE:         (id) => `${API_BASE}/coding/assessments/${id}/close`,
+    PUBLISH_RESULT:(id) => `${API_BASE}/coding/assessments/${id}/publish-result`,
+    HIDE_RESULT:   (id) => `${API_BASE}/coding/assessments/${id}/hide-result`,
+    RESULTS:       (id) => `${API_BASE}/coding/assessments/${id}/results`,
+    PARTICIPANTS:  (id) => `${API_BASE}/coding/assessments/${id}/participants`,
+    RESULTS_SUMMARY:(id) => `${API_BASE}/coding/assessments/${id}/results-summary`,
+    ANALYTICS:     (id) => `${API_BASE}/coding/assessments/${id}/analytics`,
+    LEADERBOARD:   (id) => `${API_BASE}/coding/assessments/${id}/leaderboard`,
+    RECORDINGS:    (id) => `${API_BASE}/coding/assessments/${id}/recordings`,
+    // Participant
+    START:         (id) => `${API_BASE}/coding/participant/start/${id}`,
+    RUN:                  `${API_BASE}/coding/participant/run`,
+    SUBMIT_CODE:          `${API_BASE}/coding/participant/submit-code`,
+    SUBMIT:        (id) => `${API_BASE}/coding/participant/submit/${id}`,
+    PARTICIPANT_RESULT: (id) => `${API_BASE}/coding/participant/assessments/${id}/result`,
   },
 
   /** Coding Assessment module (Judge0 sandbox + AI gen/review + plagiarism) */
@@ -196,45 +223,6 @@ export const API = {
     DELETE:      (id) => `${API_BASE}/recordings/${id}`,
   },
 
-  CODING: {
-    // Trainer
-    ASSESSMENTS:          `${API_BASE}/coding/assessments`,
-    ASSESSMENT:     (id) => `${API_BASE}/coding/assessments/${id}`,
-    QUESTIONS:      (id) => `${API_BASE}/coding/assessments/${id}/questions`,
-    GENERATE_Q:     (id) => `${API_BASE}/coding/assessments/${id}/generate-question`,
-    PLAGIARISM_CHECK:   (id) => `${API_BASE}/coding/assessments/${id}/plagiarism-check`,
-    PLAGIARISM_REPORTS: (id) => `${API_BASE}/coding/assessments/${id}/plagiarism-reports`,
-    RESULTS:        (id) => `${API_BASE}/coding/assessments/${id}/results`,
-    // Participant
-    P_ASSESSMENTS:        `${API_BASE}/coding/participant/assessments`,
-    P_ASSESSMENT:   (id) => `${API_BASE}/coding/participant/assessments/${id}`,
-    START:          (id) => `${API_BASE}/coding/participant/assessments/${id}/start`,
-    RUN:     (attemptId) => `${API_BASE}/coding/participant/attempts/${attemptId}/run`,
-    SUBMIT:  (attemptId) => `${API_BASE}/coding/participant/attempts/${attemptId}/submit`,
-    REVIEW:      (subId) => `${API_BASE}/coding/participant/submissions/${subId}/review`,
-    VIOLATION:(attemptId)=> `${API_BASE}/coding/participant/attempts/${attemptId}/violation`,
-  }
-};
-
-export const codingAssessmentApi = {
-  create: (data) => fetch(`${API_BASE}/coding-assessments`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data) }),
-  list: () => fetch(`${API_BASE}/coding-assessments`, { headers: getAuthHeaders() }),
-  get: (id) => fetch(`${API_BASE}/coding-assessments/${id}`, { headers: getAuthHeaders() }),
-  update: (id, data) => fetch(`${API_BASE}/coding-assessments/${id}`, { method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(data) }),
-  delete: (id) => fetch(`${API_BASE}/coding-assessments/${id}`, { method: 'DELETE', headers: getAuthHeaders() }),
-  publish: (id) => fetch(`${API_BASE}/coding-assessments/${id}/publish`, { method: 'POST', headers: getAuthHeaders() }),
-  close: (id) => fetch(`${API_BASE}/coding-assessments/${id}/close`, { method: 'POST', headers: getAuthHeaders() }),
-};
-
-export const codingAttemptApi = {
-  start: (assessmentId) => fetch(`${API_BASE}/coding-attempts/start`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ assessmentId }) }),
-  get: (id) => fetch(`${API_BASE}/coding-attempts/${id}`, { headers: getAuthHeaders() }),
-  submit: (id) => fetch(`${API_BASE}/coding-attempts/${id}/submit`, { method: 'POST', headers: getAuthHeaders() }),
-};
-
-export const codeExecutionApi = {
-  run: (data) => fetch(`${API_BASE}/code/run`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data) }),
-  submit: (data) => fetch(`${API_BASE}/code/submit`, { method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data) }),
 };
 
 export { API_BASE, BACKEND_ORIGIN };

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Search, Plus, Pencil, Trash2, GripVertical,
   BookOpen, FileText, Users, BarChart3, Layers, Sparkles,
-  CheckCircle2, AlertCircle, Calendar, Folder, MessageSquare
+  CheckCircle2, AlertCircle, Calendar, Folder, MessageSquare, Code
 } from 'lucide-react'
 import { API, assetUrl } from '../api/api'
 import { useToast } from '../components/Toast'
@@ -12,6 +12,7 @@ import CourseQuizzesTab from '../components/trainer/CourseQuizzesTab'
 import CourseParticipantsTab from '../components/trainer/CourseParticipantsTab'
 import CourseAnalyticsTab from '../components/trainer/CourseAnalyticsTab'
 import DiscussionBoard from '../components/shared/DiscussionBoard'
+import CourseCodingTab from '../components/trainer/CourseCodingTab'
 
 const STATUS_BADGE = {
   DRAFT:     { bg: '#f1f5f9', fg: '#475569', label: 'Draft' },
@@ -308,6 +309,7 @@ function CourseDetail({ user, courseId, onBack }) {
   const TABS = [
     { key: 'lessons',      label: 'Lessons',      icon: <Layers size={16} /> },
     { key: 'quizzes',      label: 'AI Quiz',      icon: <Sparkles size={16} /> },
+    { key: 'coding',       label: 'Coding',       icon: <Code size={16} /> },
     { key: 'participants', label: 'Participants', icon: <Users size={16} /> },
     { key: 'analytics',    label: 'Analytics',    icon: <BarChart3 size={16} /> },
     { key: 'discussions',  label: 'Discussions',  icon: <MessageSquare size={16} /> },
@@ -396,6 +398,7 @@ function CourseDetail({ user, courseId, onBack }) {
         >
           {tab === 'lessons'      && <LessonsTab user={user} courseId={courseId} onCountChange={fetchCourse} />}
           {tab === 'quizzes'      && <CourseQuizzesTab user={user} courseId={courseId} onCountChange={fetchCourse} />}
+          {tab === 'coding'       && <CourseCodingTab user={user} courseId={courseId} onCountChange={fetchCourse} />}
           {tab === 'participants' && <CourseParticipantsTab user={user} courseId={courseId} />}
           {tab === 'analytics'    && <CourseAnalyticsTab user={user} courseId={courseId} />}
           {tab === 'discussions'  && <DiscussionBoard user={user} trainingId={course.trainingProgramId} />}

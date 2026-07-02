@@ -125,7 +125,9 @@ export default function TrainerRecordingDetail({ user }) {
         if (!r.ok) throw new Error(d.message || 'Failed to load')
         setRecording(d.data.recording)
         setQuizResult(d.data.quizResult)
-        setViolations(d.data.violations || [])
+        // Exclude monitoring-only events from user-facing display
+        const MONITORING_EVENTS = new Set(['HEARTBEAT_LOST', 'HEARTBEAT_RESTORED', 'SESSION_STARTED', 'SESSION_RESUMED'])
+        setViolations((d.data.violations || []).filter(v => !MONITORING_EVENTS.has(v.type)))
         setStreamUrl(`${API_BASE}/recordings/${id}/stream?token=${user.token}`)
       } catch (e) {
         showError(e.message)

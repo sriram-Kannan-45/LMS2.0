@@ -24,13 +24,6 @@ const {
   ExamSession,
   Violation,
   ProctorActivity,
-  CodingAssessment,
-  CodingQuestion,
-  TestCase,
-  CodingSubmission,
-  SubmissionResult,
-  CodingViolation,
-  PlagiarismReport,
   LiveSession,
   Note,
   AIDocument,
@@ -233,46 +226,7 @@ const deleteTraining = async (req, res) => {
         await AIQuiz.destroy({ where: { id: quizIds } });
       }
 
-      // 6. CodingAssessment & its child models
-      const codingAssessments = await CodingAssessment.findAll({ where: { courseId: course.id } });
-      const codingAssessmentIds = codingAssessments.map(ca => ca.id);
-      if (codingAssessmentIds.length > 0) {
-        // CodingQuestion & TestCase & CodingSubmission
-        const codingQuestions = await CodingQuestion.findAll({ where: { assessmentId: codingAssessmentIds } });
-        const codingQuestionIds = codingQuestions.map(cq => cq.id);
-        if (codingQuestionIds.length > 0) {
-          await TestCase.destroy({ where: { questionId: codingQuestionIds } });
-          
-          const subms = await CodingSubmission.findAll({ where: { questionId: codingQuestionIds } });
-          const submIds = subms.map(s => s.id);
-          if (submIds.length > 0) {
-            await SubmissionResult.destroy({ where: { submissionId: submIds } });
-            await CodingSubmission.destroy({ where: { id: submIds } });
-          }
-          await CodingQuestion.destroy({ where: { id: codingQuestionIds } });
-        }
-
-        // CodingAttempt & submissions & violations
-        const codingAttempts = await CodingAttempt.findAll({ where: { assessmentId: codingAssessmentIds } });
-        const codingAttemptIds = codingAttempts.map(ca => ca.id);
-        if (codingAttemptIds.length > 0) {
-          const subms = await CodingSubmission.findAll({ where: { attemptId: codingAttemptIds } });
-          const submIds = subms.map(s => s.id);
-          if (submIds.length > 0) {
-            await SubmissionResult.destroy({ where: { submissionId: submIds } });
-            await CodingSubmission.destroy({ where: { id: submIds } });
-          }
-          await CodingViolation.destroy({ where: { attemptId: codingAttemptIds } });
-          await CodingAttempt.destroy({ where: { id: codingAttemptIds } });
-        }
-
-        // PlagiarismReport
-        await PlagiarismReport.destroy({ where: { assessmentId: codingAssessmentIds } });
-
-        await CodingAssessment.destroy({ where: { id: codingAssessmentIds } });
-      }
-
-      // 7. Lessons themselves
+      // 6. Lessons themselves
       if (lessonIds.length > 0) {
         await Lesson.destroy({ where: { id: lessonIds } });
       }
@@ -345,7 +299,7 @@ const deleteTrainer = async (req, res) => {
 
     const {
       TrainerProfile, TrainingTrainerAssignment, CourseTrainerAssignment,
-      Course, Lesson, Note, AIDocument, AIQuiz, CodingAssessment, LiveSession,
+      Course, Lesson, Note, AIDocument, AIQuiz, LiveSession,
       DiscussionPost, Notification, Training, DeviceFingerprint, ChatMessage,
       Attendance, ActivityLog
     } = require('../models');
@@ -393,8 +347,7 @@ const deleteTrainer = async (req, res) => {
       referencedLessons,
       referencedQuizzes,
       referencedNotes,
-      referencedAIDocuments,
-      referencedCodingAssessments
+      referencedAIDocuments
     ] = await Promise.all([
       Lesson.findOne({ where: { trainerId: id }, transaction: t }),
       AIQuiz.findOne({
@@ -407,16 +360,14 @@ const deleteTrainer = async (req, res) => {
         transaction: t
       }),
       Note.findOne({ where: { trainerId: id }, transaction: t }),
-      AIDocument.findOne({ where: { trainerId: id }, transaction: t }),
-      CodingAssessment.findOne({ where: { trainerId: id }, transaction: t })
+      AIDocument.findOne({ where: { trainerId: id }, transaction: t })
     ]);
 
     if (
       referencedLessons ||
       referencedQuizzes ||
       referencedNotes ||
-      referencedAIDocuments ||
-      referencedCodingAssessments
+      referencedAIDocuments
     ) {
       await t.rollback();
       console.warn(`[deleteTrainer] Trainer #${id} cannot be hard-deleted because they are referenced by other records.`);
@@ -447,7 +398,6 @@ const deleteTrainer = async (req, res) => {
       Note.destroy({ where: { trainerId: id }, transaction: t }),
       AIDocument.destroy({ where: { trainerId: id }, transaction: t }),
       AIQuiz.destroy({ where: { trainerId: id }, transaction: t }),
-      CodingAssessment.destroy({ where: { trainerId: id }, transaction: t })
     ]);
 
     // C. Deleting trainer profile
@@ -689,7 +639,7 @@ const deleteParticipant = async (req, res) => {
       Enrollment, Feedback, Notification, ParticipantProfile,
       DeviceFingerprint, ParticipantTracking, Certificate, Attendance, DiscussionPost,
       LessonProgress, QuizProgress, QuizAttempt, QuizAnswer, QuizResult, AssessmentSession,
-      ExamSession, Violation, CodingAttempt, CodingSubmission, SubmissionResult, CodingViolation
+      ExamSession, Violation
     } = require('../models');
     const { Op } = require('sequelize');
 
@@ -714,24 +664,7 @@ const deleteParticipant = async (req, res) => {
     await Violation.destroy({ where: { participantId: id }, transaction: t });
     await AssessmentSession.destroy({ where: { participantId: id }, transaction: t });
 
-    // C. Coding Attempt cleanup
-    if (typeof CodingAttempt !== 'undefined') {
-      const codingAttempts = await CodingAttempt.findAll({ where: { participantId: id }, attributes: ['id'], transaction: t });
-      const codingAttemptIds = codingAttempts.map(ca => ca.id);
-      if (codingAttemptIds.length > 0) {
-        const codingSubmissions = await CodingSubmission.findAll({ where: { attemptId: { [Op.in]: codingAttemptIds } }, attributes: ['id'], transaction: t });
-        const submissionIds = codingSubmissions.map(cs => cs.id);
-        if (submissionIds.length > 0) {
-          await SubmissionResult.destroy({ where: { submissionId: { [Op.in]: submissionIds } }, transaction: t });
-          await CodingSubmission.destroy({ where: { id: { [Op.in]: submissionIds } }, transaction: t });
-        }
-        await CodingViolation.destroy({ where: { attemptId: { [Op.in]: codingAttemptIds } }, transaction: t });
-        await CodingAttempt.destroy({ where: { id: { [Op.in]: codingAttemptIds } }, transaction: t });
-      }
-      await CodingSubmission.destroy({ where: { participantId: id }, transaction: t }).catch(() => {});
-    }
-
-    // D. Discussion posts nesting
+    // C. Discussion posts nesting
     const posts = await DiscussionPost.findAll({ where: { userId: id }, attributes: ['id'], transaction: t });
     const postIds = posts.map(p => p.id);
     if (postIds.length > 0) {

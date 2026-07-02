@@ -2126,6 +2126,107 @@ def _invoke_json(prompt: str):
         return parsed
 
 
+class CodingProblemsRequest(BaseModel):
+    prompt: str
+    numProblems: int = 5
+    difficulty: str = "MEDIUM"
+    languages: str = "javascript,python"
+
+    @field_validator('numProblems')
+    @classmethod
+    def validate_count(cls, v):
+        if v < 1 or v > 20:
+            raise ValueError('Number of problems must be between 1 and 20.')
+        return v
+
+    @field_validator('difficulty')
+    @classmethod
+    def validate_difficulty(cls, v):
+        v = v.upper()
+        if v not in ('EASY', 'MEDIUM', 'HARD', 'MIXED'):
+            raise ValueError('Difficulty must be EASY, MEDIUM, HARD, or MIXED.')
+        return v
+
+
+CODING_PROBLEMS_SYSTEM = (
+    "You are an expert competitive programming question author. "
+    "Generate a set of coding problems in strict JSON. Return ONLY valid JSON, no markdown.\n"
+    "Schema:\n"
+    "{\n"
+    '  "title": string (overall assessment title),\n'
+    '  "problems": [\n'
+    "    {\n"
+    '      "title": string,\n'
+    '      "description": string (detailed problem statement),\n'
+    '      "constraints": string,\n'
+    '      "inputFormat": string,\n'
+    '      "outputFormat": string,\n'
+    '      "sampleInput": string,\n'
+    '      "sampleOutput": string,\n'
+    '      "explanation": string,\n'
+    '      "difficulty": "EASY"|"MEDIUM"|"HARD",\n'
+    '      "programmingLanguage": string,\n'
+    '      "starterCode": string (boilerplate code template),\n'
+    '      "expectedSolution": string (reference solution),\n'
+    '      "timeLimit": number (seconds, default 5),\n'
+    '      "memoryLimit": number (MB, default 256),\n'
+    '      "marks": number,\n'
+    '      "tags": string[],\n'
+    '      "testCases": [\n'
+    "        {\n"
+    '          "input": string,\n'
+    '          "expectedOutput": string,\n'
+    '          "isHidden": boolean,\n'
+    '          "description": string|null\n'
+    "        }\n"
+    "      ]\n"
+    "    }\n"
+    "  ]\n"
+    "}\n"
+    "For each problem, generate exactly 2 visible (isHidden=false) and 5 hidden (isHidden=true) test cases. "
+    "Suggest marks by difficulty: EASY=10, MEDIUM=20, HARD=30. "
+    "Distribute problems across the requested languages."
+)
+
+
+@app.post("/generate-coding-problems")
+async def generate_coding_problems(req: CodingProblemsRequest):
+    if llm is None:
+        raise HTTPException(status_code=503, detail="LLM not configured")
+    prompt = (
+        CODING_PROBLEMS_SYSTEM
+        + f"\n\nTopic: {req.prompt}. Number of problems: {req.numProblems}. "
+        + f"Difficulty: {req.difficulty}. Languages: {req.languages}."
+    )
+    last_error = None
+    for attempt in range(1, Config.MAX_RETRIES + 1):
+        try:
+            log.info("Generating %d coding problems (attempt %d/%d)...", req.numProblems, attempt, Config.MAX_RETRIES)
+            parsed = _invoke_json(prompt)
+            if not isinstance(parsed, dict) or "problems" not in parsed:
+                raise ValueError("response missing 'problems' array")
+            if not isinstance(parsed["problems"], list) or len(parsed["problems"]) == 0:
+                raise ValueError("problems array is empty")
+            title = parsed.get("title") or f"Coding Assessment: {req.prompt[:60]}"
+            return {
+                "title": title,
+                "problems": parsed["problems"],
+                "languages": req.languages.split(","),
+            }
+        except Exception as e:
+            last_error = e
+            log.warning("Coding problems generation attempt %d failed: %s", attempt, e)
+            if "429" in str(e).lower() or "resource_exhausted" in str(e) or "quota" in str(e):
+                delay = min(30 * attempt, 120)
+                log.warning("Rate limit hit — backing off %ds", delay)
+                await asyncio.sleep(delay)
+                continue
+            if attempt < Config.MAX_RETRIES:
+                await asyncio.sleep(Config.RETRY_DELAY * attempt)
+    log.error("Coding problems generation failed after %d attempts", Config.MAX_RETRIES)
+    raise HTTPException(status_code=422, detail=f"AI failed to generate coding problems: {last_error}")
+
+
 @app.post("/generate-coding-question")
 async def generate_coding_question(req: CodingQuestionRequest):
     if llm is None:

@@ -31,6 +31,10 @@ const {
   QuizAttempt,
   QuizAnswer,
   QuizResult,
+  CodingAssessment,
+  CodingProblem,
+  CodingAttempt,
+  CodingResult,
   User,
 } = require('../models');
 
@@ -654,6 +658,60 @@ async function listCourseQuizzes(req, res) {
   }
 }
 
+// GET /api/participant/courses/:courseId/coding-assessments — all PUBLISHED coding assessments with status
+async function listCourseCodingAssessments(req, res) {
+  try {
+    const ctx = await loadEnrolledCourse(req, res, req.params.courseId);
+    if (!ctx) return;
+    const { course } = ctx;
+
+    const assessments = await CodingAssessment.findAll({
+      where: { courseId: course.id, status: 'PUBLISHED' },
+      include: [
+        { model: CodingProblem, as: 'problems', attributes: ['id', 'title'], required: false },
+      ],
+      order: [['id', 'DESC']],
+    });
+    if (assessments.length === 0) return res.json({ success: true, assessments: [] });
+
+    const ids = assessments.map(a => a.id);
+    const [attempts, results] = await Promise.all([
+      CodingAttempt.findAll({
+        where: { assessmentId: ids, participantId: req.user.id },
+        attributes: ['id', 'assessmentId', 'status'],
+      }),
+      CodingResult.findAll({
+        where: { assessmentId: ids, participantId: req.user.id },
+        attributes: ['assessmentId', 'percentage'],
+      }),
+    ]);
+    const attemptMap = Object.fromEntries(attempts.map(a => [String(a.assessmentId), a]));
+    const resultMap = Object.fromEntries(results.map(r => [String(r.assessmentId), r]));
+
+    const out = assessments.map(a => {
+      const attempt = attemptMap[String(a.id)];
+      const result = resultMap[String(a.id)];
+      const showScore = a.resultStatus === 'PUBLISHED' && !!result;
+      return {
+        assessmentId: a.id,
+        title: a.title,
+        problemCount: (a.problems || []).length,
+        myStatus: attempt?.status || 'NOT_STARTED', // IN_PROGRESS | SUBMITTED
+        resultStatus: a.resultStatus,
+        myScore: showScore ? Number(result.percentage) : null,
+        proctoringEnabled: a.proctoringEnabled,
+        proctoringLevel: a.proctoringLevel,
+      };
+    });
+    const available = out.filter(a => a.myStatus === 'NOT_STARTED' || a.myStatus === 'IN_PROGRESS');
+    const completed = out.filter(a => a.myStatus !== 'NOT_STARTED' && a.myStatus !== 'IN_PROGRESS');
+    res.json({ success: true, assessments: available, completedAssessments: completed });
+  } catch (e) {
+    console.error('listCourseCodingAssessments:', e.message);
+    res.status(500).json({ error: 'Failed to list course coding assessments' });
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Lesson detail + view
 // ─────────────────────────────────────────────────────────────────────────────
@@ -697,21 +755,13 @@ async function getLessonDetail(req, res) {
       console.error('ParticipantTracking view log error:', e.message);
     }
 
-    const { LessonCodingAssessment, CodingAssessment, CodingQuestion, CodingAttempt } = require('../models');
-
-    const [materials, quizzes, assessments, codingAssessments, progress] = await Promise.all([
+    const [materials, quizzes, assessments, progress] = await Promise.all([
       LessonMaterial.findAll({ where: { lessonId: lesson.id }, order: [['orderIndex', 'ASC']] }),
       AIQuiz.findAll({
         where: { lessonId: lesson.id, status: 'PUBLISHED' },
         include: [{ model: AIQuestion, as: 'questions', attributes: ['id'] }],
       }),
       LessonAssessment.findAll({ where: { lessonId: lesson.id } }),
-      LessonCodingAssessment.findAll({
-        where: { lessonId: lesson.id },
-        include: [
-          { model: CodingAssessment, as: 'assessment', attributes: ['id', 'title', 'description', 'timeLimit'] },
-        ],
-      }),
       LessonProgress.findOne({ where: { lessonId: lesson.id, participantId: req.user.id } }),
     ]);
 
@@ -734,13 +784,6 @@ async function getLessonDetail(req, res) {
       where: { assessmentId: assessmentIds, participantId: req.user.id },
     });
     const submissionByAssessment = Object.fromEntries(submissions.map(s => [String(s.assessmentId), s]));
-
-    // Coding assessment attempt status per assessment
-    const codingAssessmentIds = codingAssessments.map(ca => ca.assessmentId);
-    const codingAttempts = codingAssessmentIds.length === 0 ? [] : await CodingAttempt.findAll({
-      where: { assessmentId: codingAssessmentIds, participantId: req.user.id },
-    });
-    const attemptByCoding = Object.fromEntries(codingAttempts.map(a => [String(a.assessmentId), a]));
 
     res.json({
       success: true,
@@ -779,21 +822,6 @@ async function getLessonDetail(req, res) {
           isMandatory: a.isMandatory,
           myStatus: sub?.status || 'NOT_STARTED',
           mySubmittedAt: sub?.submittedAt || null,
-        };
-      }),
-      codingAssessments: codingAssessments.map(ca => {
-        const attempt = attemptByCoding[String(ca.assessmentId)];
-        const assessment = ca.assessment;
-        return {
-          lessonCodingId: ca.id,
-          assessmentId: ca.assessmentId,
-          title: assessment?.title || 'Coding Assessment',
-          description: assessment?.description,
-          timeLimit: assessment?.timeLimit,
-          isMandatory: ca.isMandatory,
-          resultStatus: ca.resultStatus,
-          myStatus: attempt?.status || 'NOT_STARTED',
-          myScore: attempt?.score ?? null,
         };
       }),
       progress: progress ? {
@@ -1262,6 +1290,7 @@ module.exports = {
   listCourseLessons,
   listCourseResources,
   listCourseQuizzes,
+  listCourseCodingAssessments,
   // Lessons
   getLessonDetail,
   markLessonViewed,

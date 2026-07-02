@@ -420,6 +420,134 @@ const connectDB = async () => {
         logger.error('⚠️ Error applying migration to proctor_violations', { error: pvError.message });
       }
 
+      // ═══════════════════════════════════════════════════════════════════
+      // ASSESSMENT SESSIONS + EXAM SESSIONS SCHEMA FIX
+      // ═══════════════════════════════════════════════════════════════════
+      // Both tables originally had `quiz_id BIGINT NOT NULL` with FK to
+      // `ai_quizzes`.  Coding assessments use their own attempt/assessment
+      // tables and set quiz_id = NULL.  We need to:
+      //   1. Drop FK constraints so we can alter columns
+      //   2. Make quiz_id NULL-able
+      //   3. Add assessment_id + assessment_type columns if missing
+      //   4. Drop FK on attempt_id if it references quiz_attempts
+      // ───────────────────────────────────────────────────────────────────
+
+      async function fixAssessmentTables() {
+        const tables = [
+          { name: 'assessment_sessions', columns: ['quiz_id', 'attempt_id'] },
+          { name: 'exam_sessions',        columns: ['quiz_id', 'attempt_id'] },
+          { name: 'proctor_violations',   columns: ['quiz_id'] },
+        ];
+
+        for (const { name: tbl, columns: fkCols } of tables) {
+          try {
+            // a) Drop ALL FK constraints on these columns so ALTER can succeed
+            for (const col of fkCols) {
+              try {
+                const [rows] = await sequelize.query(`
+                  SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${tbl}'
+                    AND COLUMN_NAME = '${col}' AND REFERENCED_TABLE_NAME IS NOT NULL
+                `);
+                for (const row of rows) {
+                  try {
+                    await sequelize.query(`ALTER TABLE \`${tbl}\` DROP FOREIGN KEY \`${row.CONSTRAINT_NAME}\``);
+                    logger.info(`🗑️ Dropped FK ${row.CONSTRAINT_NAME} on ${tbl}.${col}`);
+                  } catch (e) {
+                    logger.warn(`⚠️ Could not drop FK ${row.CONSTRAINT_NAME}: ${e.message}`);
+                  }
+                }
+              } catch (_) { /* query error */ }
+            }
+
+            // b) Add assessment_type if missing
+            try {
+              const [cols] = await sequelize.query(`SHOW COLUMNS FROM \`${tbl}\``);
+              const names = cols.map(c => c.Field);
+
+              if (!names.includes('assessment_type')) {
+                await sequelize.query(
+                  `ALTER TABLE \`${tbl}\` ADD COLUMN \`assessment_type\` ENUM('quiz','coding') NOT NULL DEFAULT 'quiz'`
+                );
+                logger.info(`➕ Added assessment_type to ${tbl}`);
+              }
+
+              if (!names.includes('assessment_id')) {
+                await sequelize.query(
+                  `ALTER TABLE \`${tbl}\` ADD COLUMN \`assessment_id\` BIGINT UNSIGNED NULL`
+                );
+                logger.info(`➕ Added assessment_id to ${tbl}`);
+              }
+            } catch (_) { /* table may not exist yet */ }
+
+            // c) Make quiz_id nullable (safe even if already nullable)
+            try {
+              await sequelize.query(
+                `ALTER TABLE \`${tbl}\` MODIFY COLUMN \`quiz_id\` BIGINT UNSIGNED NULL`
+              );
+              logger.info(`✅ Made ${tbl}.quiz_id nullable`);
+            } catch (e) {
+              logger.warn(`⚠️ Could not alter ${tbl}.quiz_id (may not exist): ${e.message}`);
+            }
+
+            // d) Make attempt_id nullable (coding sessions set it to null)
+            try {
+              await sequelize.query(
+                `ALTER TABLE \`${tbl}\` MODIFY COLUMN \`attempt_id\` BIGINT UNSIGNED NULL`
+              );
+              logger.info(`✅ Made ${tbl}.attempt_id nullable`);
+            } catch (e) {
+              logger.warn(`⚠️ Could not alter ${tbl}.attempt_id (may not exist): ${e.message}`);
+            }
+
+            // e) Add coding_attempt_id column with FK to coding_attempts
+            try {
+              const [cols] = await sequelize.query(`SHOW COLUMNS FROM \`${tbl}\``);
+              const names = cols.map(c => c.Field);
+              if (!names.includes('coding_attempt_id')) {
+                await sequelize.query(
+                  `ALTER TABLE \`${tbl}\` ADD COLUMN \`coding_attempt_id\` BIGINT UNSIGNED NULL AFTER \`attempt_id\``
+                );
+                logger.info(`➕ Added coding_attempt_id to ${tbl}`);
+              }
+              // Drop any existing FK on coding_attempt_id first (safe)
+              const [fkRows] = await sequelize.query(`
+                SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '${tbl}'
+                  AND COLUMN_NAME = 'coding_attempt_id' AND REFERENCED_TABLE_NAME IS NOT NULL
+              `);
+              for (const fk of fkRows) {
+                try {
+                  await sequelize.query(`ALTER TABLE \`${tbl}\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\``);
+                } catch (_) {}
+              }
+              // Add FK to coding_attempts
+              const tblName = tbl === 'assessment_sessions' ? 'assessment_sessions' : 'exam_sessions';
+              await sequelize.query(
+                `ALTER TABLE \`${tbl}\` ADD CONSTRAINT \`fk_${tbl}_coding_attempt\` FOREIGN KEY (\`coding_attempt_id\`) REFERENCES \`coding_attempts\` (\`id\`) ON DELETE SET NULL ON UPDATE CASCADE`
+              );
+              logger.info(`✅ Added FK on ${tbl}.coding_attempt_id → coding_attempts.id`);
+            } catch (e) {
+              logger.warn(`⚠️ Could not add coding_attempt_id to ${tbl}: ${e.message}`);
+            }
+
+            logger.info(`✅ ${tbl} schema migration done`);
+          } catch (err) {
+            logger.error(`⚠️ Error migrating ${tbl}: ${err.message}`);
+          }
+        }
+      }
+
+      await fixAssessmentTables();
+
+      // Fix quiz_recordings ENUM to include 'coding'
+      try {
+        await sequelize.query(
+          `ALTER TABLE \`quiz_recordings\` MODIFY COLUMN \`assessment_type\` ENUM('quiz','coding') NOT NULL DEFAULT 'quiz'`
+        );
+        logger.info('✅ Extended quiz_recordings.assessment_type ENUM to include coding');
+      } catch (_) { /* table may not exist */ }
+
       logger.info('✅ Manual schema migration checks completed successfully');
     } catch (migError) {
       logger.error('⚠️ Error applying manual schema migrations to ai_questions', { error: migError.message });

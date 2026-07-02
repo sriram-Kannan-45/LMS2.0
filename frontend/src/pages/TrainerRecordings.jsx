@@ -275,7 +275,7 @@ export default function TrainerRecordings({ user }) {
                     {paginated.map(rec => {
                       const pName = rec.participant?.name || `User #${rec.participantId}`
                       const pEmail = rec.participant?.email || ''
-                      const qTitle = rec.quiz?.title || `Quiz #${rec.quizId}`
+                      const qTitle = rec.quiz?.title || (rec.quizId ? `Quiz #${rec.quizId}` : 'Unknown Quiz')
                       return (
                         <tr key={rec.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                           <td className="py-4 px-5">

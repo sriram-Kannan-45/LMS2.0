@@ -46,6 +46,13 @@ export function useQuizProtection({
   participantName = '',
   participantId = '',
 }) {
+  console.log('[useQuizProtection] Initialized', {
+    attemptId,
+    quizId: quiz?.id,
+    quizTitle: quiz?.title,
+    enabled,
+    copyProtectionEnabled: quiz?.copyProtectionEnabled,
+  })
   const [violationCount, setViolationCount] = useState(initialViolationCount)
   const [softViolationCount, setSoftViolationCount] = useState(0)
   const [disqualified, setDisqualified] = useState(
@@ -95,7 +102,12 @@ export function useQuizProtection({
     const weight = VIOLATION_WEIGHTS[actionType] || 1.0
     const isSoft = weight < 1.0
 
-    console.warn(`[useQuizProtection] Violation: ${actionType} (weight: ${weight})`)
+    console.warn(`[useQuizProtection] Violation: ${actionType} (weight: ${weight}), attemptId: ${attemptId}`)
+
+    if (!attemptId) {
+      console.error('[useQuizProtection] Cannot report violation: attemptId is missing')
+      return
+    }
 
     const answerArray = Object.entries(stateRef.current.answers).map(([questionId, val]) => ({
       questionId: parseInt(questionId, 10),
@@ -109,15 +121,20 @@ export function useQuizProtection({
       const headers = { ...getAuthHeaders(), 'Content-Type': 'application/json' }
       if (token) headers['X-Assessment-Session'] = token
 
+      const quizId = quiz?.id || stateRef.current.answers?.[0]?.quizId
+      const violationPayload = {
+        type: actionType,
+        weight,
+        quizId,
+        questionNumber: stateRef.current.currentQ + 1,
+        answers: answerArray,
+      }
+      console.log('[useQuizProtection] Violation payload:', violationPayload)
+
       const res = await fetch(`${API_BASE}/quizzes/attempts/${attemptId}/violation`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          type: actionType,
-          weight,
-          questionNumber: stateRef.current.currentQ + 1,
-          answers: answerArray,
-        }),
+        body: JSON.stringify(violationPayload),
       })
 
       const data = await res.json()

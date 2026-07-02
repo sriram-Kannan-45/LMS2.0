@@ -341,7 +341,7 @@ export function ProctorProvider({ children }) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [socket, session?.sessionId, screenStream]);
 
-  const start = useCallback(async ({ quizId, assessmentType, assessmentId, attemptId, fingerprintHash, screenSharing }) => {
+  const start = useCallback(async ({ quizId, assessmentId, attemptId, fingerprintHash, screenSharing, assessmentType = 'quiz' }) => {
     setError(null);
     if (!authReady) {
       const err = new Error('Authentication still loading — please wait a moment');
@@ -352,13 +352,13 @@ export function ProctorProvider({ children }) {
       err.code = 'AUTH_USER_ID_MISSING';
       setError(err); throw err;
     }
-    const isCoding = assessmentType === 'coding_assessment';
-    if (!quizId && !(isCoding && assessmentId)) {
-      const err = new Error('Quiz id or coding assessment id missing');
+    const id = quizId || assessmentId;
+    if (!id) {
+      const err = new Error('Quiz/Assessment id missing');
       setError(err); throw err;
     }
     try {
-      const s = await proctorApi.startSession({ quizId, assessmentType, assessmentId, attemptId, fingerprintHash, screenSharing });
+      const s = await proctorApi.startSession({ quizId: id, attemptId, fingerprintHash, screenSharing, assessmentType });
       setSession(s);
       return s;
     } catch (e) {

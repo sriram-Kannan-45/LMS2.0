@@ -1,4 +1,10 @@
-const { QuizRecording, User, AIQuiz, QuizResult, QuizAttempt, ExamSession, Violation, CodingAttempt, CodingAssessment } = require('../models');
+const { QuizRecording, User, AIQuiz, QuizResult, QuizAttempt, ExamSession, Violation, CodingAssessment, CodingResult, CodingAttempt } = require('../models');
+
+// Events that must never appear in user-facing violation lists
+const MONITORING_EVENT_TYPES = new Set([
+  'HEARTBEAT_LOST', 'HEARTBEAT_RESTORED',
+  'SESSION_STARTED', 'SESSION_RESUMED',
+]);
 const path = require('path');
 const fs = require('fs');
 const { Op } = require('sequelize');
@@ -6,8 +12,8 @@ const logger = require('../utils/logger');
 
 const STORAGE_ROOT = path.join(__dirname, '..', '..', 'storage', 'recordings');
 
-function ensureStorageDir(quizId) {
-  const dir = path.join(STORAGE_ROOT, String(quizId));
+function ensureStorageDir(subPath) {
+  const dir = path.join(STORAGE_ROOT, String(subPath));
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -19,8 +25,11 @@ function fail(res, status, message) { return res.status(status).json({ success: 
 
 exports.upload = async (req, res) => {
   try {
-    const assessmentType = req.body.assessment_type === 'coding_assessment' ? 'coding_assessment' : 'quiz';
-    const { participantId, sessionId, durationSeconds } = req.body;
+    const { participantId, sessionId, durationSeconds, assessment_type = 'quiz' } = req.body;
+    let quizId = req.body.quizId;
+    let trainerId = req.user.id;
+
+    console.log('[recordingController.upload]', { quizId, participantId, sessionId, assessment_type, hasFile: !!req.file, userId: req.user.id });
 
     if (!participantId || !sessionId) {
       return fail(res, 400, 'participantId and sessionId are required');
@@ -29,53 +38,39 @@ exports.upload = async (req, res) => {
       return fail(res, 400, 'No recording file uploaded');
     }
 
-    let quizId = null;
-    let codingAttemptId = null;
-    let trainerId = req.user.id;
-    let storageKey;
-
-    if (assessmentType === 'coding_assessment') {
-      codingAttemptId = req.body.codingAttemptId;
-      if (!codingAttemptId) {
-        return fail(res, 400, 'codingAttemptId is required for coding assessment recordings');
-      }
-      const attempt = await CodingAttempt.findByPk(codingAttemptId, {
-        include: [{ model: CodingAssessment, as: 'assessment', attributes: ['id', 'trainerId'] }]
-      });
-      if (!attempt) return fail(res, 404, 'Coding attempt not found');
-      trainerId = attempt.assessment?.trainerId || req.user.id;
-      storageKey = `coding_${codingAttemptId}`;
+    if (assessment_type === 'coding') {
+      if (!quizId) return fail(res, 400, 'quizId is required for coding assessment recordings');
+      const assessment = await CodingAssessment.findByPk(quizId);
+      if (!assessment) return fail(res, 404, 'Coding assessment not found');
+      trainerId = assessment.trainerId || req.user.id;
     } else {
-      quizId = req.body.quizId;
-      if (!quizId) {
-        return fail(res, 400, 'quizId is required for quiz recordings');
-      }
+      if (!quizId) return fail(res, 400, 'quizId is required for quiz recordings');
       const quiz = await AIQuiz.findByPk(quizId);
       if (!quiz) return fail(res, 404, 'Quiz not found');
       trainerId = quiz.trainerId || req.user.id;
-      storageKey = quizId;
     }
 
-    const filePath = path.join(ensureStorageDir(storageKey), `${storageKey}_${participantId}_${Date.now()}.webm`);
+    const subDir = assessment_type === 'coding' ? `coding/${quizId}` : String(quizId);
+    const filePath = path.join(ensureStorageDir(subDir), `${quizId}_${participantId}_${Date.now()}.webm`);
 
     fs.renameSync(req.file.path, filePath);
 
     const fileSizeMb = Math.round((fs.statSync(filePath).size / (1024 * 1024)) * 100) / 100;
 
     const recording = await QuizRecording.create({
-      quizId: assessmentType === 'quiz' ? (quizId || null) : null,
-      codingAttemptId: assessmentType === 'coding_assessment' ? (codingAttemptId || null) : null,
+      quizId,
       participantId,
       trainerId,
       sessionId,
       filePath,
       fileSizeMb,
       durationSeconds: durationSeconds ? parseInt(durationSeconds, 10) : null,
-      assessmentType,
+      assessmentType: assessment_type,
       status: 'ready',
       recordedAt: new Date()
     });
 
+    console.log('[recordingController.upload] Recording created:', { id: recording.id, quizId, participantId, trainerId, assessment_type });
     return ok(res, recording);
   } catch (error) {
     logger.error('[recordingController.upload]', { error: error.message });
@@ -91,10 +86,10 @@ exports.list = async (req, res) => {
 
     const where = { isDeleted: false };
 
-    if (type === 'coding') {
-      where.assessmentType = 'coding_assessment';
-    } else if (type === 'quiz') {
+    if (type === 'quiz') {
       where.assessmentType = 'quiz';
+    } else if (type === 'coding') {
+      where.assessmentType = 'coding';
     }
 
     if (quiz_id) where.quizId = quiz_id;
@@ -115,8 +110,7 @@ exports.list = async (req, res) => {
       include: [
         { model: User, as: 'participant', attributes: ['id', 'name', 'email'] },
         { model: User, as: 'trainer', attributes: ['id', 'name', 'email'] },
-        { model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] },
-        { model: CodingAttempt, as: 'codingAttempt', attributes: ['id', 'assessmentId', 'participantId'] }
+        { model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] }
       ],
       order: [['recorded_at', 'DESC']],
       offset,
@@ -128,12 +122,8 @@ exports.list = async (req, res) => {
       const recJson = rec.toJSON();
       let violationCount = 0;
       try {
-        const sessionWhere = recJson.assessmentType === 'coding_assessment'
-          ? {
-              assessmentType: 'coding_assessment',
-              assessmentId: recJson.codingAttempt?.assessmentId,
-              participantId: recJson.participantId,
-            }
+        const sessionWhere = recJson.assessmentType === 'coding'
+          ? { assessmentId: recJson.quizId, participantId: recJson.participantId }
           : { quizId: recJson.quizId, participantId: recJson.participantId };
         const sessions = await ExamSession.findAll({
           where: sessionWhere,
@@ -141,11 +131,23 @@ exports.list = async (req, res) => {
         });
         if (sessions.length > 0) {
           violationCount = await Violation.count({
-            where: { sessionId: sessions.map(s => s.id) }
+            where: {
+              sessionId: sessions.map(s => s.id),
+              type: { [Op.notIn]: [...MONITORING_EVENT_TYPES] },
+            }
           });
         }
       } catch (e) {
         // Proctoring tables might not exist
+      }
+      // For coding recordings, populate the quiz title from CodingAssessment
+      if (recJson.assessmentType === 'coding' && !recJson.quiz) {
+        try {
+          const codingAssess = await CodingAssessment.findByPk(recJson.quizId, { attributes: ['id', 'title'] });
+          if (codingAssess) {
+            recJson.quiz = { id: codingAssess.id, title: codingAssess.title };
+          }
+        } catch (e) { /* ignore */ }
       }
       recJson.violationCount = violationCount;
       enhancedRecordings.push(recJson);
@@ -176,18 +178,22 @@ exports.getOne = async (req, res) => {
       include: [
         { model: User, as: 'participant', attributes: ['id', 'name', 'email'] },
         { model: User, as: 'trainer', attributes: ['id', 'name', 'email'] },
-        { model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] },
-        {
-          model: CodingAttempt,
-          as: 'codingAttempt',
-          attributes: ['id', 'assessmentId', 'participantId', 'status', 'totalScore', 'startedAt', 'submittedAt'],
-          include: [{ model: CodingAssessment, as: 'assessment', attributes: ['id', 'title'] }]
-        }
+        { model: AIQuiz, as: 'quiz', attributes: ['id', 'title'] }
       ]
     });
 
     if (!recording || recording.isDeleted) {
       return fail(res, 404, 'Recording not found');
+    }
+
+    // For coding recordings, populate quiz title from CodingAssessment
+    if (recording.assessmentType === 'coding' && !recording.quiz) {
+      try {
+        const codingAssess = await CodingAssessment.findByPk(recording.quizId, { attributes: ['id', 'title'] });
+        if (codingAssess) {
+          recording.dataValues.quiz = { id: codingAssess.id, title: codingAssess.title };
+        }
+      } catch (e) { /* ignore */ }
     }
 
     if (userRole === 'TRAINER' && recording.trainerId !== userId) {
@@ -198,19 +204,23 @@ exports.getOne = async (req, res) => {
       return fail(res, 403, 'Access denied. Participants cannot view recordings.');
     }
 
-    const quizResult = await QuizResult.findOne({
-      where: { quizId: recording.quizId, participantId: recording.participantId },
-      include: [{ model: QuizAttempt, as: 'attempt', attributes: ['timeTaken', 'startedAt', 'submittedAt'] }]
-    });
+    let quizResult = null;
+    if (recording.assessmentType === 'coding') {
+      quizResult = await CodingResult.findOne({
+        where: { assessmentId: recording.quizId, participantId: recording.participantId },
+        include: [{ model: CodingAttempt, as: 'attempt', attributes: ['timeTaken', 'startedAt', 'submittedAt'] }]
+      });
+    } else {
+      quizResult = await QuizResult.findOne({
+        where: { quizId: recording.quizId, participantId: recording.participantId },
+        include: [{ model: QuizAttempt, as: 'attempt', attributes: ['timeTaken', 'startedAt', 'submittedAt'] }]
+      });
+    }
 
     let violations = [];
     try {
-      const sessionWhere = recording.assessmentType === 'coding_assessment'
-        ? {
-            assessmentType: 'coding_assessment',
-            assessmentId: recording.codingAttempt?.assessmentId,
-            participantId: recording.participantId,
-          }
+      const sessionWhere = recording.assessmentType === 'coding'
+        ? { assessmentId: recording.quizId, participantId: recording.participantId }
         : { quizId: recording.quizId, participantId: recording.participantId };
       const sessions = await ExamSession.findAll({
         where: sessionWhere,
@@ -222,6 +232,7 @@ exports.getOne = async (req, res) => {
           order: [['occurredAt', 'ASC']],
           limit: 100,
         });
+        violations = violations.filter(v => !MONITORING_EVENT_TYPES.has(v.type));
       }
     } catch (e) {
       // Proctoring tables may not exist; return empty violations

@@ -34,13 +34,10 @@ const participantProfileRoutes = require('./routes/participantProfileRoutes');
 const proctoringRoutes = require('./routes/proctoringRoutes');
 const monitorRoutes = require('./routes/monitorRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
-const codingAssessmentsRoutes = require('./routes/codingAssessmentsRoutes');
-const codingAttemptsRoutes = require('./routes/codingAttemptsRoutes');
-const codeExecutionRoutes = require('./routes/codeExecutionRoutes');
-const codingSubmissionsRoutes = require('./routes/codingSubmissionsRoutes');
 const discussionRoutes = require('./routes/discussionRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const recordingRoutes = require('./routes/recordingRoutes');
+const codingAssessmentRoutes = require('./routes/codingAssessmentRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -146,13 +143,10 @@ app.use('/api/participant-profile', participantProfileRoutes);
 app.use('/api/proctor', proctoringRoutes);
 app.use('/api', monitorRoutes);
 app.use('/api/lessons', lessonRoutes);
-app.use('/api/coding-assessments', codingAssessmentsRoutes);
-app.use('/api/coding-attempts', codingAttemptsRoutes);
-app.use('/api/code', codeExecutionRoutes);
-app.use('/api/coding-submissions', codingSubmissionsRoutes);
 app.use('/api/discussion', discussionRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/recordings', recordingRoutes);
+app.use('/api/coding', codingAssessmentRoutes);
 
 // Health check for AI service (separate path to avoid conflict with router)
 app.get('/api/ai/health', async (req, res) => {
@@ -202,6 +196,16 @@ app.use((err, req, res, next) => {
   }
   if (err.message && err.message.includes('Only JPG')) {
     return res.status(415).json({ success: false, message: err.message });
+  }
+
+  // Never expose raw SQL/database errors to the frontend
+  const msg = err.message || '';
+  if (msg.includes('cannot be null') || msg.includes('Column') || msg.includes('ER_PARSE_ERROR') || msg.includes('ER_BAD_FIELD_ERROR') || msg.includes('ER_NO_REFERENCED_ROW') || msg.includes('ER_DUP_ENTRY') || msg.includes('ER_DATA_TOO_LONG') || msg.includes('Sequelize')) {
+    console.error('⚠️ Sanitized database error for client:', err.message);
+    return res.status(err.status || 500).json({
+      success: false,
+      message: 'A database error occurred. Please try again or contact support.'
+    });
   }
 
   res.status(err.status || 500).json({
@@ -372,7 +376,6 @@ const startServer = async () => {
       const {
         Lesson, LessonQuiz, LessonAssessment,
         AssessmentSubmission, QuizProgress, LessonProgress,
-        LessonCodingAssessment,
         Enrollment, AIQuiz,
       } = require('./models');
       // FK checks off: altering lessons.training_id from NOT NULL to NULL
@@ -388,7 +391,6 @@ const startServer = async () => {
         await AssessmentSubmission.sync({ alter: true });
         await QuizProgress.sync({ alter: true });
         await LessonProgress.sync({ alter: true });
-        await LessonCodingAssessment.sync({ alter: true });
         await Enrollment.sync({ alter: true });
         await AIQuiz.sync({ alter: true });
       } finally {
@@ -399,25 +401,6 @@ const startServer = async () => {
       logger.error('Could not sync lesson workflow tables', { error: e.message });
     }
 
-    // Coding Assessment tables — additive sync, scoped to module
-    try {
-      const {
-        CodingAssessment, CodingQuestion, TestCase, CodingAttempt,
-        CodingSubmission, SubmissionResult, CodingViolation, PlagiarismReport,
-      } = require('./models');
-      await CodingAssessment.sync({ alter: true });
-      await CodingQuestion.sync({ alter: true });
-      await TestCase.sync({ alter: true });
-      await CodingAttempt.sync({ alter: true });
-      await CodingSubmission.sync({ alter: true });
-      await SubmissionResult.sync({ alter: true });
-      await CodingViolation.sync({ alter: true });
-      await PlagiarismReport.sync({ alter: true });
-      logger.info('coding assessment tables ready');
-    } catch (e) {
-      logger.error('Could not sync coding assessment tables', { error: e.message });
-    }
-
     // Quiz Recordings — screen recordings for proctored quiz sessions
     try {
       const { QuizRecording } = require('./models');
@@ -425,6 +408,20 @@ const startServer = async () => {
       logger.info('quiz_recordings table ready');
     } catch (e) {
       logger.error('Could not sync quiz_recordings', { error: e.message });
+    }
+
+    // Coding Assessment tables
+    try {
+      const { CodingAssessment, CodingProblem, CodingTestCase, CodingAttempt, CodingSubmission, CodingResult } = require('./models');
+      await CodingAssessment.sync({ alter: true });
+      await CodingProblem.sync({ alter: true });
+      await CodingTestCase.sync({ alter: true });
+      await CodingAttempt.sync({ alter: true });
+      await CodingSubmission.sync({ alter: true });
+      await CodingResult.sync({ alter: true });
+      logger.info('coding_assessment tables ready');
+    } catch (e) {
+      logger.error('Could not sync coding_assessment tables', { error: e.message });
     }
 
     // Add course-centric indexes that were intentionally omitted from the

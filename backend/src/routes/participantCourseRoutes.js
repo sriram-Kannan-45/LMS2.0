@@ -32,6 +32,7 @@ router.get(   '/courses/:courseId',               participant, c.getCourseOvervi
 router.get(   '/courses/:courseId/lessons',       participant, c.listCourseLessons);
 router.get(   '/courses/:courseId/resources',     participant, c.listCourseResources);
 router.get(   '/courses/:courseId/quizzes',       participant, c.listCourseQuizzes);
+router.get(   '/courses/:courseId/coding-assessments', participant, c.listCourseCodingAssessments);
 
 // ── Lessons ──────────────────────────────────────────────────────────────
 router.get(   '/lessons/:lessonId',               participant, c.getLessonDetail);

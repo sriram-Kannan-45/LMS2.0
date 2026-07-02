@@ -22,6 +22,40 @@ function ParticipantQuizAttemptPageInner({ user }) {
   const { error: showError } = useToast()
   const proctor = useProctor()
   const fp = useDeviceFingerprint()
+
+  console.log('[ParticipantQuizAttemptPage] Initializing:', {
+    trainingId,
+    quizId,
+    userId: user?.id,
+    attemptIdFromParams: searchParams.get('attemptId'),
+    sessionIdFromParams: searchParams.get('sessionId'),
+    sessionTokenFromParams: !!searchParams.get('sessionToken'),
+  })
+
+  let attemptId = searchParams.get('attemptId')
+  let sessionToken = searchParams.get('sessionToken')
+  const sessionIdParam = searchParams.get('sessionId') || `session_${Date.now()}`
+
+  if (quizId) {
+    const storageKey = `quiz_${quizId}_attempt`
+    if (attemptId && sessionToken) {
+      sessionStorage.setItem(storageKey, JSON.stringify({ attemptId, sessionToken }))
+      console.log('[ParticipantQuizAttemptPage] Cached attempt/session:', { attemptId, sessionToken })
+    } else {
+      const cached = sessionStorage.getItem(storageKey)
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached)
+          attemptId = attemptId || parsed.attemptId
+          sessionToken = sessionToken || parsed.sessionToken
+          console.log('[ParticipantQuizAttemptPage] Restored from cache:', { attemptId, sessionToken })
+        } catch (e) {
+          console.error('[ParticipantQuizAttemptPage] Error parsing cached session:', e)
+        }
+      }
+    }
+  }
+
   const {
     recording: screenRecording,
     startRecording,
@@ -32,30 +66,9 @@ function ParticipantQuizAttemptPageInner({ user }) {
     assessmentType: 'quiz',
     assessmentId: quizId,
     participantId: user?.id,
-    sessionId: searchParams.get('sessionId') || `session_${Date.now()}`,
+    sessionId: sessionIdParam,
     userToken: user?.token
   })
-
-  let attemptId = searchParams.get('attemptId')
-  let sessionToken = searchParams.get('sessionToken')
-
-  if (quizId) {
-    const storageKey = `quiz_${quizId}_attempt`
-    if (attemptId && sessionToken) {
-      sessionStorage.setItem(storageKey, JSON.stringify({ attemptId, sessionToken }))
-    } else {
-      const cached = sessionStorage.getItem(storageKey)
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached)
-          attemptId = attemptId || parsed.attemptId
-          sessionToken = sessionToken || parsed.sessionToken
-        } catch (e) {
-          console.error('[ParticipantQuizAttemptPage] Error parsing cached session:', e)
-        }
-      }
-    }
-  }
 
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState(null)
@@ -92,6 +105,14 @@ function ParticipantQuizAttemptPageInner({ user }) {
           setLoading(false)
           return
         }
+
+        console.log('[ParticipantQuizAttemptPage] Questions fetched:', {
+          quizId: data.quiz?.id,
+          quizTitle: data.quiz?.title,
+          attemptId: data.attempt?.id,
+          attemptStatus: data.attempt?.status,
+          questionCount: data.questions?.length,
+        })
 
         setQuizData({
           id: data.quiz.id,
@@ -160,8 +181,9 @@ function ParticipantQuizAttemptPageInner({ user }) {
   }, [proctor])
 
   const handleConsented = useCallback(() => {
+    console.log('[ParticipantQuizAttemptPage] User consented, starting quiz flow', { quizId, attemptId })
     setConsented(true)
-  }, [])
+  }, [quizId, attemptId])
 
   const handleCancel = useCallback(() => {
     // Stop screen share if active
@@ -186,14 +208,19 @@ function ParticipantQuizAttemptPageInner({ user }) {
   }, [navigate, trainingId, screenStream])
 
   const handleSubmit = useCallback(async () => {
+    console.log('[ParticipantQuizAttemptPage] Submitting quiz', { quizId, attemptId, recordingActive: !!screenRecording })
     if (screenRecording) {
       const blob = await stopRecording()
       if (blob) {
-        await uploadRecording(blob)
+        console.log('[ParticipantQuizAttemptPage] Uploading recording blob', { blobSize: blob.size })
+        const result = await uploadRecording(blob)
+        console.log('[ParticipantQuizAttemptPage] Upload result:', result)
+      } else {
+        console.warn('[ParticipantQuizAttemptPage] No recording blob to upload')
       }
     }
     navigate(`/trainings/${trainingId}/quizzes/${quizId}/result`)
-  }, [screenRecording, stopRecording, uploadRecording, trainingId, quizId, navigate])
+  }, [screenRecording, stopRecording, uploadRecording, trainingId, quizId, navigate, attemptId])
 
   if (loading) {
     return (

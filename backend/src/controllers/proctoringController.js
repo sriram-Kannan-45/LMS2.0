@@ -22,39 +22,38 @@ function clientIp(req) {
   );
 }
 
-function emitTrainerUpdate(req, quizId, payload) {
+function emitTrainerUpdate(req, quizId, payload, assessmentId) {
   const io = req.app.get('io');
   if (!io) return;
-  io.to(`proctor_quiz_${quizId}`).emit('proctor:update', payload);
+  const roomId = quizId || `coding_${assessmentId || ''}`;
+  io.to(`proctor_quiz_${roomId}`).emit('proctor:update', payload);
+  if (quizId) {
+    io.to(`proctor_coding_${quizId}`).emit('proctor:update', payload);
+  }
 }
 
-// POST /api/proctor/sessions/start  { quizId, fingerprintHash, screenSharing }
+// POST /api/proctor/sessions/start  { quizId, fingerprintHash, screenSharing, assessmentType }
 exports.startSession = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { quizId, attemptId, fingerprintHash, screenSharing = false, assessmentType, assessmentId } = req.body;
-    const isCoding = assessmentType === 'coding_assessment';
-    if (!isCoding && !quizId) return fail(res, 400, 'quizId is required');
-    if (isCoding && !assessmentId) return fail(res, 400, 'assessmentId is required for coding assessments');
+    const { quizId, attemptId, fingerprintHash, screenSharing = false, assessmentType = 'quiz' } = req.body;
+    if (!quizId) return fail(res, 400, 'quizId/assessmentId is required');
 
     const { session, resumed } = await proctoring.startSession({
       userId,
       quizId,
-      assessmentType,
-      assessmentId,
       attemptId,
       fingerprintHash,
       ipAddress: clientIp(req),
       userAgent: req.headers['user-agent'],
       screenSharing,
+      assessmentType,
     });
 
-    if (!isCoding) {
-      emitTrainerUpdate(req, quizId, {
-        type: resumed ? 'resumed' : 'started',
-        session: proctoring.buildClientView(session),
-      });
-    }
+    emitTrainerUpdate(req, quizId, {
+      type: resumed ? 'resumed' : 'started',
+      session: proctoring.buildClientView(session),
+    }, session.assessmentId);
 
     ok(res, { ...proctoring.buildClientView(session), resumed });
   } catch (err) { next(err); }
@@ -68,7 +67,7 @@ exports.activateSession = async (req, res, next) => {
     emitTrainerUpdate(req, session.quizId, {
       type: 'activated',
       session: proctoring.buildClientView(session),
-    });
+    }, session.assessmentId);
     ok(res, proctoring.buildClientView(session));
   } catch (err) { next(err); }
 };
@@ -93,7 +92,7 @@ exports.recordViolation = async (req, res, next) => {
       type: 'violation',
       session: proctoring.buildClientView(session),
       violation: result.violation,
-    });
+    }, session.assessmentId);
 
     ok(res, {
       session: proctoring.buildClientView(session),
@@ -122,7 +121,7 @@ exports.submit = async (req, res, next) => {
     emitTrainerUpdate(req, session.quizId, {
       type: 'submitted',
       session: proctoring.buildClientView(session),
-    });
+    }, session.assessmentId);
     ok(res, proctoring.buildClientView(session));
   } catch (err) { next(err); }
 };
@@ -138,7 +137,7 @@ exports.terminate = async (req, res, next) => {
     emitTrainerUpdate(req, session.quizId, {
       type: 'terminated',
       session: proctoring.buildClientView(session),
-    });
+    }, session.assessmentId);
     ok(res, proctoring.buildClientView(session));
   } catch (err) { next(err); }
 };
@@ -223,7 +222,8 @@ exports.forceTerminate = async (req, res, next) => {
         sessionId: session.id,
         reason: session.terminationReason,
       });
-      io.to(`proctor_quiz_${session.quizId}`).emit('proctor:update', {
+      const roomId = session.quizId || `coding_${session.assessmentId || ''}`;
+      io.to(`proctor_quiz_${roomId}`).emit('proctor:update', {
         type: 'terminated',
         session: proctoring.buildClientView(session),
       });
@@ -242,8 +242,48 @@ exports.forceTerminate = async (req, res, next) => {
  */
 exports.getExamData = async (req, res, next) => {
   try {
-    const session = req.examSession; // populated by sessionLock
+    const session = req.examSession;
     if (!session) return fail(res, 404, 'Session not found');
+
+    if (session.assessmentType === 'coding') {
+      const { CodingAssessment, CodingProblem } = require('../models');
+      const assessment = await CodingAssessment.findByPk(session.assessmentId, {
+        include: [{ model: CodingProblem, as: 'problems' }],
+      });
+      if (!assessment) return fail(res, 404, 'Coding assessment not found');
+
+      const problems = (assessment.problems || [])
+        .slice()
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .map(p => ({
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          constraints: p.constraints,
+          inputFormat: p.inputFormat,
+          outputFormat: p.outputFormat,
+          sampleInput: p.sampleInput,
+          sampleOutput: p.sampleOutput,
+          difficulty: p.difficulty,
+          marks: p.marks,
+          order: p.order,
+          starterCode: p.starterCode,
+        }));
+
+      return ok(res, {
+        session: proctoring.buildClientView(session),
+        assessment: {
+          id: assessment.id,
+          title: assessment.title,
+          description: assessment.description,
+          timeLimit: assessment.timeLimit,
+          difficulty: assessment.difficulty,
+          languages: assessment.languages,
+        },
+        problems,
+        serverTime: new Date().toISOString(),
+      });
+    }
 
     const [quiz, savedAnswers] = await Promise.all([
       AIQuiz.findByPk(session.quizId, {
@@ -256,7 +296,6 @@ exports.getExamData = async (req, res, next) => {
 
     if (!quiz) return fail(res, 404, 'Quiz not found');
 
-    // Sort and strip correctAnswer / explanation from the wire payload.
     const questions = (quiz.questions || [])
       .slice()
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -305,6 +344,11 @@ exports.saveAnswers = async (req, res, next) => {
       return fail(res, 410, 'Session has ended');
     }
 
+    // Coding assessments use their own save mechanism, not QuizAnswer.
+    if (session.assessmentType === 'coding') {
+      return ok(res, { saved: 0 });
+    }
+
     const incoming = Array.isArray(req.body?.answers) ? req.body.answers : [];
     if (!incoming.length) return ok(res, { saved: 0 });
 
@@ -347,10 +391,27 @@ exports.finalize = async (req, res, next) => {
     const session = req.examSession;
     if (!session.attemptId) return fail(res, 409, 'Session has no attempt');
 
-    // Idempotency: short-circuit if already finalized.
+    // ── Coding assessment: just submit, don't grade quiz answers ──
+    if (session.assessmentType === 'coding') {
+      if (session.status !== 'SUBMITTED' && session.status !== 'TERMINATED') {
+        await proctoring.submitSession(session);
+      }
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          const roomId = session.quizId || `coding_${session.assessmentId || ''}`;
+          io.to(`proctor_quiz_${roomId}`).emit('proctor:update', {
+            type: 'submitted',
+            session: proctoring.buildClientView(session),
+          });
+        }
+      } catch { /* swallow */ }
+      return ok(res, { submitted: true });
+    }
+
+    // ── Quiz: full grading logic ──
     const existingResult = await QuizResult.findOne({ where: { attemptId: session.attemptId } });
     if (existingResult) {
-      // Make sure the session reflects SUBMITTED in this case.
       if (session.status !== 'SUBMITTED' && session.status !== 'TERMINATED') {
         await proctoring.submitSession(session);
       }
@@ -366,7 +427,6 @@ exports.finalize = async (req, res, next) => {
       });
     }
 
-    // Optional final answers payload sent at submit-time
     const finalAnswers = Array.isArray(req.body?.answers) ? req.body.answers : null;
     if (finalAnswers && finalAnswers.length) {
       for (const a of finalAnswers) {
@@ -386,10 +446,8 @@ exports.finalize = async (req, res, next) => {
       }
     }
 
-    // 1) Mark session SUBMITTED
     await proctoring.submitSession(session);
 
-    // 2) Score all saved answers
     const [attempt, quiz, savedRows] = await Promise.all([
       QuizAttempt.findByPk(session.attemptId),
       AIQuiz.findByPk(session.quizId, {
@@ -413,7 +471,7 @@ exports.finalize = async (req, res, next) => {
           selectedOption: row.selectedOption !== undefined && row.selectedOption !== null ? row.selectedOption : null,
           answer: row.answerText || '',
           answerText: row.answerText || '',
-          matches: null // will be parsed from answerText automatically inside gradeAnswer
+          matches: null
         });
         isCorrect = result.isCorrect;
         score = result.score;
@@ -449,15 +507,14 @@ exports.finalize = async (req, res, next) => {
     const maxScore = totalQuestions * 100;
     const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
 
-    // 3) Update attempt + create result
     const submittedAt = new Date();
-    let timeTaken = null;
-    if (attempt?.startedAt) {
-      timeTaken = Math.max(0, Math.round(
-        (submittedAt.getTime() - new Date(attempt.startedAt).getTime()) / 1000,
-      ));
-    }
     if (attempt) {
+      let timeTaken = null;
+      if (attempt.startedAt) {
+        timeTaken = Math.max(0, Math.round(
+          (submittedAt.getTime() - new Date(attempt.startedAt).getTime()) / 1000,
+        ));
+      }
       await attempt.update({
         status: 'EVALUATED',
         submittedAt,
@@ -475,7 +532,6 @@ exports.finalize = async (req, res, next) => {
       evaluatedAt: submittedAt,
     });
 
-    // 4) Best-effort socket emits
     try {
       const io = req.app.get('io');
       if (io) {
@@ -515,6 +571,30 @@ exports.getResult = async (req, res, next) => {
     const isOwner = session.participantId === req.user.id;
     const isTrainer = req.user.role === 'TRAINER' || req.user.role === 'ADMIN';
     if (!isOwner && !isTrainer) return fail(res, 403, 'Forbidden');
+
+    if (session.assessmentType === 'coding') {
+      const { CodingResult, CodingAssessment } = require('../models');
+      const attemptId = session.codingAttemptId;
+      const [result, assessment] = await Promise.all([
+        attemptId ? CodingResult.findOne({ where: { attemptId } }) : Promise.resolve(null),
+        CodingAssessment.findByPk(session.assessmentId),
+      ]);
+      return ok(res, {
+        session: proctoring.buildClientView(session),
+        assessment: assessment ? {
+          id: assessment.id,
+          title: assessment.title,
+          description: assessment.description,
+        } : null,
+        result: result ? {
+          id: result.id,
+          totalScore: Number(result.totalScore),
+          maxScore: Number(result.maxScore),
+          percentage: Number(result.percentage),
+          evaluatedAt: result.evaluatedAt,
+        } : null,
+      });
+    }
 
     const [result, quiz, savedAnswers] = await Promise.all([
       QuizResult.findOne({ where: { attemptId: session.attemptId } }),

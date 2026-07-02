@@ -21,7 +21,7 @@ const ExamSession = sequelize.define('ExamSession', {
     primaryKey: true,
   },
   assessmentType: {
-    type: DataTypes.ENUM('quiz', 'coding_assessment'),
+    type: DataTypes.ENUM('quiz', 'coding'),
     allowNull: false,
     defaultValue: 'quiz',
     field: 'assessment_type',
@@ -40,7 +40,13 @@ const ExamSession = sequelize.define('ExamSession', {
     type: DataTypes.BIGINT.UNSIGNED,
     allowNull: true,
     field: 'attempt_id',
-    comment: 'Linked QuizAttempt.id once created',
+    comment: 'Linked QuizAttempt.id (null for coding)',
+  },
+  codingAttemptId: {
+    type: DataTypes.BIGINT.UNSIGNED,
+    allowNull: true,
+    field: 'coding_attempt_id',
+    comment: 'Linked CodingAttempt.id (null for quiz)',
   },
   participantId: {
     type: DataTypes.BIGINT.UNSIGNED,
@@ -170,6 +176,7 @@ const ExamSession = sequelize.define('ExamSession', {
   indexes: [
     { fields: ['participant_id'] },
     { fields: ['quiz_id'] },
+    { fields: ['assessment_id'] },
     { fields: ['status'] },
   ],
 });

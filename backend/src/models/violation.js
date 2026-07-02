@@ -25,7 +25,7 @@ const Violation = sequelize.define('Violation', {
   },
   quizId: {
     type: DataTypes.BIGINT.UNSIGNED,
-    allowNull: false,
+    allowNull: true,
     field: 'quiz_id',
   },
   type: {

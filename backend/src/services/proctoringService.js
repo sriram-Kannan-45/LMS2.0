@@ -14,6 +14,7 @@ const {
   ProctorActivity,
   AIQuiz,
   QuizAttempt,
+  CodingAssessment,
   CodingAttempt,
   User,
 } = require('../models');
@@ -27,6 +28,8 @@ const DEFAULT_MAX_WARNINGS = 5;
 const HEARTBEAT_TIMEOUT_MS = 25_000;
 const GRACE_PERIOD_DEFAULT_MINUTES = 2;
 const GRACE_PERIOD_REAPER_INTERVAL_MS = 30_000;
+const NETWORK_DISCONNECT_TIMEOUT_MS = 30_000;   // 30s grace before storing a NETWORK_DISCONNECTED violation
+const VIOLATION_DEBOUNCE_MS = 5_000;             // 5s debounce per type per session
 
 function thresholdsForLevel(level) {
   switch (level) {
@@ -40,7 +43,41 @@ function thresholdsForLevel(level) {
   }
 }
 
-// Severities that bump the warning counter
+// Violations that are actual cheating events (not monitoring events)
+const CHEATING_TYPES = new Set([
+  'FULLSCREEN_EXIT',
+  'FULLSCREEN_DISABLED',
+  'SCREEN_SHARE_STOPPED',
+  'SCREEN_SHARE_CHANGED',
+  'TAB_SWITCH',
+  'BROWSER_LOST_FOCUS',
+  'WINDOW_BLUR',
+  'RIGHT_CLICK',
+  'COPY_ATTEMPT',
+  'PASTE_ATTEMPT',
+  'DEVTOOLS_OPENED',
+  'MULTIPLE_MONITOR_DETECTED',
+  'RECORDING_FAILED',
+  'NETWORK_DISCONNECTED',
+  'ASSESSMENT_LEFT',
+  'MANUAL_SUBMISSION_TIMEOUT',
+  'MULTIPLE_FACES',
+  'FACE_ABSENT',
+  'PHONE_DETECTED',
+  'LOOKING_AWAY',
+  'VOICE_DETECTED',
+  'TRAINER_WARNING',
+]);
+
+// Monitoring events that should NEVER appear as user-facing violations
+const MONITORING_EVENTS = new Set([
+  'HEARTBEAT_LOST',
+  'HEARTBEAT_RESTORED',
+  'SESSION_STARTED',
+  'SESSION_RESUMED',
+]);
+
+// Violations that bump the warning counter (user-facing only)
 const WARNING_TYPES = new Set([
   'FULLSCREEN_EXIT',
   'TAB_SWITCH',
@@ -54,13 +91,20 @@ const WARNING_TYPES = new Set([
   'SCREENSHOT_ATTEMPT',
   'CLIPBOARD_ATTEMPT',
   'TRAINER_WARNING',
+  'NETWORK_DISCONNECTED',
 ]);
 
 const CRITICAL_TYPES = new Set([
   'MULTIPLE_LOGIN',
   'SCREEN_SHARE_DENIED',
   'NETWORK_TIMEOUT',
+  'MULTIPLE_FACES',
+  'PHONE_DETECTED',
+  'RECORDING_FAILED',
 ]);
+
+// Server-side debounce: map of `sessionId:type` → last timestamp
+const lastViolationTimestamps = new Map();
 
 // ── Internal helpers ────────────────────────────────────────────────────────
 async function populateViolationCounts(session) {
@@ -95,6 +139,7 @@ function buildClientView(session) {
     sessionToken: session.sessionToken,
     quizId: session.quizId,
     attemptId: session.attemptId,
+    codingAttemptId: session.codingAttemptId,
     status: session.status,
     warningsCount: session.warningsCount,
     fullscreenExits: session.fullscreenExits,
@@ -158,81 +203,50 @@ async function getActiveSessionForUser(userId) {
   return session;
 }
 
-async function startSession({ userId, quizId, assessmentType, assessmentId, attemptId, fingerprintHash, ipAddress, userAgent, screenSharing }) {
-  const isCoding = assessmentType === 'coding_assessment';
+async function startSession({ userId, quizId, attemptId, fingerprintHash, ipAddress, userAgent, screenSharing, assessmentType = 'quiz' }) {
+  console.log('[proctoringService.startSession]', { userId, quizId, attemptId, screenSharing, assessmentType });
+
+  if (!quizId) {
+    const err = new Error('quizId/assessmentId is required to start a proctored session');
+    err.status = 400;
+    throw err;
+  }
 
   // Single-device enforcement: if any other ACTIVE session for this user, terminate it.
   const existingActive = await ExamSession.findOne({
     where: { participantId: userId, status: { [Op.in]: ['PENDING', 'ACTIVE'] } },
   });
 
-  if (isCoding) {
-    if (existingActive && (existingActive.assessmentType !== 'coding_assessment' || existingActive.assessmentId !== Number(assessmentId))) {
-      await terminateSession({
-        session: existingActive,
-        reason: 'Started exam on another device or assessment',
-        type: 'MULTIPLE_LOGIN',
-      });
+  let assessment = null;
+  if (assessmentType === 'coding') {
+    assessment = await CodingAssessment.findByPk(quizId);
+    if (!assessment) {
+      const err = new Error('Coding assessment not found');
+      err.status = 404;
+      throw err;
     }
-
-    const existingCoding = await ExamSession.findOne({
-      where: { participantId: userId, assessmentType: 'coding_assessment', assessmentId, status: { [Op.in]: ['PENDING', 'ACTIVE'] } },
-      order: [['created_at', 'DESC']],
-    });
-
-    if (existingCoding) {
-      await populateViolationCounts(existingCoding);
-      return { session: existingCoding, resumed: true };
-    }
-
-    const device = await registerDevice({
-      userId, fingerprintHash, ipAddress, userAgent,
-      label: 'Exam device',
-    });
-
-    const attempt = attemptId ? await CodingAttempt.findByPk(attemptId) : null;
-
-    const startedAt = new Date();
-    const session = await ExamSession.create({
-      assessmentType: 'coding_assessment',
-      assessmentId,
-      attemptId: attempt ? attempt.id : null,
-      participantId: userId,
-      sessionToken: newSessionToken(),
-      deviceFingerprintId: device ? device.id : null,
-      status: 'PENDING',
-      isScreenSharing: !!screenSharing,
-      ipAddress,
-      userAgent,
-      startedAt,
-      endsAt: null,
-      encryptedPayload: encrypt({ seed: Date.now(), userId, assessmentId }),
-      lastHeartbeatAt: startedAt,
-      gracePeriodEndsAt: null,
-      disconnectedAt: null,
-      proctoringLevel: 'MEDIUM',
-      gracePeriodMinutes: GRACE_PERIOD_DEFAULT_MINUTES,
-    });
-
-    await populateViolationCounts(session);
-
-    return { session, resumed: false };
+  } else {
+    assessment = await getQuizOrThrow(quizId);
   }
 
-  const quiz = await getQuizOrThrow(quizId);
+  const isSame = existingActive && (
+    assessmentType === 'coding'
+      ? existingActive.assessmentId === Number(quizId)
+      : existingActive.quizId === Number(quizId)
+  );
 
-  if (existingActive && existingActive.quizId !== Number(quizId)) {
+  if (existingActive && !isSame) {
     await terminateSession({
       session: existingActive,
-      reason: 'Started exam on another device or quiz',
+      reason: 'Started exam on another device or quiz/assessment',
       type: 'MULTIPLE_LOGIN',
     });
   }
 
-  // Re-entry to same quiz → reuse if active
-  if (existingActive && existingActive.quizId === Number(quizId)) {
+  // Re-entry to same quiz/assessment → reuse if active
+  if (existingActive && isSame) {
     await populateViolationCounts(existingActive);
-    return { session: existingActive, quiz, resumed: true };
+    return { session: existingActive, quiz: assessment, resumed: true };
   }
 
   const device = await registerDevice({
@@ -241,48 +255,77 @@ async function startSession({ userId, quizId, assessmentType, assessmentId, atte
   });
 
   // Check if already attempted
-  const completed = await QuizAttempt.findOne({
-    where: { quizId, participantId: userId, status: { [Op.in]: ['SUBMITTED', 'EVALUATED'] } }
-  });
+  let completed = null;
+  if (assessmentType === 'coding') {
+    completed = await CodingAttempt.findOne({
+      where: { assessmentId: quizId, participantId: userId, status: { [Op.in]: ['SUBMITTED', 'EVALUATED'] } }
+    });
+  } else {
+    completed = await QuizAttempt.findOne({
+      where: { quizId, participantId: userId, status: { [Op.in]: ['SUBMITTED', 'EVALUATED'] } }
+    });
+  }
   if (completed) {
-    const err = new Error('You have already attempted this quiz.');
+    const err = new Error(`You have already attempted this ${assessmentType === 'coding' ? 'assessment' : 'quiz'}.`);
     err.status = 403;
     throw err;
   }
 
   // Reuse caller-supplied attempt if provided + valid; else create a new one.
-  // This avoids creating a second QuizAttempt when the existing AI-quiz
-  // start endpoint already created one.
   let attempt = null;
-  if (attemptId) {
-    attempt = await QuizAttempt.findOne({
-      where: { id: attemptId, participantId: userId, quizId },
-    });
-  }
-  if (!attempt) {
-    attempt = await QuizAttempt.findOne({
-      where: { quizId, participantId: userId, status: 'IN_PROGRESS' }
-    });
-  }
-  if (!attempt) {
-    attempt = await QuizAttempt.create({
-      quizId,
-      participantId: userId,
-      status: 'IN_PROGRESS',
-      startedAt: new Date(),
-    });
+  if (assessmentType === 'coding') {
+    if (attemptId) {
+      attempt = await CodingAttempt.findOne({
+        where: { id: attemptId, participantId: userId, assessmentId: quizId },
+      });
+    }
+    if (!attempt) {
+      attempt = await CodingAttempt.findOne({
+        where: { assessmentId: quizId, participantId: userId, status: 'IN_PROGRESS' }
+      });
+    }
+    if (!attempt) {
+      attempt = await CodingAttempt.create({
+        assessmentId: quizId,
+        participantId: userId,
+        status: 'IN_PROGRESS',
+        startedAt: new Date(),
+      });
+    }
+  } else {
+    if (attemptId) {
+      attempt = await QuizAttempt.findOne({
+        where: { id: attemptId, participantId: userId, quizId },
+      });
+    }
+    if (!attempt) {
+      attempt = await QuizAttempt.findOne({
+        where: { quizId, participantId: userId, status: 'IN_PROGRESS' }
+      });
+    }
+    if (!attempt) {
+      attempt = await QuizAttempt.create({
+        quizId,
+        participantId: userId,
+        status: 'IN_PROGRESS',
+        startedAt: new Date(),
+      });
+    }
   }
 
   const startedAt = new Date();
-  const endsAt = quiz.timeLimit
-    ? new Date(startedAt.getTime() + quiz.timeLimit * 60_000)
+  const endsAt = assessment.timeLimit
+    ? new Date(startedAt.getTime() + assessment.timeLimit * 60_000)
     : null;
 
-  const gracePeriodMinutes = quiz.gracePeriodMinutes || GRACE_PERIOD_DEFAULT_MINUTES;
+  const gracePeriodMinutes = assessment.gracePeriodMinutes || GRACE_PERIOD_DEFAULT_MINUTES;
 
   const session = await ExamSession.create({
-    quizId,
-    attemptId: attempt.id,
+    assessmentType,
+    quizId: assessmentType === 'coding' ? null : quizId,
+    assessmentId: assessmentType === 'coding' ? quizId : null,
+    attemptId: assessmentType === 'coding' ? null : attempt.id,
+    codingAttemptId: assessmentType === 'coding' ? attempt.id : null,
     participantId: userId,
     sessionToken: newSessionToken(),
     deviceFingerprintId: device ? device.id : null,
@@ -296,13 +339,13 @@ async function startSession({ userId, quizId, assessmentType, assessmentId, atte
     lastHeartbeatAt: startedAt,
     gracePeriodEndsAt: null,
     disconnectedAt: null,
-    proctoringLevel: quiz.proctoringLevel || 'MEDIUM',
+    proctoringLevel: assessment.proctoringLevel || 'MEDIUM',
     gracePeriodMinutes,
   });
 
   await populateViolationCounts(session);
 
-  return { session, quiz, attempt, resumed: false };
+  return { session, quiz: assessment, attempt, resumed: false };
 }
 
 async function activateSession(session) {
@@ -321,7 +364,13 @@ async function activateSession(session) {
 }
 
 async function heartbeat(session) {
+  const wasOffline = !session.isOnline;
   session.lastHeartbeatAt = new Date();
+  session.isOnline = true;
+  // If participant reconnects after disconnection, clear the disconnected timestamp
+  if (session.disconnectedAt) {
+    session.disconnectedAt = null;
+  }
   await session.save();
   await populateViolationCounts(session);
   return session;
@@ -335,6 +384,14 @@ async function terminateSession({ session, reason, type = 'TERMINATED' }) {
   session.terminationReason = reason || 'Terminated';
   session.endedAt = new Date();
   await session.save();
+
+  console.log('[proctoringService.terminateSession]', {
+    sessionId: session.id,
+    participantId: session.participantId,
+    quizId: session.quizId,
+    reason,
+    type,
+  });
 
   // Record activity for exam terminated
   await recordActivity({
@@ -350,28 +407,33 @@ async function terminateSession({ session, reason, type = 'TERMINATED' }) {
     type,
     severity: 'CRITICAL',
     message: reason,
+    metadata: session.assessmentId ? { assessmentId: session.assessmentId, assessmentType: session.assessmentType } : null,
   });
 
-  // Best-effort: auto-submit and grade the linked QuizAttempt.
-  // No answers are available server-side at this point, so the attempt is
-  // graded with an empty submission (zero score) for violation-based termination.
-  if (session.attemptId) {
+  // Best-effort: auto-submit and grade the linked attempt.
+  const attemptId = session.codingAttemptId || session.attemptId;
+  if (attemptId) {
     try {
-      const attempt = await QuizAttempt.findOne({
-        where: { id: session.attemptId, status: 'IN_PROGRESS' },
-      });
-      if (attempt) {
-        console.log(`[proctoringService] Auto-submitting attempt ${attempt.id} on session termination`);
-        await aiQuizService.submitAndGradeAttempt(attempt, [], { autoSubmit: true });
-        console.log(`[proctoringService] Auto-submitted attempt ${attempt.id}`);
+      if (session.assessmentType === 'coding') {
+        await CodingAttempt.update(
+          { status: 'SUBMITTED', submittedAt: new Date() },
+          { where: { id: attemptId, status: 'IN_PROGRESS' } },
+        );
+      } else {
+        const attempt = await QuizAttempt.findOne({
+          where: { id: attemptId, status: 'IN_PROGRESS' },
+        });
+        if (attempt) {
+          await aiQuizService.submitAndGradeAttempt(attempt, [], { autoSubmit: true });
+        }
       }
     } catch (e) {
       logger.warn('Failed to auto-submit attempt on terminate', { err: e.message });
-      // Fallback: just flag as submitted so scoring can be retried later
       try {
-        await QuizAttempt.update(
+        const model = session.assessmentType === 'coding' ? CodingAttempt : QuizAttempt;
+        await model.update(
           { status: 'SUBMITTED', submittedAt: new Date() },
-          { where: { id: session.attemptId, status: 'IN_PROGRESS' } },
+          { where: { id: attemptId, status: 'IN_PROGRESS' } },
         );
       } catch (e2) {
         logger.warn('Failed to flag attempt SUBMITTED on terminate', { err: e2.message });
@@ -404,17 +466,60 @@ async function submitSession(session) {
 // ── Violation handling ──────────────────────────────────────────────────────
 function severityFor(type) {
   if (CRITICAL_TYPES.has(type)) return 'CRITICAL';
-  if (type === 'FULLSCREEN_EXIT') return 'HIGH';
-  if (WARNING_TYPES.has(type)) return 'MEDIUM';
+  if (type === 'FULLSCREEN_EXIT') return 'MEDIUM';
+  if (type === 'SCREEN_SHARE_STOPPED' || type === 'DEVTOOLS_OPENED' || type === 'MULTIPLE_MONITOR_DETECTED' || type === 'SCREEN_SHARE_CHANGED') return 'HIGH';
+  if (type === 'COPY_ATTEMPT' || type === 'PASTE_ATTEMPT' || type === 'RIGHT_CLICK') return 'LOW';
+  if (CHEATING_TYPES.has(type)) return 'MEDIUM';
   return 'LOW';
+}
+
+// Server-side debounce: skip if same type on same session within 5s
+function isDebounced(sessionId, type) {
+  const key = `${sessionId}:${type}`;
+  const now = Date.now();
+  const last = lastViolationTimestamps.get(key) || 0;
+  if (now - last < VIOLATION_DEBOUNCE_MS) return true;
+  lastViolationTimestamps.set(key, now);
+  return false;
+}
+
+// Periodic cleanup of stale debounce entries (call once a minute)
+function cleanDebounceMap() {
+  const cutoff = Date.now() - VIOLATION_DEBOUNCE_MS * 2;
+  for (const [key, ts] of lastViolationTimestamps) {
+    if (ts < cutoff) lastViolationTimestamps.delete(key);
+  }
 }
 
 /**
  * Record a violation, update counters, decide if termination is required.
  * Returns { violation, session, terminated:boolean }
+ *
+ * Monitoring events (HEARTBEAT_LOST etc.) are silently skipped — they
+ * must never create violation rows or increment counters.
  */
 async function recordViolation({ session, type, message, metadata }) {
   if (!type) throw new Error('Violation type required');
+
+  // ── Skip monitoring events entirely ──
+  if (MONITORING_EVENTS.has(type)) {
+    return { violation: null, session, terminated: false };
+  }
+
+  if (!session.quizId && !session.assessmentId) {
+    logger.error('[proctoringService.recordViolation] both quizId and assessmentId are null', {
+      sessionId: session.id,
+      participantId: session.participantId,
+      type,
+    });
+    throw new Error('Cannot record violation: assessment reference is missing from session');
+  }
+
+  // ── Server-side debounce: same type on same session within 5s ──
+  if (isDebounced(session.id, type)) {
+    logger.debug(`[proctoringService] Debounced violation ${type} for session ${session.id}`);
+    return { violation: null, session, terminated: false };
+  }
 
   const severity = severityFor(type);
   const violation = await Violation.create({
@@ -494,9 +599,14 @@ async function recordActivity({ session, eventType, payload }) {
 }
 
 // ── Trainer queries ─────────────────────────────────────────────────────────
-async function getQuizMonitor(quizId) {
+async function getQuizMonitor(assessmentId) {
   const sessions = await ExamSession.findAll({
-    where: { quizId },
+    where: {
+      [Op.or]: [
+        { quizId: assessmentId },
+        { assessmentId, assessmentType: 'coding' },
+      ],
+    },
     order: [['created_at', 'DESC']],
   });
 
@@ -593,7 +703,8 @@ async function expireGracePeriodSessions(io) {
       type: 'NETWORK_TIMEOUT',
     });
     if (io) {
-      io.to(`proctor_quiz_${s.quizId}`).emit('proctor:update', {
+      const roomId = s.quizId || `coding_${s.assessmentId}`;
+      io.to(`proctor_quiz_${roomId}`).emit('proctor:update', {
         type: 'terminated',
         session: buildClientView(s),
       });
@@ -607,6 +718,15 @@ async function expireGracePeriodSessions(io) {
 }
 
 // ── Reaper for stale sessions ───────────────────────────────────────────────
+// Heartbeat is an internal monitoring event.
+// It must NEVER create violation rows or appear in user-facing UI.
+//
+// Instead:
+//   1. Mark the participant offline (isOnline = false)
+//   2. Set disconnectedAt on first detection
+//   3. If still disconnected after NETWORK_DISCONNECT_TIMEOUT_MS (30s),
+//      create ONE NETWORK_DISCONNECTED violation (debounced per session)
+//   4. On reconnect (next heartbeat), clear disconnectedAt and emit status
 async function expireStaleSessions(io) {
   const cutoff = new Date(Date.now() - HEARTBEAT_TIMEOUT_MS);
   const stale = await ExamSession.findAll({
@@ -617,25 +737,58 @@ async function expireStaleSessions(io) {
     },
     limit: 50,
   });
+
+  const now = new Date();
   for (const s of stale) {
     s.isOnline = false;
+    s.disconnectedAt = s.disconnectedAt || now;
     await s.save();
-    const violation = await Violation.create({
-      sessionId: s.id,
-      participantId: s.participantId,
-      quizId: s.quizId,
-      type: 'HEARTBEAT_LOST',
-      severity: 'MEDIUM',
-      message: 'No heartbeat received',
-    });
-    if (io) {
-      io.to(`proctor_quiz_${s.quizId}`).emit('proctor:update', {
-        type: 'violation',
+
+    // Check if 30s grace has elapsed since first disconnection
+    const disconnectedSince = new Date(s.disconnectedAt).getTime();
+    if ((s.quizId || s.assessmentId) && (now.getTime() - disconnectedSince) >= NETWORK_DISCONNECT_TIMEOUT_MS) {
+      const netKey = `net:${s.id}`;
+      const lastNet = lastViolationTimestamps.get(netKey) || 0;
+      const alreadyViolated = lastNet > disconnectedSince;
+
+      if (!alreadyViolated) {
+        lastViolationTimestamps.set(netKey, now.getTime());
+        const violation = await Violation.create({
+          sessionId: s.id,
+          participantId: s.participantId,
+          quizId: s.quizId,
+          type: 'NETWORK_DISCONNECTED',
+          severity: 'MEDIUM',
+          message: `Participant disconnected for ${Math.round((now.getTime() - disconnectedSince) / 1000)}s`,
+          metadata: { disconnectedAt: s.disconnectedAt, reconnectedAt: null, downtimeMs: now.getTime() - disconnectedSince, assessmentId: s.assessmentId, assessmentType: s.assessmentType },
+        });
+
+        s.warningsCount = (s.warningsCount || 0) + 1;
+        await s.save();
+
+        if (io) {
+          const roomId = s.quizId || `coding_${s.assessmentId}`;
+          io.to(`proctor_quiz_${roomId}`).emit('proctor:update', {
+            type: 'violation',
+            session: buildClientView(s),
+            violation,
+          });
+        }
+      }
+    }
+
+    // Always emit online=false status to trainer
+    const roomId = s.quizId || `coding_${s.assessmentId}`;
+    if (io && (s.quizId || s.assessmentId)) {
+      io.to(`proctor_quiz_${roomId}`).emit('proctor:update', {
+        type: 'state',
         session: buildClientView(s),
-        violation,
+        heartbeatLost: true,
       });
     }
   }
+  // Periodically clean old entries from the debounce map
+  cleanDebounceMap();
   return stale.length;
 }
 
@@ -654,15 +807,18 @@ async function autoSubmitExpiredSessions(io) {
     try {
       await submitSession(s);
 
-      if (s.attemptId) {
-        await QuizAttempt.update(
+      const attemptId = s.codingAttemptId || s.attemptId;
+      if (attemptId) {
+        const model = s.assessmentType === 'coding' ? CodingAttempt : QuizAttempt;
+        await model.update(
           { status: 'SUBMITTED', submittedAt: new Date() },
-          { where: { id: s.attemptId, status: 'IN_PROGRESS' } }
+          { where: { id: attemptId, status: 'IN_PROGRESS' } }
         );
       }
 
       if (io) {
-        io.to(`proctor_quiz_${s.quizId}`).emit('proctor:update', {
+        const roomId = s.quizId || `coding_${s.assessmentId}`;
+        io.to(`proctor_quiz_${roomId}`).emit('proctor:update', {
           type: 'submitted',
           session: buildClientView(s)
         });
@@ -683,9 +839,14 @@ async function autoSubmitExpiredSessions(io) {
  * getQuizReport — aggregated monitoring report for all participants in a quiz.
  * Used by the trainer's post-assessment report page.
  */
-async function getQuizReport(quizId) {
+async function getQuizReport(assessmentId) {
   const sessions = await ExamSession.findAll({
-    where: { quizId },
+    where: {
+      [Op.or]: [
+        { quizId: assessmentId },
+        { assessmentId, assessmentType: 'coding' },
+      ],
+    },
     order: [['created_at', 'DESC']],
     include: [
       { model: Violation, as: 'violations', required: false },
@@ -698,10 +859,18 @@ async function getQuizReport(quizId) {
     : [];
   const userMap = new Map(users.map(u => [u.id, u]));
 
-  const quiz = await AIQuiz.findByPk(quizId, { attributes: ['id', 'title', 'timeLimit'] });
+  const firstSession = sessions[0];
+  let quiz = null;
+  if (firstSession?.assessmentType === 'coding') {
+    quiz = await CodingAssessment.findByPk(assessmentId, { attributes: ['id', 'title', 'timeLimit'] });
+  } else {
+    quiz = await AIQuiz.findByPk(assessmentId, { attributes: ['id', 'title', 'timeLimit'] });
+  }
 
   const report = sessions.map(s => {
-    const violations = s.violations || [];
+    const allViolations = s.violations || [];
+    // Filter out monitoring events from user-facing counts
+    const violations = allViolations.filter(v => !MONITORING_EVENTS.has(v.type));
     const violationCounts = {};
     const tabSwitchCount = violations.filter(v => v.type === 'TAB_SWITCH').length;
     const fullscreenExitCount = violations.filter(v => v.type === 'FULLSCREEN_EXIT').length;
@@ -738,6 +907,7 @@ async function getQuizReport(quizId) {
       isScreenSharing: s.isScreenSharing,
       isOnline: s.isOnline,
       violationCount: violations.length,
+      totalViolationCount: allViolations.length,
       tabSwitchCount,
       fullscreenExitCount,
       screenShareInterruptions,
@@ -819,4 +989,7 @@ module.exports = {
   buildClientView,
   expireStaleSessions,
   autoSubmitExpiredSessions,
+  cleanDebounceMap,
+  CHEATING_TYPES,
+  MONITORING_EVENTS,
 };

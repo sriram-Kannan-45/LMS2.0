@@ -269,6 +269,25 @@ const aiService = {
       throw new Error('Failed to generate quiz from prompt: ' + error.message);
     }
   },
+
+  async generateCodingProblemsFromPrompt(prompt, numProblems = 5, difficulty = 'MEDIUM') {
+    const cleanPrompt = (prompt || '').toString().trim();
+    if (!cleanPrompt) throw new Error('Prompt cannot be empty.');
+    try {
+      console.log(`[aiService] Generating coding problems from prompt: "${cleanPrompt}"`);
+      const response = await axios.post(`${AI_SERVICE_URL}/generate-coding-problems`, {
+        prompt: cleanPrompt, numProblems: parseInt(numProblems, 10), difficulty,
+      }, { timeout: AI_TIMEOUT, headers: { 'Content-Type': 'application/json' } });
+      if (!response.data || !response.data.problems) {
+        throw new Error('Invalid response from AI service');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('[aiService] generateCodingProblems failed:', error.message);
+      if (error.code === 'ECONNREFUSED') throw new Error('AI service is not running.');
+      throw new Error('Failed to generate coding problems: ' + error.message);
+    }
+  },
 };
 
 module.exports = aiService;

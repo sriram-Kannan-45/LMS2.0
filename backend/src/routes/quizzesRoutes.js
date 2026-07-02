@@ -1617,12 +1617,16 @@ router.post('/attempts/:attemptId/violation', async (req, res) => {
     const participantId = req.user.id;
     const userAgent = req.headers['user-agent'] || '';
 
+    console.log('[VIOLATION] Payload received:', { attemptId, type, weight, participantId, body: req.body });
+
     const attempt = await QuizAttempt.findOne({
       where: { id: attemptId, participantId }
     });
     if (!attempt) {
+      console.log('[VIOLATION] Attempt not found:', { attemptId, participantId });
       return res.status(404).json({ error: 'Attempt not found' });
     }
+    console.log('[VIOLATION] Found attempt:', { id: attempt.id, quizId: attempt.quizId, status: attempt.status });
 
     const isDisqualifiedStatus = attempt.status === 'disqualified_copy_violation' || attempt.status === 'disqualified_policy_violation';
     if (isDisqualifiedStatus || attempt.status === 'SUBMITTED' || attempt.status === 'EVALUATED') {

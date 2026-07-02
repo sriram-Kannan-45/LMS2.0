@@ -17,7 +17,6 @@ import AchievementsSection from '../components/student/achievements/Achievements
 import LessonsSection from '../components/student/lessons/LessonsSection'
 import ProfileSection from '../components/student/profile/ProfileSection'
 import ParticipantCourses from './ParticipantCourses'
-import ParticipantCodingList from '../components/coding-assessment/ParticipantCodingList'
 import { useContinueLearning } from '../hooks/useContinueLearning'
 import { useSocketEvent } from '../hooks/useSocket'
 
@@ -275,12 +274,6 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
       {tab === 'ai-quizzes' && (
         <motion.div key="ai-quizzes" {...fadeVariant} transition={{ duration: 0.25 }}>
           <AIQuizList user={user} onStartQuiz={handleStartQuiz} />
-        </motion.div>
-      )}
-
-      {tab === 'coding' && (
-        <motion.div key="coding" {...fadeVariant} transition={{ duration: 0.25 }}>
-          <ParticipantCodingList />
         </motion.div>
       )}
 

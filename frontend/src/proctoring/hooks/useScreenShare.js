@@ -1,12 +1,3 @@
-/**
- * useScreenShare — request and monitor a screen-share stream via
- * navigator.mediaDevices.getDisplayMedia. Validates that the user
- * shared their entire screen (displaySurface === 'monitor') and
- * rejects tab/window-only shares.
- *
- *   const { stream, isSharing, request, stop, error } =
- *       useScreenShare({ onStop, onDenied, onInvalidShare });
- */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export default function useScreenShare({ onStop, onDenied, onInvalidShare } = {}) {
@@ -16,6 +7,7 @@ export default function useScreenShare({ onStop, onDenied, onInvalidShare } = {}
   const onStopRef = useRef(onStop);
   const onDeniedRef = useRef(onDenied);
   const onInvalidShareRef = useRef(onInvalidShare);
+  const trackRef = useRef(null);
 
   useEffect(() => { onStopRef.current = onStop; }, [onStop]);
   useEffect(() => { onDeniedRef.current = onDenied; }, [onDenied]);
@@ -35,11 +27,17 @@ export default function useScreenShare({ onStop, onDenied, onInvalidShare } = {}
         audio: false,
       });
 
-      // Post-grant validation: verify the user shared the entire screen
-      // or an application window. Reject browser tab shares only.
       const track = s.getVideoTracks()[0];
+      if (!track) {
+        s.getTracks().forEach(t => t.stop());
+        const e = new Error('No video track available');
+        setError(e); onDeniedRef.current?.(e);
+        return null;
+      }
+
+      trackRef.current = track;
+
       let surface = track?.getSettings?.().displaySurface;
-      // Firefox/Safari may not support getSettings().displaySurface — skip check
       if (surface && surface === 'browser') {
         s.getTracks().forEach(t => t.stop());
         const e = new Error('Please share your entire screen or an application window, not a browser tab.');
@@ -48,17 +46,55 @@ export default function useScreenShare({ onStop, onDenied, onInvalidShare } = {}
         return null;
       }
 
+      await new Promise((resolve) => {
+        if (track.readyState === 'live' && !track.muted) {
+          resolve();
+        } else {
+          const onUnmute = () => {
+            if (track.readyState === 'live') {
+              track.removeEventListener('unmute', onUnmute);
+              resolve();
+            }
+          };
+          track.addEventListener('unmute', onUnmute);
+          setTimeout(resolve, 1000);
+        }
+      });
+
       setStream(s);
       setIsSharing(true);
-      console.log('[useScreenShare] Stream acquired, surface:', surface || 'unknown');
+      console.log('[useScreenShare] Stream acquired and active, surface:', surface || 'unknown');
 
-      // The user can stop sharing at any time via the browser UI.
-      track.addEventListener('ended', () => {
+      const handleEnded = () => {
         console.log('[useScreenShare] Track ended by user/browser');
         setIsSharing(false);
         setStream(null);
         onStopRef.current?.();
-      });
+      };
+
+      const handleMute = () => {
+        console.log('[useScreenShare] Track muted');
+      };
+
+      const handleUnmute = () => {
+        console.log('[useScreenShare] Track unmuted');
+      };
+
+      track.addEventListener('ended', handleEnded);
+      track.addEventListener('mute', handleMute);
+      track.addEventListener('unmute', handleUnmute);
+
+      const cleanup = () => {
+        track.removeEventListener('ended', handleEnded);
+        track.removeEventListener('mute', handleMute);
+        track.removeEventListener('unmute', handleUnmute);
+      };
+
+      const origStop = track.stop.bind(track);
+      track.stop = function() {
+        cleanup();
+        origStop();
+      };
 
       return s;
     } catch (err) {
@@ -70,15 +106,22 @@ export default function useScreenShare({ onStop, onDenied, onInvalidShare } = {}
   }, []);
 
   const stop = useCallback(() => {
-    if (stream) stream.getTracks().forEach(t => t.stop());
+    const track = trackRef.current;
+    if (track) {
+      track.stop();
+    }
     setStream(null);
     setIsSharing(false);
-  }, [stream]);
+  }, []);
 
-  // Cleanup on unmount
-  useEffect(() => () => {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-  }, [stream]);
+  useEffect(() => {
+    const track = trackRef.current;
+    return () => {
+      if (track && track.readyState === 'live') {
+        track.stop();
+      }
+    };
+  }, []);
 
   return { stream, isSharing, request, stop, error };
 }

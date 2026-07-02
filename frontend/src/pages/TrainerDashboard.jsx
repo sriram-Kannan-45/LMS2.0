@@ -6,7 +6,6 @@ import TrainerForm from '../components/TrainerForm'
 import NotesSection from '../components/trainer/notes/NotesSection'
 import ParticipantProfileView from '../components/shared/ParticipantProfileView'
 import TrainerCourses from './TrainerCourses'
-import TrainerCodingAssessments from '../components/coding-assessment/TrainerCodingAssessments'
 import { useToast } from '../components/Toast'
 import Pagination from '../components/Pagination'
 import SortableTableHeader from '../components/SortableTableHeader'
@@ -318,10 +317,6 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
         >
           <NotesSection user={user} />
         </motion.div>
-      )}
-
-      {tab === 'coding' && (
-        <TrainerCodingAssessments />
       )}
 
       {tab === 'enrollments' && (

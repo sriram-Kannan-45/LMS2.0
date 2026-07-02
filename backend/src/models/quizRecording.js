@@ -8,15 +8,10 @@ const QuizRecording = sequelize.define('QuizRecording', {
     primaryKey: true
   },
   assessmentType: {
-    type: DataTypes.ENUM('quiz', 'coding_assessment'),
+    type: DataTypes.ENUM('quiz', 'coding'),
     allowNull: false,
     defaultValue: 'quiz',
     field: 'assessment_type'
-  },
-  codingAttemptId: {
-    type: DataTypes.BIGINT.UNSIGNED,
-    allowNull: true,
-    field: 'coding_attempt_id'
   },
   quizId: {
     type: DataTypes.BIGINT.UNSIGNED,
