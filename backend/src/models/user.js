@@ -56,6 +56,11 @@ const User = sequelize.define('User', {
     type: DataTypes.DATE,
     allowNull: true,
     comment: 'Soft delete timestamp'
+  },
+  passwordVersion: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+    comment: 'Tracks password hash algorithm version for future upgrades'
   }
 }, {
   tableName: 'users',

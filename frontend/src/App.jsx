@@ -143,13 +143,13 @@ function App() {
 
   return (
     <AppThemeProvider>
-      <ToastProvider>
-        <BrowserRouter>
+      <BrowserRouter>
+        <ToastProvider>
           <ErrorBoundary>
             <AppRoutes user={user} onLogin={handleLogin} onLogout={handleLogout} />
           </ErrorBoundary>
-        </BrowserRouter>
-      </ToastProvider>
+        </ToastProvider>
+      </BrowserRouter>
     </AppThemeProvider>
   )
 }

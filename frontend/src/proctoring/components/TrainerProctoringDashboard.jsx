@@ -19,7 +19,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity, AlertTriangle, RefreshCw, Search, Users, X,
   Send, Power, Flag, Eye, EyeOff, MessageSquare, Monitor, Camera,
-  FileText,
+  FileText, Video,
 } from 'lucide-react';
 
 import useProctorMonitor from '../hooks/useProctorMonitor';
@@ -27,6 +27,7 @@ import ParticipantMonitorCard from './ParticipantMonitorCard';
 import { GlassCard, GhostButton } from './ui';
 import { useSocket, useSocketEvent } from '../../hooks/useSocket';
 import { useToast } from '../../components/Toast';
+import RecordingReplay from './RecordingReplay';
 
 const VIOLATION_ICONS = {
   TAB_SWITCH: '🚨',
@@ -67,6 +68,7 @@ export default function TrainerProctoringDashboard({ quizId, quizTitle }) {
   const [warningText, setWarningText] = useState('');
   const [trainerMessages, setTrainerMessages] = useState([]);
   const [loadingViolations, setLoadingViolations] = useState(false);
+  const [replaySession, setReplaySession] = useState(null);
   const modalVideoRef = useRef(null);
   const webcamVideoRef = useRef(null);
   const [liveStreamObj, setLiveStreamObj] = useState({ screen: null, webcam: null });
@@ -460,6 +462,13 @@ export default function TrainerProctoringDashboard({ quizId, quizTitle }) {
                     </button>
 
                     <button
+                      onClick={() => setReplaySession(selectedSession.sessionId)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-violet-100 px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-200 transition"
+                    >
+                      <Video className="h-4 w-4" /> Replay
+                    </button>
+
+                    <button
                       onClick={() => handleTerminate(selectedSession)}
                       className="inline-flex items-center gap-2 rounded-lg bg-rose-100 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-200 transition ml-auto"
                       disabled={selectedSession.status !== 'ACTIVE' && selectedSession.status !== 'PENDING'}
@@ -588,6 +597,19 @@ export default function TrainerProctoringDashboard({ quizId, quizTitle }) {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Recording Replay Modal ─────────────────────────────────────── */}
+      <AnimatePresence>
+        {replaySession && (
+          <RecordingReplay
+            sessionId={replaySession}
+            participantName={
+              sessions.find(s => s.sessionId === replaySession)?.participant?.name || 'Unknown'
+            }
+            onClose={() => setReplaySession(null)}
+          />
         )}
       </AnimatePresence>
     </div>

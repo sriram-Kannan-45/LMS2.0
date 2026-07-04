@@ -5,31 +5,31 @@
 
 /* ─── Dark theme tokens ─── */
 [data-theme='dark'] {
-  --glass-bg: #18181b;
-  --glass-bg-strong: #18181b;
-  --glass-border: #27272a;
+  --glass-bg: #0F172A;
+  --glass-bg-strong: #0F172A;
+  --glass-border: #1E293B;
   --glass-blur: none;
   --glass-blur-strong: none;
 
-  --bg-base: #09090b;
-  --bg-surface: #18181b;
-  --bg-subtle: #27272a;
-  --bg-hover: #27272a;
-  --bg-input: #18181b;
+  --bg-base: #0F172A;
+  --bg-surface: #1E293B;
+  --bg-subtle: #1E293B;
+  --bg-hover: #334155;
+  --bg-input: #1E293B;
 
-  --border-default: #27272a;
-  --border-muted: #18181b;
-  --border-focus: #a78bfa;
+  --border-default: #334155;
+  --border-muted: #1E293B;
+  --border-focus: #60A5FA;
 
-  --accent: #8b5cf6;
-  --accent-hover: #a78bfa;
-  --accent-light: rgba(139, 92, 246, 0.12);
-  --accent-medium: rgba(139, 92, 246, 0.2);
+  --accent: #3B82F6;
+  --accent-hover: #60A5FA;
+  --accent-light: rgba(59,130,246,0.12);
+  --accent-medium: rgba(59,130,246,0.2);
   --accent-glow: transparent;
 
-  --text-primary: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
 
   --gradient-hero: none;
 
@@ -46,20 +46,20 @@
 
 /* ─── Light refinements ─── */
 [data-theme='light'] {
-  --accent: #7c3aed;
-  --accent-hover: #6d28d9;
-  --gradient-primary: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #6366f1 100%);
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --gradient-primary: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
   --gradient-hero: none;
-  --bg-base: #f9fafb;
+  --bg-base: #f8fafc;
   --bg-surface: #ffffff;
-  --bg-subtle: #f4f4f5;
-  --bg-hover: #f4f4f5;
+  --bg-subtle: #f1f5f9;
+  --bg-hover: #f1f5f9;
   --bg-input: #ffffff;
-  --border-default: #e4e4e7;
-  --border-muted: #f4f4f5;
+  --border-default: #e2e8f0;
+  --border-muted: #f1f5f9;
   --glass-bg: #ffffff;
   --glass-bg-strong: #ffffff;
-  --glass-border: #e4e4e7;
+  --glass-border: #e2e8f0;
   --glass-blur: none;
   --glass-blur-strong: none;
   --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.05);
@@ -96,7 +96,7 @@ body {
 
 .glass-surface--hover:hover {
   box-shadow: var(--shadow-md), var(--shadow-glow);
-  border-color: rgba(124, 58, 237, 0.2);
+  border-color: rgba(37, 99, 235, 0.2);
   transform: translateY(-2px);
 }
 
@@ -231,7 +231,7 @@ body {
 .stat-card:hover,
 .training-card:hover {
   box-shadow: var(--shadow-md) !important;
-  border-color: rgba(124, 58, 237, 0.35) !important;
+  border-color: rgba(37, 99, 235, 0.35) !important;
   transform: translateY(-2px) !important;
 }
 
@@ -291,7 +291,7 @@ body {
   margin-top: 4px;
 }
 
-.stat-card--violet .stat-card__icon-wrap { background: rgba(124, 58, 237, 0.12); color: #7c3aed; }
+.stat-card--violet .stat-card__icon-wrap { background: rgba(37, 99, 235, 0.12); color: #2563eb; }
 .stat-card--emerald .stat-card__icon-wrap { background: rgba(16, 185, 129, 0.12); color: #059669; }
 .stat-card--amber .stat-card__icon-wrap { background: rgba(245, 158, 11, 0.12); color: #d97706; }
 .stat-card--blue .stat-card__icon-wrap { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
@@ -349,14 +349,14 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%) !important;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%) !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
   color: #ffffff !important;
 }
 
 .btn-primary:hover {
-  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
   transform: translateY(-1.5px) scale(1.01) !important;
 }
 
@@ -376,14 +376,14 @@ body {
 }
 
 .sidebar-nav-item.active {
-  background: rgba(124, 58, 237, 0.08) !important;
-  color: #7c3aed !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+  color: #2563eb !important;
   box-shadow: none !important;
 }
 
 [data-theme='dark'] .sidebar-nav-item.active {
   background: rgba(139, 92, 246, 0.15) !important;
-  color: #a78bfa !important;
+  color: #60a5fa !important;
 }
 
 /* ─── Tables ─── */

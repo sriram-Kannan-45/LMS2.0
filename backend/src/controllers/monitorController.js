@@ -26,6 +26,7 @@ function buildParticipantView(attempt) {
 
   return {
     id: participant.id || attempt.participantId,
+    attemptId: attempt.id,
     name: participant.name || 'Unknown',
     avatar: participant.avatarUrl || participant.profilePic || null,
     email: participant.email || null,

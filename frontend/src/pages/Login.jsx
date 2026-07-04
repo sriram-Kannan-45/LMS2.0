@@ -65,19 +65,6 @@ export default function LoginPage({ onLogin, defaultRole }) {
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  // If already logged in, redirect to respective hub
-  const savedUser = localStorage.getItem('user')
-  if (savedUser) {
-    try {
-      const parsed = JSON.parse(savedUser)
-      if (parsed?.role === 'ADMIN') return <Navigate to="/admin" replace />
-      if (parsed?.role === 'TRAINER') return <Navigate to="/trainer" replace />
-      if (parsed?.role === 'PARTICIPANT') return <Navigate to="/participant" replace />
-    } catch {
-      localStorage.removeItem('user')
-    }
-  }
-
   useEffect(() => {
     const prevHtmlOverflow = document.documentElement.style.overflow
     const prevBodyOverflow = document.body.style.overflow
@@ -121,6 +108,19 @@ export default function LoginPage({ onLogin, defaultRole }) {
 
   const activeRoleConfig = roles.find(r => r.key === form.role) || roles[0]
 
+  // Redirect if already logged in — must be after all hooks
+  const savedUser = localStorage.getItem('user')
+  if (savedUser) {
+    try {
+      const parsed = JSON.parse(savedUser)
+      if (parsed?.role === 'ADMIN') return <Navigate to="/admin" replace />
+      if (parsed?.role === 'TRAINER') return <Navigate to="/trainer" replace />
+      if (parsed?.role === 'PARTICIPANT') return <Navigate to="/participant" replace />
+    } catch {
+      localStorage.removeItem('user')
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
@@ -159,15 +159,7 @@ export default function LoginPage({ onLogin, defaultRole }) {
         localStorage.removeItem('rememberedEmail')
       }
 
-      setSuccess(`Welcome back! Redirecting...`)
-      showSuccess(`Welcome back, ${data.name || 'user'}!`)
       onLogin(data)
-
-      setTimeout(() => {
-        if (form.role === 'ADMIN') navigate('/admin')
-        else if (form.role === 'TRAINER') navigate('/trainer')
-        else navigate('/participant')
-      }, 500)
     } catch (err) {
       const msg = err.message === 'Failed to fetch' ? 'Cannot connect to server.' : err.message
       setError(msg)

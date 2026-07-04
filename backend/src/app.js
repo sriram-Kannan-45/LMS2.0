@@ -442,14 +442,6 @@ const startServer = async () => {
       logger.warn('Could not start assessment session expiry job', { error: e.message });
     }
 
-    // Parallel monitor system auto-submit cron (every minute)
-    try {
-      const { startMonitorAutoSubmitCron } = require('./jobs/monitorAutoSubmit');
-      startMonitorAutoSubmitCron(io);
-    } catch (e) {
-      logger.warn('Could not start monitor auto-submit cron', { error: e.message });
-    }
-
     // Background heartbeat reaper (60s)
     try {
       const proctoring = require('./services/proctoringService');
@@ -476,10 +468,26 @@ const startServer = async () => {
     // Setup Redis adapter for multi-instance scaling (disabled for local dev)
     logger.info('Running Socket.IO in single-instance mode (Redis disabled for local dev)');
 
+    // Parallel monitor system auto-submit cron (every minute) — must run AFTER socket init
+    try {
+      const { startMonitorAutoSubmitCron } = require('./jobs/monitorAutoSubmit');
+      startMonitorAutoSubmitCron(io);
+    } catch (e) {
+      logger.warn('Could not start monitor auto-submit cron', { error: e.message });
+    }
+
+    // Start the Judge submission worker (BullMQ)
+    try {
+      const { startWorker } = require('./workers/submissionWorker');
+      startWorker(io);
+    } catch (e) {
+      logger.warn('Could not start submission worker (Redis may be unavailable)', { error: e.message });
+    }
+
     // Create default admin if not exists
     const adminExists = await User.findOne({ where: { email: 'admin@test.com' } });
     if (!adminExists) {
-      const hashedPassword = await bcrypt.hash('admin123', 10);
+      const hashedPassword = await bcrypt.hash('admin123', 12);
       await User.create({
         name: 'Admin',
         email: 'admin@test.com',

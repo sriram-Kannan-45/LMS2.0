@@ -515,63 +515,85 @@ exports.start = async (req, res) => {
   }
 };
 
-// ── PARTICIPANT: Run Code (execute with custom input) ──
+// ── PARTICIPANT: Run Code (SAMPLE TESTS ONLY — LeetCode-style) ──
 
 exports.runCode = async (req, res) => {
   try {
-    const { attemptId, problemId, code, language = 'javascript', stdin = '', timeLimit, memoryLimit } = req.body;
-    const executionService = require('../services/codeExecutionService');
+    const { attemptId, problemId, code, language = 'javascript', timeLimit, memoryLimit, input: customInput } = req.body;
+    const { JudgeEngine } = require('../judge/engine');
+    const engine = new JudgeEngine();
 
     let problem = null;
     let execTimeLimit = 5;
     let execMemoryLimit = 256;
 
     if (problemId) {
-      problem = await CodingProblem.findByPk(problemId);
+      problem = await CodingProblem.findByPk(problemId, {
+        include: [{ model: CodingTestCase, as: 'testCases', where: { isHidden: false }, required: false }]
+      });
       if (problem) {
         execTimeLimit = problem.timeLimit || timeLimit || 5;
         execMemoryLimit = problem.memoryLimit || memoryLimit || 256;
       }
     }
-
     execTimeLimit = timeLimit || execTimeLimit || 5;
     execMemoryLimit = memoryLimit || execMemoryLimit || 256;
 
-    const result = await executionService.executeCode(code, language, stdin, execTimeLimit, execMemoryLimit);
+    let sampleTestCases = (problem?.testCases || []).map(tc => ({
+      id: tc.id,
+      input: tc.input,
+      expectedOutput: tc.expectedOutput,
+      timeout: execTimeLimit,
+      memoryLimit: execMemoryLimit,
+      isHidden: false,
+    }));
 
-    const response = {
-      stdout: result.output,
-      stderr: result.error,
-      compileOutput: result.compileOutput || '',
-      status: result.status,
-      executionTime: result.executionTime || 0,
-      memoryUsed: result.memoryUsed || 0,
-      exitCode: result.status === 'ACCEPTED' ? 0 : 1,
-    };
-
-    if (result.status === 'COMPILATION_ERROR') {
-      response.compileOutput = result.error || result.compileOutput || '';
-      response.stderr = '';
+    if (customInput != null && customInput !== '') {
+      sampleTestCases = [{
+        id: null,
+        input: customInput,
+        expectedOutput: null,
+        timeout: execTimeLimit,
+        memoryLimit: execMemoryLimit,
+        isHidden: false,
+      }];
     }
+
+    const results = await engine.runSampleTests({
+      code, language, sampleTestCases,
+      timeLimit: execTimeLimit, memoryLimit: execMemoryLimit,
+    });
+
+    const sampleResults = results.map((r, i) => {
+      const tc = sampleTestCases[i];
+      return {
+        input: tc?.input || '',
+        expectedOutput: tc?.expectedOutput || '',
+        actualOutput: r.actualOutput || '',
+        verdict: r.verdict,
+        passed: r.verdict === 'ACCEPTED',
+        executionTime: r.executionTime || 0,
+        memoryUsed: r.memoryUsed || 0,
+        compileOutput: r.compileOutput || null,
+        error: r.error || null,
+      };
+    });
+
+    const allPassed = sampleResults.every(r => r.passed);
+    const compileOutput = sampleResults.find(r => r.compileOutput)?.compileOutput || '';
+    const stderr = sampleResults.find(r => r.error && !r.compileOutput)?.error || '';
 
     if (attemptId && problemId) {
       try {
-        const { CodingAttempt } = require('../models');
         const attempt = await CodingAttempt.findOne({
           where: { id: attemptId, participantId: req.user.id, status: 'IN_PROGRESS' }
         });
         if (attempt) {
-          let submission = await CodingSubmission.findOne({
-            where: { attemptId, problemId }
-          });
+          let submission = await CodingSubmission.findOne({ where: { attemptId, problemId } });
           if (submission) {
-            submission.code = code;
-            submission.language = language;
-            await submission.save();
+            await submission.update({ code, language });
           } else {
-            submission = await CodingSubmission.create({
-              attemptId, problemId, code, language, status: 'PENDING',
-            });
+            await CodingSubmission.create({ attemptId, problemId, code, language, status: 'PENDING' });
           }
         }
       } catch (saveErr) {
@@ -579,7 +601,29 @@ exports.runCode = async (req, res) => {
       }
     }
 
-    ok(res, { result: response });
+    const hasCompileError = sampleResults.some(r => r.verdict === 'COMPILATION_ERROR');
+    if (hasCompileError) {
+      return ok(res, {
+        run: {
+          status: 'COMPILATION_ERROR',
+          compileOutput,
+          sampleResults,
+          allPassed: false,
+        }
+      });
+    }
+
+    ok(res, {
+      run: {
+        status: allPassed ? 'ACCEPTED' : 'WRONG_ANSWER',
+        compileOutput,
+        stderr,
+        executionTime: Math.max(...sampleResults.map(r => r.executionTime || 0)),
+        memoryUsed: Math.max(...sampleResults.map(r => r.memoryUsed || 0)),
+        sampleResults,
+        allPassed,
+      }
+    });
   } catch (err) {
     logger.error('Run code error', { error: err.message });
     fail(res, 500, err.message || 'Code execution failed');
@@ -617,7 +661,7 @@ exports.saveCode = async (req, res) => {
   } catch (err) { fail(res, 500, err.message); }
 };
 
-// ── PARTICIPANT: Submit Code ──
+// ── PARTICIPANT: Submit Code (ALL TESTS — enterprise queue-based) ──
 
 exports.submitCode = async (req, res) => {
   try {
@@ -634,55 +678,46 @@ exports.submitCode = async (req, res) => {
       return fail(res, 400, 'This problem has no test cases configured. Please contact your trainer.');
     }
 
-    const visibleCases = testCases.filter(tc => !tc.isHidden);
-    const hiddenCases = testCases.filter(tc => tc.isHidden);
-
-    const executionService = require('../services/codeExecutionService');
-    const visibleResults = await executionService.runTests(code, language, visibleCases, problem.timeLimit, problem.memoryLimit);
-    const hiddenResults = await executionService.runTests(code, language, hiddenCases, problem.timeLimit, problem.memoryLimit);
-
-    const allResults = [...visibleResults, ...hiddenResults];
-    const totalTestCases = allResults.length;
-    const passedTestCases = allResults.filter(r => r.passed).length;
-    const maxExecTime = Math.max(...allResults.map(r => r.executionTime || 0));
-    const maxMemory = Math.max(...allResults.map(r => r.memoryUsed || 0));
-
-    if (Number.isNaN(maxExecTime) || !Number.isFinite(maxExecTime)) {
-      return fail(res, 500, 'Invalid execution time received from code runner. Please try again.');
-    }
-
-    const score = totalTestCases > 0 ? (passedTestCases / totalTestCases) * (problem.marks || 10) : 0;
-
-    const isAccepted = passedTestCases === totalTestCases;
-    let status = 'FAILED';
-    if (isAccepted) status = 'ACCEPTED';
-    else if (allResults.some(r => r.status === 'TIME_LIMIT_EXCEEDED')) status = 'TIME_LIMIT_EXCEEDED';
-    else if (allResults.some(r => r.status === 'RUNTIME_ERROR')) status = 'RUNTIME_ERROR';
-    else if (allResults.some(r => r.status === 'COMPILATION_ERROR')) status = 'COMPILATION_ERROR';
-    else if (passedTestCases > 0) status = 'WRONG_ANSWER';
+    const tcData = testCases.map(tc => ({
+      id: tc.id,
+      input: tc.input,
+      expectedOutput: tc.expectedOutput,
+      isHidden: tc.isHidden,
+      weight: tc.weight || 1,
+      timeout: tc.timeout || problem.timeLimit || 5,
+      memoryLimit: tc.memoryLimit || problem.memoryLimit || 256,
+    }));
 
     const submission = await CodingSubmission.create({
-      attemptId, problemId, code, language, status,
-      totalTestCases, passedTestCases,
-      executionTime: maxExecTime, memoryUsed: maxMemory,
-      score: Math.round(score * 100) / 100,
-      output: allResults.map(r => ({
-        testCaseId: r.testCaseId, input: r.input, expectedOutput: r.expectedOutput,
-        actualOutput: r.actualOutput, passed: r.passed, status: r.status,
-        executionTime: r.executionTime, memoryUsed: r.memoryUsed, isHidden: r.isHidden
-      }))
+      attemptId, problemId, code, language, status: 'PENDING',
+      totalTestCases: tcData.length, passedTestCases: 0,
+      executionTime: 0, memoryUsed: 0, score: 0,
+    });
+
+    const io = req.app.get('io');
+
+    const { enqueueSubmission } = require('../queues/submissionQueue');
+    await enqueueSubmission({
+      submissionId: submission.id,
+      attemptId,
+      problemId,
+      code,
+      language,
+      timeLimit: problem.timeLimit || 5,
+      memoryLimit: problem.memoryLimit || 256,
+      testCases: tcData,
+      participantId: req.user.id,
+      assessmentId: attempt.assessmentId,
+      io,
     });
 
     ok(res, {
       submission: {
-        id: submission.id, status: submission.status, score: submission.score,
-        totalTestCases, passedTestCases, executionTime: maxExecTime, memoryUsed: maxMemory,
-        results: visibleResults.map(r => ({
-          input: r.input, expectedOutput: r.expectedOutput, actualOutput: r.actualOutput,
-          passed: r.passed, status: r.status, executionTime: r.executionTime, memoryUsed: r.memoryUsed
-        })),
-        hiddenCount: hiddenCases.length,
-        allPassed: isAccepted
+        id: submission.id,
+        status: 'PENDING',
+        message: 'Submission queued for evaluation',
+        totalTestCases: tcData.length,
+        hiddenCount: tcData.filter(tc => tc.isHidden).length,
       }
     });
   } catch (err) {
@@ -698,99 +733,167 @@ exports.submitCode = async (req, res) => {
   }
 };
 
+// ── PARTICIPANT: Get Submission (with live result) ──
+
+exports.getSubmission = async (req, res) => {
+  try {
+    const submission = await CodingSubmission.findByPk(req.params.id, {
+      include: [{ model: CodingProblem, as: 'problem', attributes: ['id', 'title'] }]
+    });
+    if (!submission) return fail(res, 404, 'Submission not found');
+
+    const attempt = await CodingAttempt.findByPk(submission.attemptId);
+    if (attempt && attempt.participantId !== req.user.id && req.user.role !== 'TRAINER' && req.user.role !== 'ADMIN') {
+      return fail(res, 403, 'Access denied');
+    }
+
+    const output = submission.output || [];
+    const visibleResults = output.filter(r => !r.isHidden);
+    const totalHidden = output.filter(r => r.isHidden).length;
+    const passedHidden = output.filter(r => r.isHidden && r.passed).length;
+
+    ok(res, {
+      submission: {
+        id: submission.id,
+        status: submission.status,
+        score: submission.score,
+        totalTestCases: submission.totalTestCases,
+        passedTestCases: submission.passedTestCases,
+        executionTime: submission.executionTime,
+        memoryUsed: submission.memoryUsed,
+        compilerOutput: submission.compilerOutput,
+        errorMessage: submission.errorMessage,
+        failedTestCase: submission.failedTestCase,
+        language: submission.language,
+        createdAt: submission.created_at || submission.createdAt,
+        results: visibleResults.map(r => ({
+          input: r.input,
+          expectedOutput: r.expectedOutput,
+          actualOutput: r.actualOutput,
+          passed: r.passed,
+          verdict: r.verdict || r.status,
+          executionTime: r.executionTime,
+          memoryUsed: r.memoryUsed,
+        })),
+        hiddenSummary: totalHidden > 0 ? { totalHidden, passedHidden } : null,
+      }
+    });
+  } catch (err) { fail(res, 500, err.message); }
+};
+
 // ── PARTICIPANT: Submit entire assessment ──
 
 exports.submitAssessment = async (req, res) => {
   try {
     const { attemptId } = req.params;
-    const attempt = await CodingAttempt.findOne({
-      where: { id: attemptId, participantId: req.user.id, status: 'IN_PROGRESS' },
-      include: [
-        { model: CodingSubmission, as: 'submissions' },
-        { model: CodingAssessment, as: 'assessment', include: [{ model: CodingProblem, as: 'problems', include: [{ model: CodingTestCase, as: 'testCases' }] }] }
-      ]
-    });
-    if (!attempt) return fail(res, 404, 'Attempt not found or already submitted');
-    const problems = attempt.assessment.problems || [];
     const executionService = require('../services/codeExecutionService');
 
-    const existingSubs = attempt.submissions || [];
-    const evaluatedProblemIds = new Set(existingSubs.filter(s => s.status !== 'PENDING' && s.totalTestCases > 0).map(s => s.problemId));
-    const problemData = req.body.submissions || [];
+    // Use a transaction with row lock to prevent duplicate submissions atomically
+    const result = await sequelize.transaction(async (t) => {
+      const attempt = await CodingAttempt.findOne({
+        where: { id: attemptId, participantId: req.user.id },
+        include: [
+          { model: CodingSubmission, as: 'submissions' },
+          { model: CodingAssessment, as: 'assessment', include: [{ model: CodingProblem, as: 'problems', include: [{ model: CodingTestCase, as: 'testCases' }] }] }
+        ],
+        lock: t.LOCK.UPDATE,
+        transaction: t
+      });
+      if (!attempt) throw Object.assign(new Error('Attempt not found'), { status: 404 });
+      if (attempt.status !== 'IN_PROGRESS') throw Object.assign(new Error('Attempt already submitted'), { status: 409 });
 
-    for (const pd of problemData) {
-      if (evaluatedProblemIds.has(pd.problemId)) continue;
-      const problem = problems.find(p => p.id === pd.problemId);
-      if (!problem) continue;
+      const problems = attempt.assessment.problems || [];
+      const existingSubs = attempt.submissions || [];
+      const evaluatedProblemIds = new Set(existingSubs.filter(s => s.status !== 'PENDING' && s.totalTestCases > 0).map(s => s.problemId));
+      const problemData = req.body.submissions || [];
 
-      const testCases = problem.testCases || [];
-      if (testCases.length === 0) continue;
+      for (const pd of problemData) {
+        if (evaluatedProblemIds.has(pd.problemId)) continue;
+        const problem = problems.find(p => p.id === pd.problemId);
+        if (!problem) continue;
 
-      try {
-        const results = await executionService.runTests(pd.code, pd.language || 'javascript', testCases, problem.timeLimit, problem.memoryLimit);
-        const totalTC = results.length;
-        const passedTC = results.filter(r => r.passed).length;
-        const maxExecTime = Math.max(...results.map(r => r.executionTime || 0));
-        const maxMem = Math.max(...results.map(r => r.memoryUsed || 0));
-        const score = totalTC > 0 ? (passedTC / totalTC) * (problem.marks || 10) : 0;
-        const isAccepted = passedTC === totalTC;
-        let status = 'FAILED';
-        if (isAccepted) status = 'ACCEPTED';
-        else if (results.some(r => r.status === 'TIME_LIMIT_EXCEEDED')) status = 'TIME_LIMIT_EXCEEDED';
-        else if (results.some(r => r.status === 'RUNTIME_ERROR')) status = 'RUNTIME_ERROR';
-        else if (results.some(r => r.status === 'COMPILATION_ERROR')) status = 'COMPILATION_ERROR';
-        else if (passedTC > 0) status = 'WRONG_ANSWER';
+        const testCases = problem.testCases || [];
+        if (testCases.length === 0) continue;
 
-        let submission = existingSubs.find(s => s.problemId === pd.problemId);
-        if (submission) {
-          await submission.update({
-            code: pd.code, language: pd.language || 'javascript', status,
-            totalTestCases: totalTC, passedTestCases: passedTC,
-            executionTime: maxExecTime, memoryUsed: maxMem,
-            score: Math.round(score * 100) / 100,
-            output: results.map(r => ({
-              testCaseId: r.testCaseId, input: r.input, expectedOutput: r.expectedOutput,
-              actualOutput: r.actualOutput, passed: r.passed, status: r.status,
-              executionTime: r.executionTime, memoryUsed: r.memoryUsed, isHidden: r.isHidden
-            }))
-          });
-        } else {
-          submission = await CodingSubmission.create({
-            attemptId, problemId: pd.problemId, code: pd.code, language: pd.language || 'javascript',
-            status, totalTestCases: totalTC, passedTestCases: passedTC,
-            executionTime: maxExecTime, memoryUsed: maxMem,
-            score: Math.round(score * 100) / 100, output: results
-          });
+        try {
+          const results = await executionService.runTests(pd.code, pd.language || 'javascript', testCases, problem.timeLimit, problem.memoryLimit);
+          const totalTC = results.length;
+          const passedTC = results.filter(r => r.passed).length;
+          const maxExecTime = Math.max(...results.map(r => r.executionTime || 0));
+          const maxMem = Math.max(...results.map(r => r.memoryUsed || 0));
+          const problemMarks = problem.marks || 10;
+          const score = totalTC > 0 ? Math.min((passedTC / totalTC) * problemMarks, problemMarks) : 0;
+          const isAccepted = passedTC === totalTC;
+          let status = 'FAILED';
+          if (isAccepted) status = 'ACCEPTED';
+          else if (results.some(r => r.status === 'TIME_LIMIT_EXCEEDED')) status = 'TIME_LIMIT_EXCEEDED';
+          else if (results.some(r => r.status === 'RUNTIME_ERROR')) status = 'RUNTIME_ERROR';
+          else if (results.some(r => r.status === 'COMPILATION_ERROR')) status = 'COMPILATION_ERROR';
+          else if (passedTC > 0) status = 'WRONG_ANSWER';
+
+          let submission = existingSubs.find(s => s.problemId === pd.problemId);
+          if (submission) {
+            await submission.update({
+              code: pd.code, language: pd.language || 'javascript', status,
+              totalTestCases: totalTC, passedTestCases: passedTC,
+              executionTime: maxExecTime, memoryUsed: maxMem,
+              score: Math.round(score * 100) / 100,
+              output: results.map(r => ({
+                testCaseId: r.testCaseId, input: r.input, expectedOutput: r.expectedOutput,
+                actualOutput: r.actualOutput, passed: r.passed, status: r.status,
+                executionTime: r.executionTime, memoryUsed: r.memoryUsed, isHidden: r.isHidden
+              }))
+            }, { transaction: t });
+          } else {
+            submission = await CodingSubmission.create({
+              attemptId, problemId: pd.problemId, code: pd.code, language: pd.language || 'javascript',
+              status, totalTestCases: totalTC, passedTestCases: passedTC,
+              executionTime: maxExecTime, memoryUsed: maxMem,
+              score: Math.round(score * 100) / 100, output: results
+            }, { transaction: t });
+          }
+        } catch (evalErr) {
+          logger.error('Error evaluating problem during submission', { problemId: pd.problemId, error: evalErr.message });
         }
-      } catch (evalErr) {
-        logger.error('Error evaluating problem during submission', { problemId: pd.problemId, error: evalErr.message });
       }
-    }
 
-    const finalSubs = await CodingSubmission.findAll({ where: { attemptId } });
-    let totalScore = 0;
-    let maxScore = 0;
-    let problemsSolved = 0;
-    let totalTestCases = 0;
-    let passedTestCases = 0;
-    for (const p of problems) {
-      maxScore += (p.marks || 10);
-    }
-    for (const sub of finalSubs) {
-      totalScore += parseFloat(sub.score || 0);
-      totalTestCases += (sub.totalTestCases || 0);
-      passedTestCases += (sub.passedTestCases || 0);
-      if (sub.status === 'ACCEPTED') problemsSolved++;
-    }
-    const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 10000) / 100 : 0;
-    await attempt.update({ status: 'SUBMITTED', submittedAt: new Date(), timeTaken: Math.round((Date.now() - new Date(attempt.startedAt).getTime()) / 1000) });
-    const result = await CodingResult.create({
-      attemptId: attempt.id, assessmentId: attempt.assessmentId, participantId: req.user.id,
-      totalScore, maxScore, percentage, problemsSolved, totalProblems: problems.length,
-      totalTestCases, passedTestCases
+      const finalSubs = await CodingSubmission.findAll({ where: { attemptId }, transaction: t });
+      let totalScore = 0;
+      let maxScore = 0;
+      let problemsSolved = 0;
+      let totalTestCases = 0;
+      let passedTestCases = 0;
+      for (const p of problems) {
+        maxScore += (p.marks || 10);
+      }
+      for (const sub of finalSubs) {
+        totalScore += parseFloat(sub.score || 0);
+        totalTestCases += (sub.totalTestCases || 0);
+        passedTestCases += (sub.passedTestCases || 0);
+        if (sub.status === 'ACCEPTED') problemsSolved++;
+      }
+      totalScore = Math.min(totalScore, maxScore);
+      const percentage = maxScore > 0 ? Math.min(Math.round((totalScore / maxScore) * 10000) / 100, 100) : 0;
+      await attempt.update({
+        status: 'SUBMITTED', submittedAt: new Date(),
+        timeTaken: Math.round((Date.now() - new Date(attempt.startedAt).getTime()) / 1000)
+      }, { transaction: t });
+      const codingResult = await CodingResult.create({
+        attemptId: attempt.id, assessmentId: attempt.assessmentId, participantId: req.user.id,
+        totalScore: Math.min(totalScore, 999.99),
+        maxScore: Math.min(maxScore, 999.99),
+        percentage: Math.min(percentage, 100),
+        problemsSolved, totalProblems: problems.length,
+        totalTestCases, passedTestCases
+      }, { transaction: t });
+      return codingResult;
     });
+
     ok(res, { result });
-  } catch (err) { fail(res, 500, err.message); }
+  } catch (err) {
+    if (err.status) return fail(res, err.status, err.message);
+    fail(res, 500, err.message);
+  }
 };
 
 // ── TRAINER: Results & Participants ──

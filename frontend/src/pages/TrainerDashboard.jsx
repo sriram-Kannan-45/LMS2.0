@@ -208,7 +208,7 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
           <div className="stat-label">Feedback Responses</div>
           <div className="stat-value">{stats.totalFeedbacks}</div>
         </div>
-        <div className="stat-card purple">
+        <div className="stat-card blue">
           <div className="stat-label">Avg Trainer Rating</div>
           <div className="stat-value">{stats.avgTrainerRating}</div>
         </div>

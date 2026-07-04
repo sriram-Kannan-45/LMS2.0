@@ -630,8 +630,8 @@ router.put(
         return res.status(401).json({ error: 'Current password is incorrect' });
       }
 
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      await trainer.update({ password: hashedPassword });
+      const hashedPassword = await bcrypt.hash(newPassword, 12);
+      await trainer.update({ password: hashedPassword, passwordVersion: 2 });
 
       res.json({ message: 'Password changed successfully' });
     } catch (error) {

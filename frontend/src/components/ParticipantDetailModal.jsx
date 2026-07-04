@@ -33,11 +33,12 @@ export default function ParticipantDetailModal({ participant, token, onClose, on
     const fetchData = async () => {
       setLoading(true);
       try {
+        const targetId = participant.attemptId || participant.id;
         const [ssRes, vRes] = await Promise.all([
-          axios.get(`${API_BASE}/trainer/participants/${participant.id}/screenshots`, {
+          axios.get(`${API_BASE}/trainer/participants/${targetId}/screenshots`, {
             headers: authHeaders(token),
           }),
-          axios.get(`${API_BASE}/trainer/participants/${participant.id}/violations`, {
+          axios.get(`${API_BASE}/trainer/participants/${targetId}/violations`, {
             headers: authHeaders(token),
           }),
         ]);

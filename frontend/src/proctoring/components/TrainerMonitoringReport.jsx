@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Download, FileText, Users, AlertTriangle, Clock,
-  Monitor, Eye, Copy, Shield, Activity, ExternalLink, ChevronDown, ChevronUp,
+  Monitor, Eye, Copy, Shield, Activity, ExternalLink, ChevronDown, ChevronUp, Video,
 } from 'lucide-react'
 import { proctorApi } from '../api'
 import { GlassCard } from './ui'
+import RecordingReplay from './RecordingReplay'
 
 const STATUS_COLORS = {
   ACTIVE: 'bg-emerald-100 text-emerald-700',
@@ -21,6 +22,7 @@ export default function TrainerMonitoringReport({ quizId, quizTitle }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
+  const [replaySession, setReplaySession] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -184,6 +186,15 @@ export default function TrainerMonitoringReport({ quizId, quizTitle }) {
                         Termination reason: {s.terminationReason}
                       </div>
                     )}
+
+                    <div className="mt-4 flex items-center gap-2">
+                      <button
+                        onClick={() => setReplaySession(s.sessionId)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-medium text-violet-700 transition hover:bg-violet-100 hover:border-violet-300"
+                      >
+                        <Video className="h-3.5 w-3.5" /> View Recording Replay
+                      </button>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -191,6 +202,19 @@ export default function TrainerMonitoringReport({ quizId, quizTitle }) {
           </motion.div>
         ))}
       </div>
+
+      {/* Recording Replay Modal */}
+      <AnimatePresence>
+        {replaySession && (
+          <RecordingReplay
+            sessionId={replaySession}
+            participantName={
+              report?.sessions?.find(s => s.sessionId === replaySession)?.participant?.name || 'Unknown'
+            }
+            onClose={() => setReplaySession(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

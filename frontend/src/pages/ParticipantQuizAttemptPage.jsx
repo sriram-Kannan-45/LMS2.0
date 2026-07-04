@@ -160,7 +160,7 @@ function ParticipantQuizAttemptPageInner({ user }) {
       console.log('[ParticipantQuizAttemptPage] Activating proctor session...')
       await proctor.activate(s.sessionId, s.sessionToken)
       console.log('[ParticipantQuizAttemptPage] Proctor session active:', proctor.session?.sessionId)
-      startRecording()
+      startRecording(stream)
     } catch (err) {
       console.error('[ParticipantQuizAttemptPage] Failed to start proctor session:', err)
       setSessionError(err?.message || 'Failed to start proctoring session.')

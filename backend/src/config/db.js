@@ -411,7 +411,7 @@ const connectDB = async () => {
               "'RIGHT_CLICK','BLOCKED_SHORTCUT','DEVTOOLS_OPENED','REFRESH_ATTEMPT'," +
               "'NAVIGATION_ATTEMPT','MULTIPLE_LOGIN','NETWORK_LOST','HEARTBEAT_LOST'," +
               "'TERMINATED','SCREENSHOT_ATTEMPT','MOUSE_LEAVE','CLIPBOARD_ATTEMPT'," +
-              "'NETWORK_TIMEOUT','FACE_ABSENT','FACE_MULTIPLE','LOOKING_AWAY','MOBILE_DETECTED'" +
+              "'NETWORK_TIMEOUT','FACE_ABSENT','FACE_MULTIPLE','LOOKING_AWAY','MOBILE_DETECTED','TRAINER_WARNING','MIC_MUTED','CAMERA_OFF','FACE_NOT_VISIBLE'" +
               ") NOT NULL"
             );
           }
@@ -547,6 +547,54 @@ const connectDB = async () => {
         );
         logger.info('✅ Extended quiz_recordings.assessment_type ENUM to include coding');
       } catch (_) { /* table may not exist */ }
+
+      // Fix users.status ENUM to include 'INACTIVE' (for soft-delete of trainers/participants)
+      try {
+        const [userCols] = await sequelize.query("SHOW COLUMNS FROM `users` WHERE `Field` = 'status'");
+        if (userCols.length > 0) {
+          const typeStr = String(userCols[0].Type).toUpperCase();
+          if (!typeStr.includes('INACTIVE')) {
+            logger.info('🔄 Updating users.status ENUM to include INACTIVE...');
+            await sequelize.query(
+              "ALTER TABLE `users` MODIFY COLUMN `status` ENUM('PENDING','APPROVED','INACTIVE') NOT NULL DEFAULT 'PENDING'"
+            );
+          }
+        }
+      } catch (userStatusErr) {
+        logger.error('⚠️ Error updating users.status ENUM', { error: userStatusErr.message });
+      }
+
+      // Fix coding_submissions.status ENUM to include new judge verdicts
+      try {
+        const [csCols] = await sequelize.query("SHOW COLUMNS FROM `coding_submissions` WHERE `Field` = 'status'");
+        if (csCols.length > 0) {
+          const typeStr = String(csCols[0].Type).toUpperCase();
+          if (!typeStr.includes('OUTPUT_LIMIT_EXCEEDED')) {
+            logger.info('🔄 Updating coding_submissions.status ENUM with full verdicts...');
+            await sequelize.query(
+              "ALTER TABLE `coding_submissions` MODIFY COLUMN `status` ENUM('PENDING','RUNNING','COMPILING','ACCEPTED','WRONG_ANSWER','TIME_LIMIT_EXCEEDED','MEMORY_LIMIT_EXCEEDED','RUNTIME_ERROR','COMPILATION_ERROR','OUTPUT_LIMIT_EXCEEDED','PRESENTATION_ERROR','INTERNAL_ERROR','FAILED') NOT NULL DEFAULT 'PENDING'"
+            );
+          }
+        }
+      } catch (csErr) {
+        logger.error('⚠️ Error updating coding_submissions.status ENUM', { error: csErr.message });
+      }
+
+      // Add missing columns to coding_submissions
+      try {
+        const [csCols] = await sequelize.query("SHOW COLUMNS FROM `coding_submissions`");
+        const csNames = csCols.map(c => c.Field);
+        if (!csNames.includes('compiler_output')) {
+          await sequelize.query("ALTER TABLE `coding_submissions` ADD COLUMN `compiler_output` TEXT NULL AFTER `output`");
+          logger.info('➕ Added compiler_output to coding_submissions');
+        }
+        if (!csNames.includes('failed_test_case')) {
+          await sequelize.query("ALTER TABLE `coding_submissions` ADD COLUMN `failed_test_case` INT NULL AFTER `error_message`");
+          logger.info('➕ Added failed_test_case to coding_submissions');
+        }
+      } catch (csErr) {
+        logger.error('⚠️ Error adding columns to coding_submissions', { error: csErr.message });
+      }
 
       logger.info('✅ Manual schema migration checks completed successfully');
     } catch (migError) {

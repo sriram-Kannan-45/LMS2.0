@@ -420,7 +420,7 @@ const deleteTrainer = async (req, res) => {
   } catch (error) {
     await t.rollback();
     console.error('[deleteTrainer] Caught exception during deletion:', error);
-    
+
     if (error.name === 'SequelizeForeignKeyConstraintError') {
       return res.status(409).json({
         success: false,
@@ -428,13 +428,27 @@ const deleteTrainer = async (req, res) => {
       });
     }
 
-    logger.error('Delete trainer error:', {
-      method: req.method,
-      url: req.originalUrl,
-      trainerId: id,
-      error: error.message,
-      stack: error.stack,
-    });
+    if (error.name === 'SequelizeDatabaseError' && error.message && error.message.includes('Data truncated')) {
+      try {
+        const { sequelize } = require('../config/db');
+        const [colDef] = await sequelize.query("SHOW COLUMNS FROM `users` WHERE `Field` = 'status'");
+        const allowed = colDef.length > 0 ? colDef[0].Type : 'unknown';
+        logger.error('[deleteTrainer] Data truncated on users.status — ENUM may not include INACTIVE. Allowed values:', {
+          allowedEnum: allowed,
+          attemptedValue: 'INACTIVE',
+          trainerId: id
+        });
+      } catch (_) {}
+    } else {
+      logger.error('Delete trainer error:', {
+        method: req.method,
+        url: req.originalUrl,
+        trainerId: id,
+        error: error.message,
+        stack: error.stack,
+      });
+    }
+
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -635,58 +649,139 @@ const deleteParticipant = async (req, res) => {
       return res.status(404).json({ error: 'Participant not found' });
     }
 
+    const { Op } = require('sequelize');
     const {
       Enrollment, Feedback, Notification, ParticipantProfile,
       DeviceFingerprint, ParticipantTracking, Certificate, Attendance, DiscussionPost,
-      LessonProgress, QuizProgress, QuizAttempt, QuizAnswer, QuizResult, AssessmentSession,
-      ExamSession, Violation
+      LessonProgress, QuizProgress, QuizAttempt, QuizAnswer, QuizResult,
+      AssessmentSession, ExamSession, Violation, Screenshot, ProctorActivity,
+      QuizCopyViolation, QuizAssignment, AssessmentSubmission,
+      MonitorAttempt, MonitorViolation, MonitorScreenshot,
+      CodingAttempt, CodingSubmission, CodingResult,
+      QuizRecording, QuizResultsAudit
     } = require('../models');
-    const { Op } = require('sequelize');
 
-    // A. Quiz attempts, answers, results cleanup
-    const attempts = await QuizAttempt.findAll({ where: { participantId: id }, attributes: ['id'], transaction: t });
+    // 1. Quiz attempt related cleanup — child tables before QuizAttempt
+    const attempts = await QuizAttempt.findAll({
+      where: { participantId: id }, attributes: ['id'], transaction: t
+    });
     const attemptIds = attempts.map(a => a.id);
+
     if (attemptIds.length > 0) {
-      await QuizAnswer.destroy({ where: { attemptId: { [Op.in]: attemptIds } }, transaction: t });
-      await QuizResult.destroy({ where: { attemptId: { [Op.in]: attemptIds } }, transaction: t });
-      await QuizProgress.destroy({ where: { lessonQuizId: { [Op.in]: attemptIds } }, transaction: t }).catch(() => {});
-      await AssessmentSession.destroy({ where: { attemptId: { [Op.in]: attemptIds } }, transaction: t });
-      await ExamSession.destroy({ where: { attemptId: { [Op.in]: attemptIds } }, transaction: t });
+      await QuizCopyViolation.destroy({
+        where: { attemptId: { [Op.in]: attemptIds } }, transaction: t
+      });
+      await QuizAnswer.destroy({
+        where: { attemptId: { [Op.in]: attemptIds } }, transaction: t
+      });
+      await QuizResult.destroy({
+        where: { attemptId: { [Op.in]: attemptIds } }, transaction: t
+      });
+      await AssessmentSession.destroy({
+        where: { attemptId: { [Op.in]: attemptIds } }, transaction: t
+      });
+      await ExamSession.destroy({
+        where: { attemptId: { [Op.in]: attemptIds } }, transaction: t
+      });
     }
 
-    // B. Exam Sessions & Violations
-    const examSessions = await ExamSession.findAll({ where: { participantId: id }, attributes: ['id'], transaction: t });
+    // 2. Exam session & proctoring cleanup — children (Violation, Screenshot, ProctorActivity) before ExamSession
+    const examSessions = await ExamSession.findAll({
+      where: { participantId: id }, attributes: ['id'], transaction: t
+    });
     const sessionIds = examSessions.map(e => e.id);
+
     if (sessionIds.length > 0) {
-      await Violation.destroy({ where: { sessionId: { [Op.in]: sessionIds } }, transaction: t });
-      await ExamSession.destroy({ where: { id: { [Op.in]: sessionIds } }, transaction: t });
+      await Violation.destroy({
+        where: { sessionId: { [Op.in]: sessionIds } }, transaction: t
+      });
+      await Screenshot.destroy({
+        where: { sessionId: { [Op.in]: sessionIds } }, transaction: t
+      });
+      await ProctorActivity.destroy({
+        where: { sessionId: { [Op.in]: sessionIds } }, transaction: t
+      });
+      await ExamSession.destroy({
+        where: { id: { [Op.in]: sessionIds } }, transaction: t
+      });
     }
+    // Catch any records linked directly to the participant (orphans)
     await Violation.destroy({ where: { participantId: id }, transaction: t });
+    await Screenshot.destroy({ where: { participantId: id }, transaction: t });
+    await ProctorActivity.destroy({ where: { participantId: id }, transaction: t });
     await AssessmentSession.destroy({ where: { participantId: id }, transaction: t });
 
-    // C. Discussion posts nesting
-    const posts = await DiscussionPost.findAll({ where: { userId: id }, attributes: ['id'], transaction: t });
+    // 3. Discussion posts — detach children first, then delete the user's posts
+    const posts = await DiscussionPost.findAll({
+      where: { userId: id }, attributes: ['id'], transaction: t
+    });
     const postIds = posts.map(p => p.id);
     if (postIds.length > 0) {
-      await DiscussionPost.update({ parentId: null }, { where: { parentId: { [Op.in]: postIds } }, transaction: t });
+      await DiscussionPost.update(
+        { parentId: null },
+        { where: { parentId: { [Op.in]: postIds } }, transaction: t }
+      );
     }
     await DiscussionPost.destroy({ where: { userId: id }, transaction: t });
 
-    // E. General Student records cleanup
-    await Promise.all([
-      Notification.destroy({ where: { userId: id }, transaction: t }),
-      ParticipantProfile.destroy({ where: { userId: id }, transaction: t }),
-      DeviceFingerprint.destroy({ where: { userId: id }, transaction: t }),
-      ParticipantTracking.destroy({ where: { userId: id }, transaction: t }),
-      Certificate.destroy({ where: { userId: id }, transaction: t }),
-      Attendance.destroy({ where: { userId: id }, transaction: t }),
-      LessonProgress.destroy({ where: { participantId: id }, transaction: t }),
-      Feedback.destroy({ where: { participantId: id }, transaction: t }),
-      Enrollment.destroy({ where: { participantId: id }, transaction: t }),
-      QuizAttempt.destroy({ where: { participantId: id }, transaction: t })
-    ]);
+    // 4. Coding attempt cleanup
+    const codingAttempts = await CodingAttempt.findAll({
+      where: { participantId: id }, attributes: ['id'], transaction: t
+    });
+    const codingAttemptIds = codingAttempts.map(ca => ca.id);
 
-    // F. Destroy User
+    if (codingAttemptIds.length > 0) {
+      await CodingSubmission.destroy({
+        where: { attemptId: { [Op.in]: codingAttemptIds } }, transaction: t
+      });
+      await CodingResult.destroy({
+        where: { attemptId: { [Op.in]: codingAttemptIds } }, transaction: t
+      });
+      await CodingAttempt.destroy({
+        where: { id: { [Op.in]: codingAttemptIds } }, transaction: t
+      });
+    }
+
+    // 5. Monitor system cleanup
+    const monitorAttempts = await MonitorAttempt.findAll({
+      where: { participantId: id }, attributes: ['id'], transaction: t
+    });
+    const monitorAttemptIds = monitorAttempts.map(ma => ma.id);
+
+    if (monitorAttemptIds.length > 0) {
+      await MonitorViolation.destroy({
+        where: { attemptId: { [Op.in]: monitorAttemptIds } }, transaction: t
+      });
+      await MonitorScreenshot.destroy({
+        where: { attemptId: { [Op.in]: monitorAttemptIds } }, transaction: t
+      });
+      await MonitorAttempt.destroy({
+        where: { id: { [Op.in]: monitorAttemptIds } }, transaction: t
+      });
+    }
+
+    // 6. QuizProgress — fix: use participantId (was incorrectly filtering by lessonQuizId)
+    await QuizProgress.destroy({ where: { participantId: id }, transaction: t });
+
+    // 7. Other participant-scoped tables
+    await AssessmentSubmission.destroy({ where: { participantId: id }, transaction: t });
+    await QuizRecording.destroy({ where: { participantId: id }, transaction: t });
+    await QuizResultsAudit.destroy({ where: { performedBy: id }, transaction: t });
+    await QuizAssignment.destroy({ where: { participantId: id }, transaction: t });
+
+    // 8. General student records (sequentially to avoid FK conflicts)
+    await Notification.destroy({ where: { userId: id }, transaction: t });
+    await ParticipantProfile.destroy({ where: { userId: id }, transaction: t });
+    await DeviceFingerprint.destroy({ where: { userId: id }, transaction: t });
+    await ParticipantTracking.destroy({ where: { userId: id }, transaction: t });
+    await Certificate.destroy({ where: { userId: id }, transaction: t });
+    await Attendance.destroy({ where: { userId: id }, transaction: t });
+    await LessonProgress.destroy({ where: { participantId: id }, transaction: t });
+    await Feedback.destroy({ where: { participantId: id }, transaction: t });
+    await Enrollment.destroy({ where: { participantId: id }, transaction: t });
+    await QuizAttempt.destroy({ where: { participantId: id }, transaction: t });
+
+    // 9. Finally destroy the user
     await User.destroy({ where: { id }, transaction: t });
 
     await t.commit();

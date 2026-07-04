@@ -1851,4 +1851,69 @@ router.get('/attempts/:attemptId/violations', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/quizzes
+ * Returns all quizzes for admin/trainer recordings and quiz listing pages.
+ * Supports pagination via ?page=&limit=, and optional ?search=&status= filters.
+ */
+router.get('/', roleMiddleware('ADMIN', 'TRAINER'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search, status } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const where = {};
+
+    if (search) {
+      where.title = { [Op.like]: `%${search}%` };
+    }
+    if (status) {
+      where.status = status.toUpperCase();
+    }
+
+    if (req.user.role === 'TRAINER') {
+      const trainerId = req.user.id;
+      const { Training, CourseTrainerAssignment, TrainingTrainerAssignment } = require('../models');
+      const trainerCourseIds = (await CourseTrainerAssignment.findAll({
+        where: { trainerId }, attributes: ['courseId']
+      })).map(a => a.courseId);
+      const trainerTrainingIds = (await TrainingTrainerAssignment.findAll({
+        where: { trainerId }, attributes: ['trainingId']
+      })).map(a => a.trainingId);
+      const ownTrainings = (await Training.findAll({
+        where: { [Op.or]: [{ trainerId }, { createdBy: trainerId }] },
+        attributes: ['id']
+      })).map(t => t.id);
+
+      where[Op.or] = [
+        { createdBy: trainerId },
+        ...(trainerCourseIds.length ? [{ courseId: trainerCourseIds }] : []),
+        ...(trainerTrainingIds.length ? [{ trainingId: trainerTrainingIds }] : []),
+        ...(ownTrainings.length ? [{ trainingId: ownTrainings }] : []),
+      ];
+    }
+
+    const { count, rows } = await AIQuiz.findAndCountAll({
+      where,
+      include: [
+        { model: Training, as: 'training', attributes: ['id', 'title'] },
+      ],
+      order: [['created_at', 'DESC']],
+      offset,
+      limit: parseInt(limit),
+    });
+
+    res.json({
+      quizzes: rows,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(count / parseInt(limit)),
+      }
+    });
+  } catch (error) {
+    console.error('[GET /api/quizzes] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

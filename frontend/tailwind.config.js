@@ -8,16 +8,16 @@ export default {
     extend: {
       colors: {
         brand: {
-          50: '#f5f3ff',
-          100: '#ede9fe',
-          200: '#ddd6fe',
-          300: '#c4b5fd',
-          400: '#a78bfa',
-          500: '#a855f7',
-          600: '#9333ea',
-          700: '#7c3aed',
-          800: '#6b21a8',
-          900: '#581c87',
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1d4ed8',
+          800: '#1e40af',
+          900: '#1e3a8a',
         },
         slate: {
           50: '#f8fafc',
@@ -104,7 +104,7 @@ export default {
         },
       },
       backgroundImage: {
-        'ai-mesh': 'radial-gradient(ellipse 80% 50% at 20% -10%, rgba(124,58,237,0.15), transparent), radial-gradient(ellipse 60% 40% at 90% 10%, rgba(168,85,247,0.1), transparent)',
+        'ai-mesh': 'radial-gradient(ellipse 80% 50% at 20% -10%, rgba(37,99,235,0.15), transparent), radial-gradient(ellipse 60% 40% at 90% 10%, rgba(59,130,246,0.1), transparent)',
       },
       transitionDuration: {
         fast: '150ms',

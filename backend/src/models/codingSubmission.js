@@ -27,7 +27,7 @@ const CodingSubmission = sequelize.define('CodingSubmission', {
     defaultValue: 'javascript'
   },
   status: {
-    type: DataTypes.ENUM('PENDING', 'RUNNING', 'ACCEPTED', 'WRONG_ANSWER', 'TIME_LIMIT_EXCEEDED', 'MEMORY_LIMIT_EXCEEDED', 'RUNTIME_ERROR', 'COMPILATION_ERROR', 'FAILED'),
+    type: DataTypes.ENUM('PENDING', 'RUNNING', 'COMPILING', 'ACCEPTED', 'WRONG_ANSWER', 'TIME_LIMIT_EXCEEDED', 'MEMORY_LIMIT_EXCEEDED', 'RUNTIME_ERROR', 'COMPILATION_ERROR', 'OUTPUT_LIMIT_EXCEEDED', 'PRESENTATION_ERROR', 'INTERNAL_ERROR', 'FAILED'),
     allowNull: false,
     defaultValue: 'PENDING'
   },
@@ -65,10 +65,21 @@ const CodingSubmission = sequelize.define('CodingSubmission', {
     allowNull: true,
     comment: 'Array of test case results'
   },
+  compilerOutput: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'compiler_output'
+  },
   errorMessage: {
     type: DataTypes.TEXT,
     allowNull: true,
     field: 'error_message'
+  },
+  failedTestCase: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'failed_test_case',
+    comment: 'Index of first failed test case (1-based)'
   },
   submittedAt: {
     type: DataTypes.DATE,

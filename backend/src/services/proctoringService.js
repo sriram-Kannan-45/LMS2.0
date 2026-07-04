@@ -878,7 +878,7 @@ async function getQuizReport(assessmentId) {
       v.type === 'SCREEN_SHARE_STOPPED' || v.type === 'SCREEN_SHARE_DENIED'
     ).length;
     const webcamViolations = violations.filter(v =>
-      v.type === 'FACE_ABSENT' || v.type === 'FACE_MULTIPLE' || v.type === 'LOOKING_AWAY'
+      v.type === 'FACE_ABSENT' || v.type === 'FACE_MULTIPLE' || v.type === 'LOOKING_AWAY' || v.type === 'FACE_NOT_VISIBLE' || v.type === 'CAMERA_OFF' || v.type === 'MIC_MUTED'
     ).length;
     const devtoolsCount = violations.filter(v => v.type === 'DEVTOOLS_OPENED').length;
     const copyPasteCount = violations.filter(v =>

@@ -51,7 +51,7 @@ export const API = {
     TRAININGS:       `${API_BASE}/admin/trainings`,
     TRAINERS:        `${API_BASE}/admin/trainers`,
     PARTICIPANTS:    `${API_BASE}/admin/participants`,
-    DELETE_TRAINING: `${API_BASE}/admin/delete-training`,
+    DELETE_TRAINING: (id) => `${API_BASE}/admin/trainings/${id}`,
     NOTES:           `${API_BASE}/notes/admin/notes`
   },
 
@@ -210,6 +210,7 @@ export const API = {
     START:         (id) => `${API_BASE}/coding/participant/start/${id}`,
     RUN:                  `${API_BASE}/coding/participant/run`,
     SUBMIT_CODE:          `${API_BASE}/coding/participant/submit-code`,
+    SUBMISSION:    (id) => `${API_BASE}/coding/participant/submission/${id}`,
     SUBMIT:        (id) => `${API_BASE}/coding/participant/submit/${id}`,
     PARTICIPANT_RESULT: (id) => `${API_BASE}/coding/participant/assessments/${id}/result`,
   },

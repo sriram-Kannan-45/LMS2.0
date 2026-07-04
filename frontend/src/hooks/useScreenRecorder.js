@@ -15,6 +15,7 @@ let globalMediaRecorder = null
 let globalStream = null
 let globalChunks = []
 const listeners = new Set()
+let globalExternalStream = false // tracks if stream is owned externally (don't stop on cleanup)
 
 function notify() {
   listeners.forEach((cb) => cb())
@@ -39,9 +40,9 @@ export default function useScreenRecorder({
     return () => listeners.delete(cb)
   }, [])
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (existingStream) => {
     try {
-      console.log('[useScreenRecorder] Starting recording...', { assessmentId, participantId, sessionId })
+      console.log('[useScreenRecorder] Starting recording...', { assessmentId, participantId, sessionId, hasExistingStream: !!existingStream })
 
       if (!assessmentId) {
         const errMsg = 'Cannot start recording: assessmentId (quizId) is missing'
@@ -55,10 +56,11 @@ export default function useScreenRecorder({
         return true
       }
 
-      const mediaStream = await navigator.mediaDevices.getDisplayMedia({
+      const mediaStream = existingStream || await navigator.mediaDevices.getDisplayMedia({
         video: { mediaSource: 'screen' },
         audio: false
       })
+      globalExternalStream = !!existingStream
       globalStream = mediaStream
       notify()
 
@@ -133,7 +135,9 @@ export default function useScreenRecorder({
       globalMediaRecorder.stop()
 
       if (globalStream) {
-        globalStream.getTracks().forEach(track => track.stop())
+        if (!globalExternalStream) {
+          globalStream.getTracks().forEach(track => track.stop())
+        }
         globalStream = null
         notify()
       }
@@ -197,7 +201,9 @@ export default function useScreenRecorder({
 
   const cleanup = useCallback(() => {
     if (globalStream) {
-      globalStream.getTracks().forEach(track => track.stop())
+      if (!globalExternalStream) {
+        globalStream.getTracks().forEach(track => track.stop())
+      }
       globalStream = null
     }
     if (globalMediaRecorder && globalMediaRecorder.state !== 'inactive') {

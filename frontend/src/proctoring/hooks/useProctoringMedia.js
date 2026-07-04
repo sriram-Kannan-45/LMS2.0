@@ -1,11 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useProctor } from '../ProctorContext';
+import useFaceDetection from './useFaceDetection';
 
 const AUDIO_CHECK_INTERVAL_MS = 3000;
-const FRAME_SAMPLE_INTERVAL_MS = 5000;
-const HIGH_NOISE_THRESHOLD = 0.35;
-const SUSTAINED_TALK_THRESHOLD = 0.15;
-const TALK_HISTORY_LENGTH = 5;
+const CAMERA_CHECK_INTERVAL_MS = 4000;
+const MIC_CHECK_INTERVAL_MS = 3000;
 
 export default function useProctoringMedia({ enabled = true, onAiAlert } = {}) {
   const proctor = useProctor();
@@ -13,14 +12,19 @@ export default function useProctoringMedia({ enabled = true, onAiAlert } = {}) {
   const setStream = proctor.setProctorStream;
   const [error, setError] = useState(null);
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const frameIntervalRef = useRef(null);
-  const audioIntervalRef = useRef(null);
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
   const dataArrayRef = useRef(null);
   const talkHistoryRef = useRef([]);
   const micSilentCountRef = useRef(0);
+  const cameraOffCountRef = useRef(0);
+  const micMutedCountRef = useRef(0);
+
+  const { faceCount } = useFaceDetection({
+    enabled: enabled && !!stream,
+    stream,
+    videoRef,
+  });
 
   const request = useCallback(async () => {
     setError(null);
@@ -56,14 +60,6 @@ export default function useProctoringMedia({ enabled = true, onAiAlert } = {}) {
     }
     proctor.setCameraGranted(false);
     proctor.setMicGranted(false);
-    if (frameIntervalRef.current) {
-      clearInterval(frameIntervalRef.current);
-      frameIntervalRef.current = null;
-    }
-    if (audioIntervalRef.current) {
-      clearInterval(audioIntervalRef.current);
-      audioIntervalRef.current = null;
-    }
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
       audioCtxRef.current = null;
@@ -102,9 +98,7 @@ export default function useProctoringMedia({ enabled = true, onAiAlert } = {}) {
 
       const history = talkHistoryRef.current;
       history.push(rms);
-      if (history.length > TALK_HISTORY_LENGTH) history.shift();
-
-      const recentAvg = history.reduce((a, b) => a + b, 0) / history.length;
+      if (history.length > 5) history.shift();
 
       micSilentCountRef.current = rms < 0.01 ? micSilentCountRef.current + 1 : 0;
 
@@ -112,15 +106,8 @@ export default function useProctoringMedia({ enabled = true, onAiAlert } = {}) {
         proctor.report('FACE_ABSENT', 'Microphone appears to be disabled or very quiet');
         onAiAlert?.('FACE_ABSENT');
         micSilentCountRef.current = 0;
-      } else if (recentAvg > HIGH_NOISE_THRESHOLD) {
-        proctor.report('LOOKING_AWAY', 'Excessive background noise detected');
-        onAiAlert?.('LOOKING_AWAY');
-      } else if (recentAvg > SUSTAINED_TALK_THRESHOLD && history.length >= TALK_HISTORY_LENGTH) {
-        proctor.report('MOBILE_DETECTED', 'Sustained background conversation detected');
-        onAiAlert?.('MOBILE_DETECTED');
       }
     }, AUDIO_CHECK_INTERVAL_MS);
-    audioIntervalRef.current = audioInterval;
 
     return () => {
       clearInterval(audioInterval);
@@ -131,55 +118,68 @@ export default function useProctoringMedia({ enabled = true, onAiAlert } = {}) {
     };
   }, [enabled, stream, proctor, onAiAlert]);
 
-  // Frame sampling for visual proctoring simulation
+  // Camera track monitoring — detect when camera is turned off
   useEffect(() => {
     if (!enabled || !stream) return;
 
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.muted = true;
-    video.playsInline = true;
-    video.play().catch(() => {});
-    videoRef.current = video;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 160;
-    canvas.height = 120;
-    canvasRef.current = canvas;
-    const context = canvas.getContext('2d');
-
-    frameIntervalRef.current = setInterval(() => {
-      if (!context || video.paused || video.ended) return;
-
-      try {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const rand = Math.random();
-        if (rand < 0.02) {
-          proctor.report('LOOKING_AWAY', 'Candidate is looking away from the screen');
-          onAiAlert?.('LOOKING_AWAY');
-        } else if (rand < 0.035) {
-          proctor.report('FACE_ABSENT', 'No face detected in camera view');
-          onAiAlert?.('FACE_ABSENT');
-        } else if (rand < 0.045) {
-          proctor.report('FACE_MULTIPLE', 'Multiple faces detected in camera view');
-          onAiAlert?.('FACE_MULTIPLE');
-        } else if (rand < 0.05) {
-          proctor.report('MOBILE_DETECTED', 'Mobile phone usage suspected');
-          onAiAlert?.('MOBILE_DETECTED');
+    const cameraInterval = setInterval(() => {
+      const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack) {
+        cameraOffCountRef.current++;
+        if (cameraOffCountRef.current >= 2) {
+          proctor.report('CAMERA_OFF', 'Camera track is no longer available');
+          onAiAlert?.('CAMERA_OFF');
+          cameraOffCountRef.current = 0;
         }
-      } catch (e) {
-        // ignore frame sampling errors
+        return;
       }
-    }, FRAME_SAMPLE_INTERVAL_MS);
+      cameraOffCountRef.current = 0;
 
-    return () => {
-      if (frameIntervalRef.current) {
-        clearInterval(frameIntervalRef.current);
-        frameIntervalRef.current = null;
+      if (videoTrack.readyState === 'ended' || !videoTrack.enabled) {
+        cameraOffCountRef.current++;
+        if (cameraOffCountRef.current >= 2) {
+          proctor.report('CAMERA_OFF', 'Camera was turned off during the assessment');
+          onAiAlert?.('CAMERA_OFF');
+          cameraOffCountRef.current = 0;
+        }
+      } else {
+        cameraOffCountRef.current = Math.max(0, cameraOffCountRef.current - 1);
       }
-      video.pause();
-      video.srcObject = null;
-    };
+    }, CAMERA_CHECK_INTERVAL_MS);
+
+    return () => clearInterval(cameraInterval);
+  }, [enabled, stream, proctor, onAiAlert]);
+
+  // Microphone mute detection
+  useEffect(() => {
+    if (!enabled || !stream) return;
+
+    const micInterval = setInterval(() => {
+      const audioTrack = stream.getAudioTracks()[0];
+      if (!audioTrack) {
+        micMutedCountRef.current++;
+        if (micMutedCountRef.current >= 2) {
+          proctor.report('MIC_MUTED', 'Microphone track is no longer available');
+          onAiAlert?.('MIC_MUTED');
+          micMutedCountRef.current = 0;
+        }
+        return;
+      }
+      micMutedCountRef.current = 0;
+
+      if (audioTrack.readyState === 'ended' || !audioTrack.enabled) {
+        micMutedCountRef.current++;
+        if (micMutedCountRef.current >= 2) {
+          proctor.report('MIC_MUTED', 'Microphone was muted during the assessment');
+          onAiAlert?.('MIC_MUTED');
+          micMutedCountRef.current = 0;
+        }
+      } else {
+        micMutedCountRef.current = Math.max(0, micMutedCountRef.current - 1);
+      }
+    }, MIC_CHECK_INTERVAL_MS);
+
+    return () => clearInterval(micInterval);
   }, [enabled, stream, proctor, onAiAlert]);
 
   return {
@@ -189,5 +189,7 @@ export default function useProctoringMedia({ enabled = true, onAiAlert } = {}) {
     stop,
     cameraGranted: proctor.cameraGranted,
     micGranted: proctor.micGranted,
+    faceCount,
+    videoRef,
   };
 }

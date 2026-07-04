@@ -171,6 +171,8 @@ const initializeSocket = (server) => {
     require('../socket/events/proctorEvents')(io, socket);
     // Register parallel monitor system events
     require('../socket/events/monitorEvents')(io, socket);
+    // Register coding assessment events
+    require('../socket/codingEvents')(io, socket);
   });
 
   return io;

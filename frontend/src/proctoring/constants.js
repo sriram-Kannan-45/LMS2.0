@@ -28,6 +28,9 @@ export const VIOLATION_TYPES = {
   LOOKING_AWAY:         'LOOKING_AWAY',
   MOBILE_DETECTED:      'MOBILE_DETECTED',
   TRAINER_WARNING:      'TRAINER_WARNING',
+  MIC_MUTED:            'MIC_MUTED',
+  CAMERA_OFF:           'CAMERA_OFF',
+  FACE_NOT_VISIBLE:     'FACE_NOT_VISIBLE',
 };
 
 export const VIOLATION_LABELS = {
@@ -55,6 +58,9 @@ export const VIOLATION_LABELS = {
   LOOKING_AWAY:         'Looking away from screen detected',
   MOBILE_DETECTED:      'Mobile device detected in frame',
   TRAINER_WARNING:      'Warning from trainer',
+  MIC_MUTED:            'Microphone was muted during the assessment',
+  CAMERA_OFF:           'Camera was turned off during the assessment',
+  FACE_NOT_VISIBLE:     'Face not visible in camera frame',
 };
 
 export const MAX_FULLSCREEN_EXITS = 3;

@@ -48,6 +48,7 @@ router.post('/participant/start/:assessmentId', roleMiddleware('PARTICIPANT'), c
 router.post('/participant/run', roleMiddleware('PARTICIPANT'), optionalAssessmentSession, ctrl.runCode);
 router.post('/participant/save', roleMiddleware('PARTICIPANT'), optionalAssessmentSession, ctrl.saveCode);
 router.post('/participant/submit-code', roleMiddleware('PARTICIPANT'), optionalAssessmentSession, ctrl.submitCode);
+router.get('/participant/submission/:id', roleMiddleware('PARTICIPANT', 'TRAINER', 'ADMIN'), ctrl.getSubmission);
 router.post('/participant/submit/:attemptId', roleMiddleware('PARTICIPANT'), optionalAssessmentSession, ctrl.submitAssessment);
 router.get('/participant/assessments/:id/result', roleMiddleware('PARTICIPANT'), ctrl.getParticipantResult);
 
