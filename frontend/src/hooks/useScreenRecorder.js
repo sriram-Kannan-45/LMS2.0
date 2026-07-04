@@ -1,25 +1,9 @@
 import { useState, useCallback, useEffect } from 'react'
-import { API_BASE } from '../api/api'
 
-function getAuthToken() {
-  try {
-    const raw = localStorage.getItem('user')
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    return parsed?.token || parsed?.accessToken || null
-  } catch { return null }
-}
-
-// Module-level singleton so the recorder can survive route navigations.
-let globalMediaRecorder = null
+// Module-level singleton so the screen share can survive route navigations.
 let globalStream = null
-let globalChunks = []
-const listeners = new Set()
-let globalExternalStream = false // tracks if stream is owned externally (don't stop on cleanup)
-
-function notify() {
-  listeners.forEach((cb) => cb())
-}
+let globalUserStream = null  // webcam + mic stream
+let globalExternalStream = false // tracks if screen stream is owned externally
 
 export default function useScreenRecorder({
   assessmentType = 'quiz',
@@ -32,172 +16,103 @@ export default function useScreenRecorder({
 } = {}) {
   const [, forceUpdate] = useState(0)
   const [error, setError] = useState(null)
-  const [chunks, setChunks] = useState([])
 
   useEffect(() => {
-    const cb = () => forceUpdate((n) => n + 1)
-    listeners.add(cb)
-    return () => listeners.delete(cb)
+    if (autoStop === false) return
+    return () => cleanup()
+  }, [autoStop])
+
+  const startUserMedia = useCallback(async () => {
+    if (globalUserStream) return globalUserStream
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240, facingMode: 'user' },
+        audio: true,
+      })
+      globalUserStream = stream
+      return stream
+    } catch (err) {
+      console.warn('[useScreenShare] Could not access camera/mic:', err.message)
+      return null
+    }
   }, [])
 
   const startRecording = useCallback(async (existingStream) => {
     try {
-      console.log('[useScreenRecorder] Starting recording...', { assessmentId, participantId, sessionId, hasExistingStream: !!existingStream })
-
       if (!assessmentId) {
-        const errMsg = 'Cannot start recording: assessmentId (quizId) is missing'
-        console.error('[useScreenRecorder]', errMsg)
+        const errMsg = 'Cannot start: assessmentId is missing'
+        console.error('[useScreenShare]', errMsg)
         setError(errMsg)
         return false
       }
 
-      if (globalMediaRecorder && globalMediaRecorder.state !== 'inactive') {
-        console.log('[useScreenRecorder] Already recording')
+      if (globalStream) {
+        console.log('[useScreenShare] Already sharing screen')
         return true
       }
 
-      const mediaStream = existingStream || await navigator.mediaDevices.getDisplayMedia({
+      const screenStream = existingStream || await navigator.mediaDevices.getDisplayMedia({
         video: { mediaSource: 'screen' },
         audio: false
       })
       globalExternalStream = !!existingStream
-      globalStream = mediaStream
-      notify()
 
-      const track = mediaStream.getVideoTracks()[0];
-      if (track) {
-        await new Promise((resolve) => {
-          if (track.readyState === 'live' && !track.muted) {
-            resolve();
-          } else {
-            const onUnmute = () => {
-              if (track.readyState === 'live') {
-                track.removeEventListener('unmute', onUnmute);
-                resolve();
+      const tracks = [...screenStream.getVideoTracks(), ...screenStream.getAudioTracks()]
+      globalStream = screenStream
+      forceUpdate(n => n + 1)
+
+      const videoTrack = screenStream.getVideoTracks()[0]
+
+      const videoTrackReady = videoTrack
+        ? new Promise((resolve) => {
+            if (videoTrack.readyState === 'live' && !videoTrack.muted) {
+              resolve()
+            } else {
+              const onUnmute = () => {
+                if (videoTrack.readyState === 'live') {
+                  videoTrack.removeEventListener('unmute', onUnmute)
+                  resolve()
+                }
               }
-            };
-            track.addEventListener('unmute', onUnmute);
-            setTimeout(resolve, 1000);
-          }
-        });
+              videoTrack.addEventListener('unmute', onUnmute)
+              setTimeout(resolve, 1000)
+            }
+          })
+        : Promise.resolve()
+
+      const [userStream] = await Promise.all([startUserMedia(), videoTrackReady])
+
+      if (userStream) {
+        userStream.getTracks().forEach(t => tracks.push(t))
       }
 
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-        ? 'video/webm;codecs=vp9'
-        : 'video/webm'
-
-      const recorder = new MediaRecorder(mediaStream, { mimeType })
-      globalMediaRecorder = recorder
-      globalChunks = []
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          globalChunks.push(e.data)
-          setChunks([...globalChunks])
-        }
-      }
-
-      recorder.onstop = () => {
-        notify()
-      }
-
-      recorder.onerror = (err) => {
-        setError(err.message || 'Recording error')
-      }
-
-      recorder.start(5000)
       setError(null)
-      notify()
+      forceUpdate(n => n + 1)
       return true
     } catch (err) {
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setError('Screen sharing was denied. Please allow screen sharing for proctored quizzes.')
+        setError('Screen sharing was denied. Please allow screen sharing for proctored assessments.')
       } else {
-        setError(err.message || 'Failed to start screen recording')
+        setError(err.message || 'Failed to start screen sharing')
       }
       return false
     }
-  }, [])
+  }, [startUserMedia])
 
   const stopRecording = useCallback(async () => {
-    return new Promise((resolve) => {
-      if (!globalMediaRecorder || globalMediaRecorder.state === 'inactive') {
-        resolve(null)
-        return
+    if (globalStream) {
+      if (!globalExternalStream) {
+        globalStream.getTracks().forEach(track => track.stop())
       }
-
-      const originalOnStop = globalMediaRecorder.onstop
-      globalMediaRecorder.onstop = () => {
-        if (originalOnStop) originalOnStop()
-        notify()
-      }
-
-      globalMediaRecorder.stop()
-
-      if (globalStream) {
-        if (!globalExternalStream) {
-          globalStream.getTracks().forEach(track => track.stop())
-        }
-        globalStream = null
-        notify()
-      }
-
-      const blob = new Blob(globalChunks, { type: 'video/webm' })
-      resolve(blob)
-    })
+      globalStream = null
+    }
+    if (globalUserStream) {
+      globalUserStream.getTracks().forEach(track => track.stop())
+      globalUserStream = null
+    }
+    forceUpdate(n => n + 1)
+    return null
   }, [])
-
-  const uploadRecording = useCallback(async (blob) => {
-    console.log('[useScreenRecorder] uploadRecording called', {
-      hasBlob: !!blob,
-      assessmentId,
-      participantId,
-      sessionId,
-    })
-    if (!blob || !assessmentId || !participantId || !sessionId) {
-      console.error('[useScreenRecorder] Missing required fields for upload:', {
-        hasBlob: !!blob,
-        assessmentId,
-        participantId,
-        sessionId,
-      })
-      setError('Cannot upload recording: missing quizId, participantId, or sessionId')
-      return null
-    }
-    const token = userToken || getAuthToken()
-    if (!token) {
-      setError('Auth token missing')
-      return null
-    }
-    try {
-      const formData = new FormData()
-      formData.append('recording', blob, `${assessmentType}_${assessmentId}_${participantId}_${Date.now()}.webm`)
-      formData.append('assessment_type', assessmentType)
-      formData.append('participantId', participantId)
-      formData.append('sessionId', sessionId)
-      formData.append('quizId', assessmentId)
-
-      console.log('[useScreenRecorder] Uploading recording...', {
-        quizId: assessmentId,
-        participantId,
-        sessionId,
-        blobSize: blob.size,
-      })
-      const res = await fetch(`${API_BASE}/recordings/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || 'Upload failed')
-      console.log('[useScreenRecorder] Upload successful:', data.data)
-      return data.data
-    } catch (err) {
-      console.error('[useScreenRecorder] Upload failed:', err.message)
-      setError(err.message)
-      return null
-    }
-  }, [assessmentType, assessmentId, codingAttemptId, participantId, sessionId, userToken])
 
   const cleanup = useCallback(() => {
     if (globalStream) {
@@ -206,28 +121,19 @@ export default function useScreenRecorder({
       }
       globalStream = null
     }
-    if (globalMediaRecorder && globalMediaRecorder.state !== 'inactive') {
-      globalMediaRecorder.stop()
+    if (globalUserStream) {
+      globalUserStream.getTracks().forEach(track => track.stop())
+      globalUserStream = null
     }
-    globalMediaRecorder = null
-    globalChunks = []
-    setChunks([])
-    notify()
+    forceUpdate(n => n + 1)
   }, [])
 
-  useEffect(() => {
-    if (autoStop === false) return
-    return () => cleanup()
-  }, [cleanup, autoStop])
-
   return {
-    recording: globalMediaRecorder && globalMediaRecorder.state !== 'inactive',
+    recording: !!globalStream,
     stream: globalStream,
     error,
-    chunks,
     startRecording,
     stopRecording,
-    uploadRecording,
     cleanup
   }
 }

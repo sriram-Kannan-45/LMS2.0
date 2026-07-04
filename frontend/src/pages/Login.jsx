@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation, Navigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Eye, EyeOff, Mail, Lock,
@@ -108,19 +108,6 @@ export default function LoginPage({ onLogin, defaultRole }) {
 
   const activeRoleConfig = roles.find(r => r.key === form.role) || roles[0]
 
-  // Redirect if already logged in — must be after all hooks
-  const savedUser = localStorage.getItem('user')
-  if (savedUser) {
-    try {
-      const parsed = JSON.parse(savedUser)
-      if (parsed?.role === 'ADMIN') return <Navigate to="/admin" replace />
-      if (parsed?.role === 'TRAINER') return <Navigate to="/trainer" replace />
-      if (parsed?.role === 'PARTICIPANT') return <Navigate to="/participant" replace />
-    } catch {
-      localStorage.removeItem('user')
-    }
-  }
-
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
@@ -160,6 +147,11 @@ export default function LoginPage({ onLogin, defaultRole }) {
       }
 
       onLogin(data)
+      const role = data?.role?.toLowerCase()
+      if (role === 'admin') navigate('/admin', { replace: true })
+      else if (role === 'trainer') navigate('/trainer', { replace: true })
+      else if (role === 'participant') navigate('/participant', { replace: true })
+      else navigate('/', { replace: true })
     } catch (err) {
       const msg = err.message === 'Failed to fetch' ? 'Cannot connect to server.' : err.message
       setError(msg)

@@ -6,8 +6,7 @@ import { useToast } from '../components/Toast'
 import { ProctorProvider, useProctor } from '../proctoring/ProctorContext'
 import useDeviceFingerprint from '../proctoring/hooks/useDeviceFingerprint'
 import useScreenRecorder from '../hooks/useScreenRecorder'
-import { Loader2, AlertCircle, Play, Check, X, Clock, Send, Save, Terminal, Bug, Trash2, CheckCircle2, XCircle } from 'lucide-react'
-import RecordingIndicator from '../components/shared/RecordingIndicator'
+import { Loader2, AlertCircle, Play, Check, Clock, Send, Save, Terminal, Bug, Trash2, CheckCircle2, XCircle } from 'lucide-react'
 import CodeEditor from '../components/CodeEditor'
 import ProblemPanel from '../components/ProblemPanel'
 import ExamProctorShell from '../proctoring/components/ExamProctorShell'
@@ -25,6 +24,15 @@ const authHeaders = (token) => ({
 
 function getStorageKey(attemptId) {
   return `${STORAGE_PREFIX}${attemptId}`
+}
+
+const fsApi = {
+  request: (el = document.documentElement) =>
+    (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen)?.call(el),
+  exit: () =>
+    (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen)?.call(document),
+  element: () =>
+    document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement,
 }
 
 const LANGUAGE_MAP = {
@@ -57,7 +65,7 @@ function ParticipantCodingAttemptInner({ user }) {
     }
   }
 
-  const { recording: screenRecording, startRecording, stopRecording, uploadRecording } = useScreenRecorder({
+  const { recording: screenRecording, startRecording, stopRecording } = useScreenRecorder({
     assessmentType: 'coding', assessmentId, participantId: user?.id,
     sessionId: sessionIdParam, userToken: user?.token
   })
@@ -309,6 +317,17 @@ function ParticipantCodingAttemptInner({ user }) {
     setSampleResults([]); setRunStatus(''); setRunTime(null); setRunMemory(null); setSubmitVerdict(null); setOutput('')
   }
 
+  // ── Stop screen share + exit fullscreen ──
+  const handleRecordingCleanup = useCallback(async () => {
+    await stopRecording()
+    if (screenStream) {
+      setScreenStream(null)
+    }
+    if (fsApi.element()) {
+      try { await fsApi.exit() } catch {}
+    }
+  }, [stopRecording, screenStream])
+
   // ── SUBMIT ASSESSMENT ──
   const handleSubmit = async (isTimeout) => {
     if (submittingRef.current || submittedRef.current) return
@@ -332,9 +351,10 @@ function ParticipantCodingAttemptInner({ user }) {
         showSuccess?.('Submitted successfully!')
       }
       setSubmitted(true); clearInterval(timerRef.current)
-      const blob = await stopRecording()
-      if (screenStream) screenStream.getTracks().forEach(t => t.stop())
-      if (blob) { await uploadRecording(blob) }
+
+      // Stop recording, upload, exit fullscreen, stop media streams
+      await handleRecordingCleanup()
+
       localStorage.removeItem(getStorageKey(attemptId)); sessionStorage.removeItem(storageKey)
       navigate(`/trainings/${trainingId}/coding/${assessmentId}/result?attemptId=${attemptId}`)
     } catch (err) { showError?.(err.message || 'Submit failed') }
@@ -342,6 +362,17 @@ function ParticipantCodingAttemptInner({ user }) {
   }
 
   const currentLanguage = languageByProblem[currentProblem?.id] || currentProblem?.programmingLanguage || 'javascript'
+
+  // beforeunload — stop screen share when tab is closed
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      if (screenRecording) {
+        stopRecording()
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [screenRecording, stopRecording])
 
   if (loading || restoring) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#94a3b8' }}><Loader2 size={24} className="animate-spin" /></div>
   if (errorMsg) return <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: 20, textAlign: 'center' }}><AlertCircle size={32} color="#dc2626" style={{ marginBottom: 12 }} /><div style={{ fontSize: 16, fontWeight: 600, color: '#dc2626', marginBottom: 8 }}>{errorMsg}</div><button onClick={() => navigate(`/trainings/${trainingId}`)} style={{ padding: '8px 20px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Go Back</button></div>
@@ -383,7 +414,6 @@ function ParticipantCodingAttemptInner({ user }) {
         <div style={s.header}>
           <div style={s.headerLeft}>
             <span style={s.title}>{assessment?.title}</span>
-            <RecordingIndicator recording={!!screenRecording} />
             {saveStatus && <span style={{ fontSize: 11, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 3 }}><Save size={10} /> {saveStatus}</span>}
           </div>
           <div style={s.headerRight}>
@@ -457,7 +487,6 @@ function ParticipantCodingAttemptInner({ user }) {
                 </div>
               </div>
               <div ref={outputRef} style={s.outputArea}>
-                {/* Judge status indicator */}
                 {judgeStatus && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#818cf8', padding: '8px 0' }}>
                     <Loader2 size={14} className="animate-spin" />
@@ -465,7 +494,6 @@ function ParticipantCodingAttemptInner({ user }) {
                   </div>
                 )}
 
-                {/* Output tab */}
                 {!judgeStatus && activeTab === 'output' && (
                   <div>
                     {runTime !== null && (
@@ -486,7 +514,6 @@ function ParticipantCodingAttemptInner({ user }) {
                   </div>
                 )}
 
-                {/* Test Results tab - LeetCode style */}
                 {!judgeStatus && activeTab === 'testResults' && sampleResults.length > 0 && (
                   <div>
                     <div style={{ marginBottom: 8, fontWeight: 700, color: '#888', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -521,7 +548,6 @@ function ParticipantCodingAttemptInner({ user }) {
                   </div>
                 )}
 
-                {/* Submission verdict tab */}
                 {!judgeStatus && activeTab === 'submitResult' && submitVerdict && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: 16, borderRadius: 8, background: '#16213e' }}>

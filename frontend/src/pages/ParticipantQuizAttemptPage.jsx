@@ -8,12 +8,18 @@ import { Loader2, AlertCircle } from 'lucide-react'
 import { ProctorProvider, useProctor } from '../proctoring/ProctorContext'
 import useDeviceFingerprint from '../proctoring/hooks/useDeviceFingerprint'
 import useScreenRecorder from '../hooks/useScreenRecorder'
-import RecordingIndicator from '../components/shared/RecordingIndicator'
 
 const authHeaders = (token) => ({
   'Content-Type': 'application/json',
   Authorization: `Bearer ${token}`
 })
+
+const fsApi = {
+  exit: () =>
+    (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen)?.call(document),
+  element: () =>
+    document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement,
+}
 
 function ParticipantQuizAttemptPageInner({ user }) {
   const navigate = useNavigate()
@@ -23,15 +29,6 @@ function ParticipantQuizAttemptPageInner({ user }) {
   const proctor = useProctor()
   const fp = useDeviceFingerprint()
 
-  console.log('[ParticipantQuizAttemptPage] Initializing:', {
-    trainingId,
-    quizId,
-    userId: user?.id,
-    attemptIdFromParams: searchParams.get('attemptId'),
-    sessionIdFromParams: searchParams.get('sessionId'),
-    sessionTokenFromParams: !!searchParams.get('sessionToken'),
-  })
-
   let attemptId = searchParams.get('attemptId')
   let sessionToken = searchParams.get('sessionToken')
   const sessionIdParam = searchParams.get('sessionId') || `session_${Date.now()}`
@@ -40,7 +37,6 @@ function ParticipantQuizAttemptPageInner({ user }) {
     const storageKey = `quiz_${quizId}_attempt`
     if (attemptId && sessionToken) {
       sessionStorage.setItem(storageKey, JSON.stringify({ attemptId, sessionToken }))
-      console.log('[ParticipantQuizAttemptPage] Cached attempt/session:', { attemptId, sessionToken })
     } else {
       const cached = sessionStorage.getItem(storageKey)
       if (cached) {
@@ -48,7 +44,6 @@ function ParticipantQuizAttemptPageInner({ user }) {
           const parsed = JSON.parse(cached)
           attemptId = attemptId || parsed.attemptId
           sessionToken = sessionToken || parsed.sessionToken
-          console.log('[ParticipantQuizAttemptPage] Restored from cache:', { attemptId, sessionToken })
         } catch (e) {
           console.error('[ParticipantQuizAttemptPage] Error parsing cached session:', e)
         }
@@ -60,7 +55,6 @@ function ParticipantQuizAttemptPageInner({ user }) {
     recording: screenRecording,
     startRecording,
     stopRecording,
-    uploadRecording,
     error: recorderError
   } = useScreenRecorder({
     assessmentType: 'quiz',
@@ -106,14 +100,6 @@ function ParticipantQuizAttemptPageInner({ user }) {
           return
         }
 
-        console.log('[ParticipantQuizAttemptPage] Questions fetched:', {
-          quizId: data.quiz?.id,
-          quizTitle: data.quiz?.title,
-          attemptId: data.attempt?.id,
-          attemptStatus: data.attempt?.status,
-          questionCount: data.questions?.length,
-        })
-
         setQuizData({
           id: data.quiz.id,
           title: data.quiz.title,
@@ -145,21 +131,17 @@ function ParticipantQuizAttemptPageInner({ user }) {
 
   const handleScreenShareReady = useCallback(async (stream) => {
     if (!stream) return
-    console.log('[ParticipantQuizAttemptPage] Screen share ready, MediaStream created')
     setScreenStream(stream)
     setSessionError(null)
     proctor.setScreenStream(stream)
     try {
-      console.log('[ParticipantQuizAttemptPage] Starting proctor session...')
       const s = await proctor.start({
         quizId: Number(quizId),
         attemptId: Number(attemptId),
         fingerprintHash: fp,
         screenSharing: true,
       })
-      console.log('[ParticipantQuizAttemptPage] Activating proctor session...')
       await proctor.activate(s.sessionId, s.sessionToken)
-      console.log('[ParticipantQuizAttemptPage] Proctor session active:', proctor.session?.sessionId)
       startRecording(stream)
     } catch (err) {
       console.error('[ParticipantQuizAttemptPage] Failed to start proctor session:', err)
@@ -172,7 +154,6 @@ function ParticipantQuizAttemptPageInner({ user }) {
 
   const handleScreenShareResumed = useCallback((newStream) => {
     if (!newStream) return
-    console.log('[ParticipantQuizAttemptPage] Screen share resumed, replacing stream')
     setScreenStream(newStream)
     proctor.setScreenStream(newStream)
     proctor.pushState?.({ isScreenSharing: true })
@@ -181,12 +162,10 @@ function ParticipantQuizAttemptPageInner({ user }) {
   }, [proctor])
 
   const handleConsented = useCallback(() => {
-    console.log('[ParticipantQuizAttemptPage] User consented, starting quiz flow', { quizId, attemptId })
     setConsented(true)
   }, [quizId, attemptId])
 
   const handleCancel = useCallback(() => {
-    // Stop screen share if active
     if (screenStream) {
       screenStream.getTracks().forEach(t => t.stop())
     }
@@ -207,20 +186,42 @@ function ParticipantQuizAttemptPageInner({ user }) {
     navigate(`/trainings/${trainingId}`)
   }, [navigate, trainingId, screenStream])
 
-  const handleSubmit = useCallback(async () => {
-    console.log('[ParticipantQuizAttemptPage] Submitting quiz', { quizId, attemptId, recordingActive: !!screenRecording })
+  // Stop screen share + exit fullscreen (called after quiz submission)
+  const handleRecordingStop = useCallback(async () => {
     if (screenRecording) {
-      const blob = await stopRecording()
-      if (blob) {
-        console.log('[ParticipantQuizAttemptPage] Uploading recording blob', { blobSize: blob.size })
-        const result = await uploadRecording(blob)
-        console.log('[ParticipantQuizAttemptPage] Upload result:', result)
-      } else {
-        console.warn('[ParticipantQuizAttemptPage] No recording blob to upload')
+      await stopRecording()
+    }
+    if (fsApi.element()) {
+      try { await fsApi.exit() } catch {}
+    }
+    if (screenStream) {
+      screenStream.getTracks().forEach(t => t.stop())
+      setScreenStream(null)
+    }
+  }, [screenRecording, stopRecording, screenStream])
+
+  // Called from QuizTaking's "Back to Dashboard" button / auto-submit .finally()
+  const handleSubmit = useCallback(async () => {
+    await handleRecordingStop()
+    navigate(`/trainings/${trainingId}/quizzes/${quizId}/result`)
+  }, [handleRecordingStop, trainingId, quizId, navigate])
+
+  // beforeunload — stop screen share when tab is closed
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      if (screenRecording) {
+        stopRecording()
       }
     }
-    navigate(`/trainings/${trainingId}/quizzes/${quizId}/result`)
-  }, [screenRecording, stopRecording, uploadRecording, trainingId, quizId, navigate, attemptId])
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [screenRecording, stopRecording])
+
+  useEffect(() => {
+    if (recorderError) {
+      console.error('[ParticipantQuizAttemptPage] Recorder error:', recorderError)
+    }
+  }, [recorderError])
 
   if (loading) {
     return (
@@ -280,7 +281,6 @@ function ParticipantQuizAttemptPageInner({ user }) {
     )
   }
 
-  // Show consent gate before starting the quiz
   if (!consented && quizData) {
     return (
       <AssessmentConsentGate
@@ -293,7 +293,6 @@ function ParticipantQuizAttemptPageInner({ user }) {
     )
   }
 
-  // Session start error overlay (non-blocking retry/cancel)
   if (sessionError) {
     return (
       <div style={{
@@ -340,7 +339,6 @@ function ParticipantQuizAttemptPageInner({ user }) {
 
   return (
     <>
-      <RecordingIndicator recording={screenRecording} />
       <QuizTaking
         quizId={parseInt(quizId, 10)}
         attemptId={parseInt(attemptId, 10)}
@@ -351,6 +349,7 @@ function ParticipantQuizAttemptPageInner({ user }) {
         examSession={proctor.session}
         onScreenShareResumed={handleScreenShareResumed}
         onSubmit={handleSubmit}
+        onRecordingStop={handleRecordingStop}
       />
     </>
   )

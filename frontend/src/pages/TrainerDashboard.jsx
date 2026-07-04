@@ -595,10 +595,79 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="card">
-            <div className="card-header">
-              <h3>My Profile</h3>
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Manage your trainer profile & photo</span>
+          <div style={{
+            background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #2563eb 100%)',
+            borderRadius: 16, padding: '32px 32px 24px', marginBottom: 24,
+            position: 'relative', overflow: 'hidden'
+          }}>
+            <div style={{
+              position: 'absolute', top: -40, right: -40, width: 200, height: 200,
+              borderRadius: '50%', background: 'rgba(255,255,255,0.06)'
+            }} />
+            <div style={{
+              position: 'absolute', bottom: -60, left: '30%', width: 160, height: 160,
+              borderRadius: '50%', background: 'rgba(255,255,255,0.04)'
+            }} />
+            <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div style={{
+                width: 72, height: 72, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: 28, fontWeight: 700, fontFamily: "'Poppins', sans-serif",
+                border: '3px solid rgba(255,255,255,0.4)'
+              }}>
+                {user.name ? user.name.trim().split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'TR'}
+              </div>
+              <div>
+                <h2 style={{ margin: 0, color: '#fff', fontSize: 22, fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>{user.name}</h2>
+                <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>{user.email}</p>
+                <span style={{
+                  display: 'inline-block', marginTop: 8, padding: '3px 12px', borderRadius: 999,
+                  background: 'rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.5px'
+                }}>
+                  TRAINER
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 20, marginBottom: 24 }}>
+            <div style={{
+              flex: 1, background: '#fff', borderRadius: 12, padding: '20px 24px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0'
+            }}>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Account</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>Active</div>
+              <div style={{ fontSize: 12, color: '#22c55e', marginTop: 2 }}>● Verified Trainer</div>
+            </div>
+            <div style={{
+              flex: 1, background: '#fff', borderRadius: 12, padding: '20px 24px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0'
+            }}>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Trainings</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{stats.totalTrainings}</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Assigned courses</div>
+            </div>
+            <div style={{
+              flex: 1, background: '#fff', borderRadius: 12, padding: '20px 24px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0'
+            }}>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Avg. Rating</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{stats.avgTrainerRating || '—'}</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>From feedback</div>
+            </div>
+          </div>
+
+          <div style={{
+            background: '#fff', borderRadius: 12, padding: 28,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif" }}>Personal Information</h3>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Update your profile details and photo</p>
+              </div>
             </div>
             <TrainerForm user={user} />
           </div>

@@ -171,8 +171,7 @@ function TrainerRecordingsWrapper({ user, onLogout, pageVariants }) {
   const [activeTab, setActiveTab] = useState('recordings')
 
   const handleTabChange = (tab) => {
-    setActiveTab(tab)
-    navigate('/trainer')
+    navigate('/trainer', { state: { tab } })
   }
 
   return (
@@ -195,8 +194,7 @@ function RecordingDetailWrapper({ user, onLogout, pageVariants }) {
   const [activeTab, setActiveTab] = useState('recordings')
 
   const handleTabChange = (tab) => {
-    setActiveTab(tab)
-    navigate('/trainer')
+    navigate('/trainer', { state: { tab } })
   }
 
   return (
@@ -215,7 +213,14 @@ function RecordingDetailWrapper({ user, onLogout, pageVariants }) {
 }
 
 function DashboardWrapper({ component: Component, user, onLogout }) {
-  const [activeTab, setActiveTab] = useState(DEFAULT_TABS[user?.role] || 'overview')
+  const location = useLocation()
+  const [activeTab, setActiveTab] = useState(location.state?.tab || DEFAULT_TABS[user?.role] || 'overview')
+
+  useEffect(() => {
+    if (location.state?.tab) {
+      window.history.replaceState({}, document.title)
+    }
+  }, [])
 
   return (
     <ErrorBoundary>
@@ -251,36 +256,9 @@ function AppRoutes({ user, onLogin, onLogout }) {
     <Routes>
       <Route path="/" element={<Login onLogin={onLogin} />} />
       <Route path="/login" element={<Login onLogin={onLogin} />} />
-      <Route
-        path="/admin/login"
-        element={
-          user?.role === 'ADMIN' ? (
-            <Navigate to="/admin" replace />
-          ) : (
-            <Login onLogin={onLogin} defaultRole="ADMIN" />
-          )
-        }
-      />
-      <Route
-        path="/trainer/login"
-        element={
-          user?.role === 'TRAINER' ? (
-            <Navigate to="/trainer" replace />
-          ) : (
-            <Login onLogin={onLogin} defaultRole="TRAINER" />
-          )
-        }
-      />
-      <Route
-        path="/participant/login"
-        element={
-          user?.role === 'PARTICIPANT' ? (
-            <Navigate to="/participant" replace />
-          ) : (
-            <Login onLogin={onLogin} defaultRole="PARTICIPANT" />
-          )
-        }
-      />
+      <Route path="/admin/login" element={<Login onLogin={onLogin} defaultRole="ADMIN" />} />
+      <Route path="/trainer/login" element={<Login onLogin={onLogin} defaultRole="TRAINER" />} />
+      <Route path="/participant/login" element={<Login onLogin={onLogin} defaultRole="PARTICIPANT" />} />
       <Route path="/register" element={<Register onLogin={onLogin} />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
 

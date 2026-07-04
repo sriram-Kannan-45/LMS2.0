@@ -1016,9 +1016,9 @@ function AIQuizGeneratorModal({ user, courseId, onClose, onGenerated }) {
           <div style={{ padding: '40px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <div className="generating-spinner" style={{ width: 40, height: 40, border: '4px solid #f3f3f3', borderTop: '4px solid #4f46e5', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
             <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginTop: 8 }}>AI is crafting your quiz...</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginTop: 8 }}>Generating quiz...</div>
             <div style={{ fontSize: 13, color: '#64748b', maxWidth: 360 }}>
-              Analyzing topic details and generating high-quality multiple choice questions. This may take up to 60 seconds.
+              Analyzing document and generating questions. This may take up to 2 minutes. The AI service will automatically retry if temporarily unavailable.
             </div>
             {/* Loading skeleton */}
             <div style={{ width: '100%', marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>

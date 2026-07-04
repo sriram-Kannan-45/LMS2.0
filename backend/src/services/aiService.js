@@ -79,7 +79,13 @@ function normalizeRagQuestions(questions = [], fallbackDifficulty = 'MEDIUM') {
 function buildAIError(error) {
   if (!error) return new Error('AI service failed without a response.');
   if (error.response) {
-    const detail = error.response.data?.detail || error.response.data?.error || '';
+    const data = error.response.data || {};
+    const detail = data.detail || data.error || data.message || '';
+    if (error.response.status === 503) {
+      const err = new Error(data.message || 'Gemini AI is currently experiencing high demand. Please try again in a few moments.');
+      err.status = 503;
+      return err;
+    }
     if (error.response.status === 415) return new Error(`File type not supported: ${detail}`);
     if (error.response.status === 422) {
       if (detail && detail.includes("Document contains insufficient text")) {
@@ -128,7 +134,7 @@ async function callRagGeneration(payload) {
     } catch (error) {
       lastError = error;
       console.error(`[aiService] RAG attempt ${attempt} failed:`, error.message);
-      if (error.response && [400, 415, 422, 502].includes(error.response.status)) break;
+      if (error.response && [400, 415, 422, 502, 503].includes(error.response.status)) break;
       if (attempt < MAX_RETRIES) {
         await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
       }

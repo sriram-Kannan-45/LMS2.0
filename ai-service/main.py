@@ -27,7 +27,7 @@ import tempfile
 import time
 from typing import List, Dict, Any, Optional, Tuple, TypedDict
 import difflib
-from services.gemini_client import GeminiClient
+from services.gemini_client import GeminiClient, GeminiTemporaryError
 from services.prompt_builder import PromptBuilder
 from services.json_validator import JSONValidator
 from services.duplicate_remover import DuplicateRemover
@@ -35,7 +35,7 @@ from services.option_randomizer import OptionRandomizer
 from services.explanation_generator import ExplanationGenerator
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 import PyPDF2
 import docx
@@ -930,6 +930,24 @@ Generate ONLY the JSON array:
 
 MAX_RETRIES = 3
 
+
+def _parse_retry_delay(text: str) -> int | None:
+    """Extract retry_delay seconds from Gemini API error text (JSON or protobuf)."""
+    try:
+        data = json.loads(text)
+        details = data.get("error", {}).get("details", [])
+        for d in details:
+            rd = d.get("retry_delay") or {}
+            if rd.get("seconds"):
+                return int(rd["seconds"])
+    except Exception:
+        pass
+    m = re.search(r'retry_delay\s*\{[^}]*seconds:\s*(\d+)', text)
+    if m:
+        return int(m.group(1))
+    return None
+
+
 def _question_is_grounded(question: Dict, doc_tokens: set) -> bool:
     """
     Heuristic: a question is "grounded" if the question text or its correct
@@ -1585,6 +1603,16 @@ async def generate_rag_quiz(request: RAGGenerateRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except QuizGenerationError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    except GeminiTemporaryError as e:
+        log.warning("Gemini temporary error after %d retries: %s", e.retries, e.api_message)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "status": 503,
+                "message": "Gemini AI is currently experiencing high demand. Please try again in a few moments.",
+            }
+        )
     except Exception as e:
         log.error("RAG quiz generation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -1629,6 +1657,16 @@ async def generate_quiz(request: QuizRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except QuizGenerationError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    except GeminiTemporaryError as e:
+        log.warning("Quiz generation: Gemini temporary error after %d retries: %s", e.retries, e.api_message)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "status": 503,
+                "message": "Gemini AI is currently experiencing high demand. Please try again in a few moments.",
+            }
+        )
     except Exception as e:
         log.error("Quiz generation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -1830,9 +1868,11 @@ Response Format:
             except Exception as e:
                 last_error = e
                 error_str = str(e).lower()
-                # Gemini rate limit (429 RESOURCE_EXHAUSTED) — sleep longer
+                # Gemini rate limit (429 RESOURCE_EXHAUSTED) — sleep long enough
                 if "429" in error_str or "resource_exhausted" in error_str or "quota" in error_str or "rate" in error_str:
-                    delay = min(30 * attempt, 120)
+                    retry_delay = _parse_retry_delay(str(e))
+                    delay = max(30 * attempt, (retry_delay or 0) + 5)
+                    delay = min(delay, 180)
                     log.warning("Gemini rate limit hit on attempt %d — backing off %ds", attempt, delay)
                     await asyncio.sleep(delay)
                     continue
@@ -1957,6 +1997,16 @@ async def upload_and_generate(
         raise HTTPException(status_code=422, detail=str(e))
     except QuizGenerationError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    except GeminiTemporaryError as e:
+        log.warning("Upload-and-generate: Gemini temporary error after %d retries: %s", e.retries, e.api_message)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "status": 503,
+                "message": "Gemini AI is currently experiencing high demand. Please try again in a few moments.",
+            }
+        )
     except Exception as e:
         log.error("Upload-and-generate failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
@@ -2012,6 +2062,16 @@ async def trainer_generate_ai_quiz(
         raise HTTPException(status_code=422, detail=str(e))
     except QuizGenerationError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    except GeminiTemporaryError as e:
+        log.warning("Trainer RAG quiz: Gemini temporary error after %d retries: %s", e.retries, e.api_message)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "status": 503,
+                "message": "Gemini AI is currently experiencing high demand. Please try again in a few moments.",
+            }
+        )
     except Exception as e:
         log.error("Trainer RAG quiz generation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2217,8 +2277,10 @@ async def generate_coding_problems(req: CodingProblemsRequest):
             last_error = e
             log.warning("Coding problems generation attempt %d failed: %s", attempt, e)
             if "429" in str(e).lower() or "resource_exhausted" in str(e) or "quota" in str(e):
-                delay = min(30 * attempt, 120)
-                log.warning("Rate limit hit — backing off %ds", delay)
+                retry_delay = _parse_retry_delay(str(e))
+                delay = max(30 * attempt, (retry_delay or 0) + 5)
+                delay = min(delay, 180)
+                log.warning("Rate limit hit on attempt %d — backing off %ds", attempt, delay)
                 await asyncio.sleep(delay)
                 continue
             if attempt < Config.MAX_RETRIES:

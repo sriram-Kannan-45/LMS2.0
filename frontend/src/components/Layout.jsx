@@ -54,7 +54,6 @@ const navItems = {
     { key: 'enrollments', label: 'Enrollment Requests', icon: 'UserPlus' },
     { key: 'reports', label: 'Trainer Reports', icon: 'ClipboardList' },
     { key: 'feedback', label: 'Feedback Received', icon: 'Feedback' },
-    { key: 'recordings', label: 'Recordings', icon: 'ClipboardList' },
     { key: 'profile', label: 'My Profile', icon: 'My Profile' },
   ],
   PARTICIPANT: [

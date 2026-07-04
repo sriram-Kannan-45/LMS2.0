@@ -100,7 +100,7 @@ function ProgressRing({ percent, size = 132 }) {
 /* ──────────────────────────────────────────────────────────────────────────
    MAIN COMPONENT
    ────────────────────────────────────────────────────────────────────────── */
-function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isStandardQuiz = false, screenStream, examSession, onScreenShareResumed }) {
+function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isStandardQuiz = false, screenStream, examSession, onScreenShareResumed, onRecordingStop }) {
   const { error: showError, success: showSuccess } = useToast()
 
   /* ── Question / answer state ─────────────────────────────────────────── */
@@ -203,6 +203,9 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
         const d = await r.json()
         if (!r.ok) throw new Error(d.error || 'Submit failed')
         
+        // Stop recording immediately after submit (camera, mic, screen)
+        await onRecordingStop?.()
+        
         // Best-effort exit fullscreen so result summary renders normally.
         if (fsApi.element()) { try { await fsApi.exit() } catch { /* ignore */ } }
         if (!silent) showSuccess('Quiz submitted successfully!')
@@ -218,7 +221,7 @@ function QuizTaking({ quizId, attemptId, quizData, sessionToken, onSubmit, isSta
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [answers, attemptId, isStandardQuiz, quizId, onSubmit, submitting, showError, showSuccess]
+    [answers, attemptId, isStandardQuiz, quizId, onSubmit, submitting, showError, showSuccess, onRecordingStop]
   )
 
   /* ── Auto-fullscreen on mount ────────────────────────────────────────── */

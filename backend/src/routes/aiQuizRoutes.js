@@ -323,10 +323,11 @@ const router = express.Router();
           quiz
         });
 
-      } catch (error) {
-        console.error('Prompt generation endpoint error:', error);
-        res.status(500).json({ error: error.message });
-      }
+    } catch (error) {
+      console.error('Prompt generation endpoint error:', error.message);
+      const statusCode = error.status || 500;
+      res.status(statusCode).json({ error: error.message });
+    }
     }
   );
 

@@ -1,11 +1,40 @@
 import os
+import re
 import time
 import json
 import logging
 import requests
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 log = logging.getLogger("ai-quiz.gemini-client")
+
+
+def _parse_retry_delay(response_body: str) -> Optional[int]:
+    """Extract retry_delay seconds from Gemini API error response body."""
+    try:
+        data = json.loads(response_body)
+        details = data.get("error", {}).get("details", [])
+        for d in details:
+            if d.get("retry_delay") and d["retry_delay"].get("seconds"):
+                return int(d["retry_delay"]["seconds"])
+    except Exception:
+        pass
+    # Fallback: regex for protobuf-style `retry_delay { seconds: N }`
+    m = re.search(r'retry_delay\s*\{[^}]*seconds:\s*(\d+)', response_body)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+class GeminiTemporaryError(RuntimeError):
+    """Raised when Gemini API returns a temporary error (503, 429, etc.) after all retries."""
+    def __init__(self, status_code: int, message: str, retries: int = 0):
+        self.status_code = status_code
+        self.api_message = message
+        self.retries = retries
+        super().__init__(f"Gemini API error ({status_code}) after {retries} retries: {message}")
+
 
 class GeminiClient:
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
@@ -75,14 +104,17 @@ class GeminiClient:
         # Print the complete Gemini request payload (excluding API key)
         log.info(f"Gemini Request Payload:\n{json.dumps(payload, indent=2)}")
 
-        max_retries = 3
+        max_retries = 5
         last_error = None
+        temporary_status_codes = (408, 429, 500, 502, 503, 504)
         
         for attempt in range(1, max_retries + 1):
+            start_time = time.time()
             try:
                 log.info(f"Sending request to Gemini model {self.model} (Attempt {attempt}/{max_retries})...")
                 response = requests.post(url, headers=headers, json=payload, timeout=90)
                 
+                elapsed = time.time() - start_time
                 status_code = response.status_code
                 response_body = response.text
                 
@@ -142,22 +174,69 @@ class GeminiClient:
                 last_error = he
                 status_code = he.response.status_code if he.response is not None else "Unknown"
                 detail = he.response.text if he.response is not None else ""
-                log.error(f"HTTP error {status_code} during Gemini API call: {detail}")
+                elapsed = time.time() - start_time
+                log.error(
+                    f"HTTP error {status_code} during Gemini API call: {detail}"
+                )
                 
-                if status_code in (408, 429, 500, 502, 503, 504):
+                log.info(
+                    f"Retry attempt {attempt}/{max_retries} | "
+                    f"Model: {self.model} | "
+                    f"Status: {status_code} | "
+                    f"Response time: {elapsed:.2f}s | "
+                    f"Error: {detail[:200]}"
+                )
+                
+                if status_code in temporary_status_codes:
+                    if attempt < max_retries:
+                        wait_time = 2 ** attempt
+                        # Use retry_delay from server when available (especially for 429 quota)
+                        if status_code == 429:
+                            retry_delay = _parse_retry_delay(detail)
+                            if retry_delay is not None:
+                                wait_time = max(wait_time, retry_delay + 5)
+                        log.info(f"Retrying in {wait_time}s on status {status_code} (attempt {attempt}/{max_retries})...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        api_message = ""
+                        try:
+                            err_json = he.response.json()
+                            api_message = err_json.get("error", {}).get("message", "")
+                        except Exception:
+                            pass
+                        if not api_message:
+                            api_message = detail
+                        raise GeminiTemporaryError(
+                            status_code=status_code,
+                            message=api_message,
+                            retries=max_retries
+                        )
+                break
+                
+            except requests.exceptions.Timeout as toe:
+                elapsed = time.time() - start_time
+                log.error(f"Timeout after {elapsed:.2f}s on attempt {attempt}/{max_retries}: {str(toe)}")
+                if attempt < max_retries:
                     wait_time = 2 ** attempt
-                    log.info(f"Retrying in {wait_time} seconds on status {status_code}...")
+                    log.info(f"Retrying in {wait_time}s after timeout (attempt {attempt}/{max_retries})...")
                     time.sleep(wait_time)
                     continue
-                break
+                raise GeminiTemporaryError(
+                    status_code=504,
+                    message=f"Request timed out after {elapsed:.2f}s",
+                    retries=max_retries
+                )
                 
             except Exception as e:
                 last_error = e
-                log.error(f"Exception during Gemini API call on attempt {attempt}: {str(e)}")
-                wait_time = 2 ** attempt
-                log.info(f"Retrying in {wait_time} seconds...")
-                time.sleep(wait_time)
-                continue
+                elapsed = time.time() - start_time
+                log.error(f"Exception during Gemini API call on attempt {attempt}/{max_retries}: {str(e)}")
+                if attempt < max_retries:
+                    wait_time = 2 ** attempt
+                    log.info(f"Retrying in {wait_time}s after exception (attempt {attempt}/{max_retries})...")
+                    time.sleep(wait_time)
+                    continue
                 
         if last_error:
             if isinstance(last_error, requests.exceptions.HTTPError):

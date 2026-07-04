@@ -564,6 +564,20 @@ const connectDB = async () => {
         logger.error('⚠️ Error updating users.status ENUM', { error: userStatusErr.message });
       }
 
+      // Add passwordVersion column to users for hash algorithm tracking
+      try {
+        const [pwCols] = await sequelize.query("SHOW COLUMNS FROM `users` WHERE `Field` = 'passwordVersion'");
+        if (pwCols.length === 0) {
+          logger.info('🔄 Adding passwordVersion column to users...');
+          await sequelize.query(
+            "ALTER TABLE `users` ADD COLUMN `passwordVersion` INT NOT NULL DEFAULT 1 COMMENT 'Tracks password hash algorithm version'"
+          );
+          logger.info('✅ passwordVersion column added to users');
+        }
+      } catch (pwErr) {
+        logger.error('⚠️ Error adding passwordVersion column', { error: pwErr.message });
+      }
+
       // Fix coding_submissions.status ENUM to include new judge verdicts
       try {
         const [csCols] = await sequelize.query("SHOW COLUMNS FROM `coding_submissions` WHERE `Field` = 'status'");

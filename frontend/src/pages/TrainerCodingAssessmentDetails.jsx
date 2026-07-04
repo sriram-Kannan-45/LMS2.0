@@ -5,7 +5,7 @@ import {
   ArrowLeft, Settings, BookOpen, Users, BarChart3, Trophy, FileText, ListChecks,
   Plus, Pencil, Trash2, Save, X, Check, Send, Loader2, AlertTriangle, Eye, Star,
   Search, ChevronDown, ChevronUp, Clock, Calendar, User,
-  HelpCircle, CheckCircle2, AlertCircle, RefreshCw, Monitor, Code, Terminal, Play,
+  HelpCircle, CheckCircle2, AlertCircle, RefreshCw, Code, Terminal, Play,
 } from 'lucide-react'
 import { API } from '../api/api'
 import { useToast } from '../components/Toast'
@@ -1227,3 +1227,4 @@ function SettingsTab({ assessment, onRefresh, auth, toast }) {
     </div>
   )
 }
+
