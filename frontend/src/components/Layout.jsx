@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Award, BookOpen, BookPlus, ClipboardList, Code, FileText, GraduationCap, Home, LayoutDashboard, LogOut, Menu, MessageSquare, Sparkles, Trophy, User, UserPlus, Users, X } from 'lucide-react'
+import { Award, BookOpen, BookPlus, ClipboardList, Code, FileText, GraduationCap, Home, LayoutDashboard, LogOut, Menu, MessageSquare, Search, Bell, Settings, Shield, Sparkles, Trophy, User, UserPlus, Users, X, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ProfileDropdown from './student/profile/ProfileDropdown'
@@ -37,57 +37,142 @@ const iconMap = {
   'Trainer Reports': <ClipboardList size={18} />,
 }
 
-const navItems = {
+const navGroups = {
   ADMIN: [
-    { key: 'overview', label: 'Dashboard', icon: 'Dashboard' },
-    { key: 'pending', label: 'Pending Approval', icon: 'Overview' },
-    { key: 'trainings', label: 'Trainings', icon: 'Trainings' },
-    { key: 'trainers', label: 'Trainers', icon: 'Trainers' },
-    { key: 'participants', label: 'Participants', icon: 'Participants' },
-    { key: 'sessions', label: 'Sessions', icon: 'AI Quizzes' },
-    { key: 'notes', label: 'Notes', icon: 'Lessons' },
-    { key: 'feedback', label: 'Feedback', icon: 'Feedback' },
-    { key: 'surveys', label: 'Surveys', icon: 'Surveys' },
-    { key: 'recordings', label: 'Recordings', icon: 'ClipboardList' },
+    {
+      title: 'Overview',
+      items: [
+        { key: 'overview', label: 'Dashboard', icon: 'Dashboard' },
+      ],
+    },
+    {
+      title: 'Management',
+      items: [
+        { key: 'pending', label: 'Pending Approval', icon: 'Overview' },
+        { key: 'trainings', label: 'Trainings', icon: 'Trainings' },
+        { key: 'trainers', label: 'Trainers', icon: 'Trainers' },
+        { key: 'participants', label: 'Participants', icon: 'Participants' },
+      ],
+    },
+    {
+      title: 'Content',
+      items: [
+        { key: 'sessions', label: 'Sessions', icon: 'AI Quizzes' },
+        { key: 'notes', label: 'Notes', icon: 'Lessons' },
+        { key: 'feedback', label: 'Feedback', icon: 'Feedback' },
+        { key: 'surveys', label: 'Surveys', icon: 'Surveys' },
+      ],
+    },
+    {
+      title: 'Reports',
+      items: [
+        { key: 'recordings', label: 'Recordings', icon: 'ClipboardList' },
+      ],
+    },
   ],
   TRAINER: [
-    { key: 'courses', label: 'Trainings', icon: 'Trainings' },
-    { key: 'notes', label: 'Notes & Resources', icon: 'Notes' },
-    { key: 'enrollments', label: 'Enrollment Requests', icon: 'UserPlus' },
-    { key: 'reports', label: 'Trainer Reports', icon: 'ClipboardList' },
-    { key: 'feedback', label: 'Feedback Received', icon: 'Feedback' },
-    { key: 'profile', label: 'My Profile', icon: 'My Profile' },
+    {
+      title: 'Overview',
+      items: [
+        { key: 'courses', label: 'Trainings', icon: 'Trainings' },
+      ],
+    },
+    {
+      title: 'Content',
+      items: [
+        { key: 'notes', label: 'Notes & Resources', icon: 'Notes' },
+        { key: 'enrollments', label: 'Enrollment Requests', icon: 'UserPlus' },
+      ],
+    },
+    {
+      title: 'Reports',
+      items: [
+        { key: 'reports', label: 'Trainer Reports', icon: 'ClipboardList' },
+        { key: 'feedback', label: 'Feedback Received', icon: 'Feedback' },
+      ],
+    },
+    {
+      title: 'Settings',
+      items: [
+        { key: 'profile', label: 'My Profile', icon: 'My Profile' },
+      ],
+    },
   ],
   PARTICIPANT: [
-    { key: 'overview', label: 'Overview', icon: 'Overview' },
-    { key: 'myEnrollments', label: 'My Trainings', icon: 'Trainings' },
-    { key: 'leaderboard', label: 'Leaderboard', icon: 'Leaderboard' },
-    { key: 'achievements', label: 'Achievements', icon: 'Achievements' },
-    { key: 'reports', label: 'My Reports', icon: 'Feedback' },
-    { key: 'certificates', label: 'Certificates', icon: 'Achievements' },
-    { key: 'feedback', label: 'Give Feedback', icon: 'Give Feedback' },
-    { key: 'myFeedbacks', label: 'My Feedbacks', icon: 'My Feedbacks' },
-    { key: 'profile', label: 'Profile', icon: 'Profile' },
+    {
+      title: 'Overview',
+      items: [
+        { key: 'overview', label: 'Overview', icon: 'Overview' },
+      ],
+    },
+    {
+      title: 'Learning',
+      items: [
+        { key: 'myEnrollments', label: 'My Trainings', icon: 'Trainings' },
+        { key: 'leaderboard', label: 'Leaderboard', icon: 'Leaderboard' },
+        { key: 'achievements', label: 'Achievements', icon: 'Achievements' },
+      ],
+    },
+    {
+      title: 'Activity',
+      items: [
+        { key: 'reports', label: 'My Reports', icon: 'Feedback' },
+        { key: 'certificates', label: 'Certificates', icon: 'Achievements' },
+        { key: 'feedback', label: 'Give Feedback', icon: 'Give Feedback' },
+        { key: 'myFeedbacks', label: 'My Feedbacks', icon: 'My Feedbacks' },
+      ],
+    },
+    {
+      title: 'Settings',
+      items: [
+        { key: 'profile', label: 'Profile', icon: 'Profile' },
+      ],
+    },
   ],
 }
 
-const roleColors = {
-  ADMIN: { gradient: 'from-rose-500 to-orange-500', badge: 'bg-rose-100 text-rose-700' },
-  TRAINER: { gradient: 'from-emerald-500 to-teal-500', badge: 'bg-emerald-100 text-emerald-700' },
-  PARTICIPANT: { gradient: 'from-blue-500 to-indigo-500', badge: 'bg-blue-100 text-blue-700' },
+const pageDescriptions = {
+  overview: 'Monitor your platform activity and key metrics',
+  pending: 'Review and approve pending registrations',
+  trainings: 'Manage all training programs',
+  trainers: 'Manage trainer accounts and assignments',
+  participants: 'View and manage learner accounts',
+  sessions: 'Manage assessment and quiz sessions',
+  notes: 'Organize course notes and resources',
+  feedback: 'View and respond to feedback',
+  surveys: 'Create and manage surveys',
+  recordings: 'Access session recordings',
+  courses: 'Manage your training courses',
+  enrollments: 'Review enrollment requests',
+  reports: 'View detailed analytics and reports',
+  profile: 'Manage your account settings',
+  myEnrollments: 'Your enrolled training programs',
+  leaderboard: 'See how you rank among learners',
+  achievements: 'Your badges and accomplishments',
+  certificates: 'Download your completion certificates',
+  myFeedbacks: 'Feedback you\'ve submitted',
 }
 
 function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }) {
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const items = navItems[user.role] || []
-  const colors = roleColors[user.role] || roleColors.PARTICIPANT
+  const groups = navGroups[user.role] || []
   const isParticipant = user.role === 'PARTICIPANT'
 
   const initials = (name) =>
     name ? name.trim().split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U'
 
   const closeSidebar = () => setSidebarOpen(false)
+
+  const currentPageLabel = (() => {
+    for (const group of groups) {
+      const found = group.items.find(i => i.key === activeTab)
+      if (found) return found.label
+    }
+    return 'Dashboard'
+  })()
+
+  const currentPageDescription = pageDescriptions[activeTab] || ''
 
   return (
     <div className={`app-layout${user.role === 'PARTICIPANT' || user.role === 'ADMIN' ? ' theme-academic' : ''}`}>
@@ -129,11 +214,13 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
               borderRadius: '8px',
               border: 'none',
               background: 'transparent',
-              color: '#94a3b8',
+              color: 'rgba(148,163,184,0.7)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              position: 'relative',
+              zIndex: 1,
             }}
           >
             <X size={18} />
@@ -142,32 +229,35 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
 
         {/* Navigation */}
         <nav className="sidebar-nav">
-          <div className="sidebar-nav-label">Navigation</div>
-          {items.map((item) => (
-            <motion.button
-              key={item.key}
-              className={`sidebar-nav-item${activeTab === item.key ? ' active' : ''}`}
-              onClick={() => {
-                if (item.key === 'recordings') {
-                  const path = user.role === 'ADMIN' ? '/admin/recordings' : '/trainer/recordings'
-                  navigate(path)
-                } else {
-                  onTabChange(item.key)
-                }
-                closeSidebar()
-              }}
-              whileHover={{ x: 3 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <span className="nav-icon">
-                {iconMap[item.icon]}
-              </span>
-              <span>{item.label}</span>
-            </motion.button>
+          {groups.map((group, gi) => (
+            <div key={gi}>
+              <div className="sidebar-nav-label">{group.title}</div>
+              {group.items.map((item) => (
+                <motion.button
+                  key={item.key}
+                  className={`sidebar-nav-item${activeTab === item.key ? ' active' : ''}`}
+                  onClick={() => {
+                    if (item.key === 'recordings') {
+                      const path = user.role === 'ADMIN' ? '/admin/recordings' : '/trainer/recordings'
+                      navigate(path)
+                    } else {
+                      onTabChange(item.key)
+                    }
+                    closeSidebar()
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <span className="nav-icon">
+                    {iconMap[item.icon]}
+                  </span>
+                  <span>{item.label}</span>
+                </motion.button>
+              ))}
+            </div>
           ))}
         </nav>
 
-        {/* Footer — user profile only */}
+        {/* Footer — user profile */}
         <div className="sidebar-footer">
           {isParticipant ? (
             <ProfileDropdown
@@ -213,17 +303,54 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
         </motion.button>
       )}
 
-      {/* Main Content */}
-      <motion.main
-        className="main-content"
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <div className="page-content">
+      {/* Main Content Area */}
+      <div className="main-content">
+        {/* Top Header Bar */}
+        <header className="top-header">
+          <div className="top-header__left">
+            <div className="top-header__breadcrumb">
+              <span className="top-header__breadcrumb-page">{currentPageLabel}</span>
+              {currentPageDescription && (
+                <span className="top-header__breadcrumb-desc">{currentPageDescription}</span>
+              )}
+            </div>
+          </div>
+          <div className="top-header__right">
+            <div className="top-header__search">
+              <Search size={16} className="top-header__search-icon" />
+              <input
+                type="text"
+                placeholder="Search..."
+                className="top-header__search-input"
+              />
+            </div>
+            <button className="top-header__icon-btn" title="Notifications">
+              <Bell size={18} />
+              <span className="top-header__notify-dot" />
+            </button>
+            <div className="top-header__divider" />
+            <div className="top-header__user">
+              <div className="top-header__avatar">
+                {initials(user.name)}
+              </div>
+              <div className="top-header__user-info">
+                <span className="top-header__user-name">{user.name}</span>
+                <span className="top-header__user-role">{user.role}</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <motion.main
+          className="page-content"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        >
           {children}
-        </div>
-      </motion.main>
+        </motion.main>
+      </div>
     </div>
   )
 }

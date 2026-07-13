@@ -28,7 +28,7 @@
 /* ── Main Content Enhancement ── */
 .main-content {
   flex: 1;
-  margin-left: calc(260px + 16px);
+  margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -780,9 +780,9 @@
 }
 
 .tab-pill.active {
-  color: #4f46e5 !important;
-  background: #ede9fe !important;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+  color: #4F46E5 !important;
+  background: rgba(79,70,229,0.08) !important;
+  box-shadow: 0 2px 8px rgba(79,70,229,0.1);
 }
 
 /* ── Sidebar Footer User Section Redesign ── */
