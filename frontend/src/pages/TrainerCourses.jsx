@@ -6,6 +6,7 @@ import {
   CheckCircle2, AlertCircle, Calendar, Folder, MessageSquare, Code
 } from 'lucide-react'
 import { API, assetUrl } from '../api/api'
+import { Button, Badge, Table, PageHeader, EmptyState, StatCard, ProgressBar } from '../components/ui'
 import { useToast } from '../components/Toast'
 import MaterialManager from '../components/trainer/MaterialManager'
 import CourseQuizzesTab from '../components/trainer/CourseQuizzesTab'
@@ -21,16 +22,9 @@ const STATUS_BADGE = {
 }
 
 function StatusBadge({ value }) {
-  const v = STATUS_BADGE[value] || STATUS_BADGE.DRAFT
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
-      background: v.bg, color: v.fg, textTransform: 'uppercase', letterSpacing: 0.4,
-    }}>
-      {v.label}
-    </span>
-  )
+  const label = value?.toUpperCase() || 'DRAFT';
+  const color = label === 'PUBLISHED' ? 'success' : label === 'ARCHIVED' ? 'warning' : 'neutral';
+  return <Badge color={color}>{label}</Badge>;
 }
 
 function Stat({ icon, label, value }) {
@@ -129,47 +123,34 @@ function CoursesList({ user, onOpenCourse }) {
   }, [courses, search, statusFilter])
 
   return (
-    <div style={{ padding: '24px 0' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: '#0f172a' }}>My Trainings</h1>
-          <p style={{ marginTop: 4, color: '#64748b', fontSize: 14 }}>
-            All trainings assigned to you. Open one to manage lessons, materials, quizzes, and analytics.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="My Trainings"
+        subtitle="All trainings assigned to you. Open one to manage lessons, materials, quizzes, and analytics."
+      />
 
       {/* Search + filter row */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-        <div style={{
-          flex: '1 1 320px', display: 'flex', alignItems: 'center', gap: 8,
-          background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
-          padding: '10px 14px', minHeight: 44,
-        }}>
-          <Search size={16} color="#94a3b8" />
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full md:max-w-md">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search courses by title, description, or program…"
-            style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, background: 'transparent' }}
+            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-sm"
           />
         </div>
-        <div style={{ display: 'flex', gap: 6, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 4 }}>
+        <div className="flex gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
           {['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'].map(s => (
-            <button
+            <Button
               key={s}
               onClick={() => setStatusFilter(s)}
-              style={{
-                padding: '8px 14px', border: 'none', cursor: 'pointer',
-                borderRadius: 8, fontSize: 12, fontWeight: 600,
-                background: statusFilter === s ? '#4f46e5' : 'transparent',
-                color: statusFilter === s ? '#fff' : '#64748b',
-                textTransform: 'capitalize',
-              }}
+              variant={statusFilter === s ? 'primary' : 'ghost'}
+              size="sm"
             >
               {s === 'ALL' ? 'All' : s.toLowerCase()}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -198,70 +179,56 @@ function CoursesList({ user, onOpenCourse }) {
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((c, i) => (
             <motion.div
               key={c.id}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}
-              style={{
-                background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
-                overflow: 'hidden', cursor: 'pointer', transition: 'all 0.2s',
-                display: 'flex', flexDirection: 'column',
-              }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col cursor-pointer group"
               onClick={() => onOpenCourse(c.id)}
             >
               {/* Thumbnail */}
-              <div style={{
-                height: 160, position: 'relative',
-                background: c.thumbnailUrl
-                  ? `url(${assetUrl(c.thumbnailUrl)}) center/cover`
-                  : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              }}>
-                {!c.thumbnailUrl && (
-                  <div style={{
-                    position: 'absolute', inset: 0, display: 'flex',
-                    alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.85)',
-                  }}>
-                    <BookOpen size={48} />
-                  </div>
-                )}
-                <div style={{ position: 'absolute', top: 12, left: 12 }}>
+              <div
+                className="h-44 relative bg-cover bg-center flex items-center justify-center text-white"
+                style={{
+                  backgroundImage: c.thumbnailUrl ? `url(${assetUrl(c.thumbnailUrl)})` : 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                }}
+              >
+                {!c.thumbnailUrl && <BookOpen size={40} className="text-white/80 group-hover:scale-110 transition-transform duration-200" />}
+                <div className="absolute top-3 left-3">
                   <StatusBadge value={c.status} />
                 </div>
               </div>
 
               {/* Body */}
-              <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{
-                  fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 6px',
-                  display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
-                  overflow: 'hidden', minHeight: '2.6em', lineHeight: '1.3',
-                }}>
+              <div className="p-5 flex-1 flex flex-col">
+                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 mb-1.5 line-clamp-2 leading-snug">
                   {c.title}
                 </h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#64748b', fontSize: 12, marginBottom: 8 }}>
+                <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3">
                   <Folder size={12} />
                   <span>{c.programTitle || 'No program'}</span>
                 </div>
-                <p style={{
-                  margin: '0 0 12px', color: '#64748b', fontSize: 13, lineHeight: 1.5,
-                  display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
-                  overflow: 'hidden', minHeight: '2.6em',
-                }}>
+                <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed mb-4">
                   {c.description || 'No description provided.'}
                 </p>
 
                 {/* Stats row */}
-                <div style={{
-                  display: 'flex', gap: 12, paddingTop: 10, marginTop: 'auto',
-                  borderTop: '1px solid #f1f5f9', flexWrap: 'wrap',
-                }}>
-                  <Stat icon={<FileText size={14} />} label="Lessons" value={c.lessonCount} />
-                  <Stat icon={<Sparkles size={14} />} label="Quizzes" value={c.quizCount} />
-                  <Stat icon={<Users size={14} />} label="Enrolled" value={c.enrolledCount} />
+                <div className="flex items-center gap-4 pt-4 mt-auto border-t border-slate-100 dark:border-slate-800/80">
+                  <div className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <FileText size={13} className="text-violet-500" />
+                    <span>{c.lessonCount} <span className="text-slate-400 font-normal">Lessons</span></span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <Sparkles size={13} className="text-amber-500" />
+                    <span>{c.quizCount} <span className="text-slate-400 font-normal">Quizzes</span></span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <Users size={13} className="text-emerald-500" />
+                    <span>{c.enrolledCount} <span className="text-slate-400 font-normal">Enrolled</span></span>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -316,74 +283,66 @@ function CourseDetail({ user, courseId, onBack }) {
   ]
 
   return (
-    <div style={{ padding: '24px 0' }}>
-      {/* Back link */}
-      <button
-        onClick={onBack}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px',
-          background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
-          fontSize: 13, color: '#475569', cursor: 'pointer', marginBottom: 16,
-        }}
-      >
-        <ArrowLeft size={14} /> My Trainings
-      </button>
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Button onClick={onBack} variant="secondary" size="sm" icon={ArrowLeft}>
+          Back to Trainings
+        </Button>
+      </div>
 
       {/* Header card */}
-      <div style={{
-        background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
-        padding: 20, display: 'flex', gap: 20, marginBottom: 16,
-        flexWrap: 'wrap', alignItems: 'center',
-      }}>
-        <div style={{
-          width: 200, height: 130, borderRadius: 10, flexShrink: 0,
-          background: course.thumbnailUrl
-            ? `url(${assetUrl(course.thumbnailUrl)}) center/cover`
-            : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
-        }}>
-          {!course.thumbnailUrl && <BookOpen size={48} />}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row gap-6 items-center">
+        <div
+          className="w-48 h-32 rounded-xl flex-shrink-0 bg-cover bg-center flex items-center justify-center text-white"
+          style={{
+            backgroundImage: course.thumbnailUrl ? `url(${assetUrl(course.thumbnailUrl)})` : 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+          }}
+        >
+          {!course.thumbnailUrl && <BookOpen size={40} className="text-white/80" />}
         </div>
 
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: '#0f172a' }}>{course.title}</h1>
+        <div className="flex-1 min-w-[240px] space-y-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-200 leading-tight">{course.title}</h1>
             <StatusBadge value={course.status} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#64748b', fontSize: 13, marginTop: 6 }}>
-            <Folder size={14} /> <span>{course.programTitle || 'No program'}</span>
+          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            <Folder size={13} />
+            <span>{course.programTitle || 'No program'}</span>
           </div>
-          <p style={{ margin: '10px 0 14px', color: '#475569', fontSize: 14, lineHeight: 1.5 }}>
+          <p className="text-sm text-slate-500 leading-relaxed max-w-3xl">
             {course.description || 'No description provided.'}
           </p>
-          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-            <Stat icon={<FileText size={14} />} label="Lessons" value={course.lessonCount} />
-            <Stat icon={<Sparkles size={14} />} label="Quizzes" value={course.quizCount} />
-            <Stat icon={<Users size={14} />} label="Enrolled" value={course.enrolledCount} />
+          <div className="flex items-center gap-5 pt-2">
+            <div className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+              <FileText size={13} className="text-violet-500" />
+              <span>{course.lessonCount} <span className="text-slate-400 font-normal">Lessons</span></span>
+            </div>
+            <div className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+              <Sparkles size={13} className="text-amber-500" />
+              <span>{course.quizCount} <span className="text-slate-400 font-normal">Quizzes</span></span>
+            </div>
+            <div className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+              <Users size={13} className="text-emerald-500" />
+              <span>{course.enrolledCount} <span className="text-slate-400 font-normal">Enrolled</span></span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Tab bar */}
-      <div style={{
-        background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
-        padding: 4, display: 'flex', gap: 4, marginBottom: 16, position: 'sticky', top: 8, zIndex: 5,
-      }}>
+      <div className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl flex gap-1.5 sticky top-2 z-10 shadow-sm border border-slate-200/20">
         {TABS.map(t => (
-          <button
+          <Button
             key={t.key}
             onClick={() => setTab(t.key)}
-            style={{
-              flex: 1, padding: '10px 16px', border: 'none', cursor: 'pointer',
-              borderRadius: 8, fontSize: 13, fontWeight: 600,
-              background: tab === t.key ? '#4f46e5' : 'transparent',
-              color: tab === t.key ? '#fff' : '#475569',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              transition: 'all 0.15s',
-            }}
+            variant={tab === t.key ? 'primary' : 'ghost'}
+            className="flex-1 text-center justify-center font-semibold"
+            icon={t.icon.type}
+            size="sm"
           >
-            {t.icon} {t.label}
-          </button>
+            {t.label}
+          </Button>
         ))}
       </div>
 

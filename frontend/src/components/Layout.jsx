@@ -3,6 +3,8 @@ import { Award, BookOpen, BookPlus, ClipboardList, Code, FileText, GraduationCap
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ProfileDropdown from './student/profile/ProfileDropdown'
+import Badge from './ui/Badge'
+
 
 const iconMap = {
   Dashboard: <LayoutDashboard size={18} />,
@@ -184,9 +186,9 @@ function Layout({ user, children, activeTab, onTabChange, onLogout, headerSlot }
               </div>
               <div className="sidebar-user-info">
                 <div className="sidebar-user-name">{user.name}</div>
-                <span className={`badge ${colors.badge}`} style={{ fontSize: '9px', fontWeight: 700, padding: '2px 6px', textTransform: 'uppercase', marginTop: 2 }}>
+                <Badge color={user.role === 'ADMIN' ? 'danger' : user.role === 'TRAINER' ? 'success' : 'primary'} className="mt-1 text-[10px] scale-90 origin-left">
                   {user.role}
-                </span>
+                </Badge>
               </div>
               <button className="sidebar-logout-btn" onClick={onLogout} title="Sign Out">
                 <LogOut size={14} />

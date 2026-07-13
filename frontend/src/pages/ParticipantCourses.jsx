@@ -10,34 +10,19 @@ import {
 import { API, assetUrl, API_BASE } from '../api/api'
 import { useToast } from '../components/Toast'
 import DiscussionBoard from '../components/shared/DiscussionBoard'
+import { Button, Badge, Table, PageHeader, EmptyState, StatCard, ProgressBar } from '../components/ui'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
 const auth = (token) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token}` })
 
-function ProgressBar({ percent, height = 8, color = '#4f46e5' }) {
-  const v = Math.max(0, Math.min(100, Number(percent || 0)))
-  return (
-    <div style={{ height, width: '100%', background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
-      <div style={{ width: `${v}%`, height: '100%', background: color, transition: 'width 0.3s' }} />
-    </div>
-  )
-}
+
 
 function StatusPill({ status }) {
-  const map = {
-    NOT_STARTED: { bg: '#f1f5f9', fg: '#64748b', label: 'Not started' },
-    IN_PROGRESS: { bg: '#fef3c7', fg: '#92400e', label: 'In progress' },
-    COMPLETED:   { bg: '#dcfce7', fg: '#15803d', label: 'Completed' },
-  }
-  const v = map[status] || map.NOT_STARTED
-  return (
-    <span style={{
-      fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999,
-      background: v.bg, color: v.fg, textTransform: 'uppercase', letterSpacing: 0.4,
-    }}>{v.label}</span>
-  )
+  const label = status === 'NOT_STARTED' ? 'Not started' : status === 'IN_PROGRESS' ? 'In progress' : 'Completed';
+  const color = status === 'COMPLETED' ? 'success' : status === 'IN_PROGRESS' ? 'warning' : 'neutral';
+  return <Badge color={color}>{label}</Badge>;
 }
 
 const MAT_ICON = {
@@ -75,34 +60,24 @@ function MyCoursesList({ user, onOpen }) {
   }, [])
 
   return (
-    <div style={{ padding: '20px 0' }}>
-      <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: '#0f172a' }}>My Trainings</h1>
-      <p style={{ marginTop: 4, color: '#64748b', fontSize: 14 }}>
-        Continue where you left off, or jump into any of your enrolled trainings.
-      </p>
+    <div className="space-y-6">
+      <PageHeader
+        title="My Trainings"
+        subtitle="Continue where you left off, or jump into any of your enrolled trainings."
+      />
 
       {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16, marginTop: 20 }}>
-          {[1, 2, 3].map(i => <div key={i} style={{ height: 280, background: '#f1f5f9', borderRadius: 12 }} />)}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map(i => <div key={i} className="h-72 bg-slate-100 dark:bg-slate-800 rounded-2xl animate-pulse" />)}
         </div>
       ) : courses.length === 0 ? (
-        <div style={{
-          padding: '60px 24px', textAlign: 'center', background: '#fff',
-          border: '1px dashed #cbd5e1', borderRadius: 12, marginTop: 20,
-        }}>
-          <BookOpen size={48} color="#cbd5e1" style={{ margin: '0 auto 12px' }} />
-          <h3 style={{ margin: '0 0 6px', color: '#475569', fontSize: 18, fontWeight: 600 }}>
-            No trainings yet
-          </h3>
-          <p style={{ margin: 0, color: '#94a3b8', fontSize: 14 }}>
-            Browse the Explore Trainings tab to find programs you can enroll in.
-          </p>
-        </div>
+        <EmptyState
+          icon={BookOpen}
+          title="No trainings yet"
+          description="Browse the Explore Trainings catalog to find programs you can enroll in."
+        />
       ) : (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: 16, marginTop: 20,
-        }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {courses.map((c, i) => (
             <motion.div
               key={c.courseId}
@@ -116,62 +91,45 @@ function MyCoursesList({ user, onOpen }) {
                 }
                 onOpen(c.courseId)
               }}
-              style={{
-                background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12,
-                overflow: 'hidden', cursor: c.enrollmentStatus === 'PENDING' ? 'not-allowed' : 'pointer',
-                display: 'flex', flexDirection: 'column',
-                opacity: c.enrollmentStatus === 'PENDING' ? 0.75 : 1,
-              }}
+              className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 flex flex-col group ${c.enrollmentStatus === 'PENDING' ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
             >
-              <div style={{
-                height: 140, position: 'relative',
-                background: c.thumbnailUrl
-                  ? `url(${assetUrl(c.thumbnailUrl)}) center/cover`
-                  : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
-              }}>
-                {!c.thumbnailUrl && <BookOpen size={42} />}
+              <div
+                className="h-40 relative bg-cover bg-center flex items-center justify-center text-white"
+                style={{
+                  backgroundImage: c.thumbnailUrl ? `url(${assetUrl(c.thumbnailUrl)})` : 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                }}
+              >
+                {!c.thumbnailUrl && <BookOpen size={40} className="text-white/80 group-hover:scale-110 transition-transform duration-200" />}
               </div>
-              <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{
-                  fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 4px',
-                  display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
-                  overflow: 'hidden', minHeight: '2.4em', lineHeight: '1.3',
-                }}>
-                  {c.title}
-                </h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#64748b', fontSize: 11, marginBottom: 10 }}>
-                  <Folder size={11} /> {c.programTitle || '—'}
+              <div className="p-5 flex-1 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200 mb-1 line-clamp-2 leading-snug">
+                    {c.title}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-4">
+                    <Folder size={12} /> <span>{c.programTitle || '—'}</span>
+                  </div>
                 </div>
 
-                <div style={{ marginTop: 'auto' }}>
+                <div className="space-y-3">
                   {c.enrollmentStatus === 'PENDING' ? (
-                    <div style={{ textAlign: 'center', padding: '8px 0' }}>
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 999,
-                        background: '#fef3c7', color: '#92400e', textTransform: 'uppercase',
-                        display: 'inline-block', width: '100%', boxSizing: 'border-box',
-                        letterSpacing: 0.4,
-                      }}>
-                        Awaiting Approval
-                      </span>
+                    <div className="w-full text-center">
+                      <Badge color="warning" className="w-full justify-center py-1 text-xs uppercase tracking-wider font-bold">Awaiting Approval</Badge>
                     </div>
                   ) : (
                     <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
-                        <span>Progress</span><span style={{ fontWeight: 700, color: '#4f46e5' }}>{Math.round(c.progressPercent)}%</span>
+                      <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
+                        <span>Progress</span>
+                        <span className="font-bold text-violet-600 dark:text-violet-400">{Math.round(c.progressPercent)}%</span>
                       </div>
-                      <ProgressBar percent={c.progressPercent} />
-                      <button
-                        style={{
-                          width: '100%', marginTop: 12, padding: '9px 14px',
-                          background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8,
-                          fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        }}
+                      <ProgressBar value={c.progressPercent} max={100} showLabel={false} color="violet" />
+                      <Button
+                        variant="primary"
+                        className="w-full mt-2"
+                        icon={PlayCircle}
                       >
-                        <PlayCircle size={14} /> Continue
-                      </button>
+                        Continue
+                      </Button>
                     </>
                   )}
                 </div>

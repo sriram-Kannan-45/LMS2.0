@@ -10,23 +10,20 @@ export default function EmptyState({
   className = '',
 }) {
   return (
-    <div className={`flex flex-col items-center justify-center py-16 px-4 ${className}`}>
-      <div
-        className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
-        style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}
-      >
-        <Icon size={28} />
+    <div className={`flex flex-col items-center justify-center text-center py-16 px-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-sm ${className}`}>
+      <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-400 border border-violet-100 dark:border-violet-900/30">
+        <Icon size={24} />
       </div>
-      <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+      <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1.5">
         {title}
       </h3>
       {description && (
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', textAlign: 'center', maxWidth: 400, marginBottom: 20, lineHeight: 1.5 }}>
+        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mb-5 leading-relaxed">
           {description}
         </p>
       )}
       {actionLabel && onAction && (
-        <Button variant="primary" onClick={onAction}>
+        <Button variant="primary" size="sm" onClick={onAction}>
           {actionLabel}
         </Button>
       )}

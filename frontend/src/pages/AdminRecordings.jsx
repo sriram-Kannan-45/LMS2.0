@@ -5,6 +5,7 @@ import { API_BASE } from '../api/api'
 import { useToast } from '../components/Toast'
 import VideoPlayer from '../components/shared/VideoPlayer'
 import RecordingStatusBadge from '../components/shared/RecordingStatusBadge'
+import { Button, Badge, Table, PageHeader, EmptyState } from '../components/ui'
 
 const auth = (user) => ({ Authorization: `Bearer ${user.token}` })
 
@@ -146,28 +147,28 @@ export default function AdminRecordings({ user }) {
     name ? name.trim().split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '--'
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="p-6 max-w-7xl mx-auto">
-      <motion.div variants={itemVariants} className="mb-6">
-        <h1 className="text-3xl font-bold" style={{ fontFamily: "'Poppins', sans-serif" }}>Quiz Screen Recordings</h1>
-        <p className="text-gray-500 mt-1">Monitor participant activity during quiz sessions</p>
-      </motion.div>
+    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="p-6 max-w-7xl mx-auto space-y-6">
+      <PageHeader
+        title="Quiz Screen Recordings"
+        subtitle="Monitor and audit participant activity feeds during proctored quiz sessions."
+      />
 
-      <motion.div variants={itemVariants} className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter size={16} className="text-gray-400" />
-          <span className="text-sm font-medium text-gray-600">Filters</span>
+      <motion.div variants={itemVariants} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <Filter size={16} className="text-slate-400" />
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Filter Recordings</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <input
             placeholder="Search participant..."
             value={filters.search}
             onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
           <select
             value={filters.quiz_id}
             onChange={e => setFilters(f => ({ ...f, quiz_id: e.target.value }))}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
           >
             <option value="">All Quizzes</option>
             {quizzes.map(q => <option key={q.id} value={q.id}>{q.title}</option>)}
@@ -175,7 +176,7 @@ export default function AdminRecordings({ user }) {
           <select
             value={filters.trainer_id}
             onChange={e => setFilters(f => ({ ...f, trainer_id: e.target.value }))}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
           >
             <option value="">All Trainers</option>
             {trainers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -184,20 +185,18 @@ export default function AdminRecordings({ user }) {
             type="date"
             value={filters.date_from}
             onChange={e => setFilters(f => ({ ...f, date_from: e.target.value }))}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="From"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
           <input
             type="date"
             value={filters.date_to}
             onChange={e => setFilters(f => ({ ...f, date_to: e.target.value }))}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="To"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
           <select
             value={filters.status}
             onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
           >
             <option value="">All Status</option>
             <option value="ready">Ready</option>
@@ -205,105 +204,94 @@ export default function AdminRecordings({ user }) {
             <option value="failed">Failed</option>
           </select>
         </div>
-        <div className="flex gap-2 mt-3">
-          <button onClick={applyFilters} className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">Apply Filters</button>
-          <button onClick={resetFilters} className="px-4 py-1.5 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition-colors">Reset</button>
+        <div className="flex gap-2 pt-2">
+          <Button onClick={applyFilters} variant="primary" size="sm">Apply Filters</Button>
+          <Button onClick={resetFilters} variant="secondary" size="sm">Reset</Button>
         </div>
       </motion.div>
 
-      <motion.div variants={itemVariants} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <motion.div variants={itemVariants} className="space-y-4">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">Loading recordings...</div>
+          <div className="p-8 text-center text-slate-400">Loading recordings...</div>
         ) : recordings.length === 0 ? (
-          <div className="p-12 text-center">
-            <Monitor size={48} className="mx-auto text-gray-300 mb-3" />
-            <p className="text-gray-500 font-medium">No recordings found</p>
-            <p className="text-gray-400 text-sm mt-1">Recordings appear here after participants complete a proctored quiz session.</p>
-          </div>
+          <EmptyState
+            icon={Monitor}
+            title="No recordings found"
+            description="Recordings appear here after participants complete a proctored quiz session."
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">#</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Participant</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Quiz</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Trainer</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Date & Time</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Duration</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Size</th>
-                  <th className="text-left px-4 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Status</th>
-                  <th className="text-right px-4 py-3 text-gray-500 font-medium text-xs uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recordings.map((rec, idx) => (
-                  <tr key={rec.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 text-gray-400">{(pagination.page - 1) * pagination.limit + idx + 1}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-semibold">
-                          {initials(rec.participant?.name)}
-                        </div>
-                        <span className="font-medium text-gray-800">{rec.participant?.name || `User #${rec.participantId}`}</span>
+          <div className="space-y-4">
+            <Table
+              columns={[
+                { key: 'index', header: '#', render: (_, idx) => (pagination.page - 1) * pagination.limit + idx + 1 },
+                {
+                  key: 'participant',
+                  header: 'Participant',
+                  render: (row) => (
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400 flex items-center justify-center text-xs font-bold border border-violet-100 dark:border-violet-900/30">
+                        {initials(row.participant?.name)}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{rec.quiz?.title || `Quiz #${rec.quizId}`}</td>
-                    <td className="px-4 py-3 text-gray-600">{rec.trainer?.name || `Trainer #${rec.trainerId}`}</td>
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmtDate(rec.recordedAt)}</td>
-                    <td className="px-4 py-3 text-gray-600">{fmtDuration(rec.durationSeconds)}</td>
-                    <td className="px-4 py-3 text-gray-600">{fmtSize(rec.fileSizeMb)}</td>
-                    <td className="px-4 py-3"><RecordingStatusBadge status={rec.status} /></td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => handleWatch(rec)} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors" title="Watch">
-                          <Play size={16} />
-                        </button>
-                        <button onClick={() => handleDownload(rec)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors" title="Download">
-                          <Download size={16} />
-                        </button>
-                        <button onClick={() => handleDelete(rec.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors" title="Delete">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">{row.participant?.name || `User #${row.participantId}`}</span>
+                    </div>
+                  ),
+                },
+                { key: 'quiz', header: 'Quiz', render: (row) => row.quiz?.title || `Quiz #${row.quizId}` },
+                { key: 'trainer', header: 'Trainer', render: (row) => row.trainer?.name || `Trainer #${row.trainerId}` },
+                { key: 'recordedAt', header: 'Date & Time', render: (row) => fmtDate(row.recordedAt) },
+                { key: 'duration', header: 'Duration', render: (row) => fmtDuration(row.durationSeconds) },
+                { key: 'size', header: 'Size', render: (row) => fmtSize(row.fileSizeMb) },
+                { key: 'status', header: 'Status', render: (row) => <RecordingStatusBadge status={row.status} /> },
+                {
+                  key: 'actions',
+                  header: '',
+                  className: 'text-right',
+                  render: (row) => (
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button size="sm" variant="ghost" onClick={() => handleWatch(row)} icon={Play} className="text-violet-600 dark:text-violet-400" title="Watch" />
+                      <Button size="sm" variant="ghost" onClick={() => handleDownload(row)} icon={Download} className="text-slate-500 dark:text-slate-400" title="Download" />
+                      <Button size="sm" variant="ghost" onClick={() => handleDelete(row.id)} icon={Trash2} className="text-rose-500 hover:text-rose-700" title="Delete" />
+                    </div>
+                  ),
+                },
+              ]}
+              data={recordings}
+            />
 
-        {pagination.totalPages > 1 && !loading && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <span className="text-sm text-gray-500">
-              Showing {(pagination.page - 1) * pagination.limit + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                disabled={pagination.page <= 1}
-                onClick={() => fetchRecordings(pagination.page - 1)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(p => (
-                <button
-                  key={p}
-                  onClick={() => fetchRecordings(p)}
-                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${p === pagination.page ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                >
-                  {p}
-                </button>
-              ))}
-              <button
-                disabled={pagination.page >= pagination.totalPages}
-                onClick={() => fetchRecordings(pagination.page + 1)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Showing {(pagination.page - 1) * pagination.limit + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    disabled={pagination.page <= 1}
+                    onClick={() => fetchRecordings(pagination.page - 1)}
+                    variant="secondary"
+                    size="sm"
+                    icon={ChevronLeft}
+                  />
+                  {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(p => (
+                    <Button
+                      key={p}
+                      onClick={() => fetchRecordings(p)}
+                      variant={p === pagination.page ? 'primary' : 'secondary'}
+                      size="sm"
+                      className="w-8 h-8 p-0"
+                    >
+                      {p}
+                    </Button>
+                  ))}
+                  <Button
+                    disabled={pagination.page >= pagination.totalPages}
+                    onClick={() => fetchRecordings(pagination.page + 1)}
+                    variant="secondary"
+                    size="sm"
+                    icon={ChevronRight}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </motion.div>

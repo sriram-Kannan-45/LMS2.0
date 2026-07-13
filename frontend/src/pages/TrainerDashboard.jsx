@@ -9,6 +9,7 @@ import TrainerCourses from './TrainerCourses'
 import { useToast } from '../components/Toast'
 import Pagination from '../components/Pagination'
 import SortableTableHeader from '../components/SortableTableHeader'
+import { Button, Badge, Table, PageHeader, EmptyState, StatCard, ProgressBar } from '../components/ui'
 
 import { API_BASE } from '../api/api'
 
@@ -228,84 +229,98 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="card">
-            <div className="card-header">
-              <h3>Feedback Received ({feedbacks.length})</h3>
+          <PageHeader
+            title="Feedback Received"
+            subtitle="View ratings and comments submitted by training participants."
+          />
+          {feedbacks.length === 0 ? (
+            <EmptyState
+              icon={MessageSquare}
+              title="No Feedback Yet"
+              description="Feedback from participants will appear here once they start submitting."
+            />
+          ) : (
+            <div className="space-y-4">
+              <Table
+                columns={[
+                  {
+                    key: 'trainingTitle',
+                    header: (
+                      <SortableTableHeader sortKey="trainingTitle" currentSort={feedbackSort.key} sortDirection={feedbackSort.direction} onSort={handleFeedbackSort}>
+                        Training
+                      </SortableTableHeader>
+                    ),
+                    render: (row) => <strong className="text-slate-800 dark:text-slate-200">{row.trainingTitle}</strong>
+                  },
+                  {
+                    key: 'participant',
+                    header: 'Participant',
+                    render: (row) => row.anonymous ? <Badge color="neutral">Anonymous</Badge> : (
+                      row.participantId ? (
+                        <button
+                          type="button"
+                          onClick={() => setViewingParticipant({ id: row.participantId, name: row.participantName })}
+                          className="text-violet-600 hover:text-violet-700 hover:underline text-sm font-medium focus:outline-none cursor-pointer"
+                          title="View profile"
+                        >
+                          {row.participantName}
+                        </button>
+                      ) : row.participantName
+                    )
+                  },
+                  {
+                    key: 'trainerRating',
+                    header: (
+                      <SortableTableHeader sortKey="trainerRating" currentSort={feedbackSort.key} sortDirection={feedbackSort.direction} onSort={handleFeedbackSort} numeric>
+                        Trainer Rating
+                      </SortableTableHeader>
+                    ),
+                    render: (row) => <Stars v={row.trainerRating} />
+                  },
+                  {
+                    key: 'subjectRating',
+                    header: (
+                      <SortableTableHeader sortKey="subjectRating" currentSort={feedbackSort.key} sortDirection={feedbackSort.direction} onSort={handleFeedbackSort} numeric>
+                        Subject Rating
+                      </SortableTableHeader>
+                    ),
+                    render: (row) => <Stars v={row.subjectRating} />
+                  },
+                  {
+                    key: 'comments',
+                    header: 'Comments',
+                    className: 'max-w-[200px] truncate text-slate-500 text-xs',
+                    render: (row) => row.comments || '-'
+                  },
+                  {
+                    key: 'trainerResponse',
+                    header: 'My Reply',
+                    className: 'max-w-[200px]',
+                    render: (row) => row.trainerResponse ? (
+                      <span className="text-slate-500 text-xs">{row.trainerResponse}</span>
+                    ) : (
+                      <Button size="sm" variant="primary" onClick={() => { setReplyModal(row); setReplyText(''); }}>
+                        <MessageSquare size={12} className="mr-1" /> Reply
+                      </Button>
+                    )
+                  },
+                  {
+                    key: 'submittedAt',
+                    header: 'Date',
+                    render: (row) => fmtDate(row.submittedAt)
+                  }
+                ]}
+                data={paginatedFeedbacks}
+              />
+              {totalFeedbackPages > 1 && (
+                <Pagination
+                  currentPage={feedbackPage}
+                  totalPages={totalFeedbackPages}
+                  onPageChange={setFeedbackPage}
+                />
+              )}
             </div>
-            {feedbacks.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">💬</div>
-                <h3>No Feedback Yet</h3>
-                <p>Feedback from participants will appear here once they start submitting.</p>
-              </div>
-            ) : (
-              <>
-                <div className="table-wrapper">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <SortableTableHeader sortKey="trainingTitle" currentSort={feedbackSort.key} sortDirection={feedbackSort.direction} onSort={handleFeedbackSort}>Training</SortableTableHeader>
-                        <th>Participant</th>
-                        <SortableTableHeader sortKey="trainerRating" currentSort={feedbackSort.key} sortDirection={feedbackSort.direction} onSort={handleFeedbackSort} numeric>Trainer Rating</SortableTableHeader>
-                        <SortableTableHeader sortKey="subjectRating" currentSort={feedbackSort.key} sortDirection={feedbackSort.direction} onSort={handleFeedbackSort} numeric>Subject Rating</SortableTableHeader>
-                        <th>Comments</th>
-                        <th>My Reply</th>
-                        <th>Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedFeedbacks.map(f => (
-                        <tr key={f.id}>
-                          <td><strong>{f.trainingTitle}</strong></td>
-                          <td>{f.anonymous ? <span className="badge badge-gray">Anonymous</span> : (
-                            f.participantId ? (
-                              <button
-                                type="button"
-                                onClick={() => setViewingParticipant({ id: f.participantId, name: f.participantName })}
-                                style={{
-                                  background: 'transparent',
-                                  border: 0,
-                                  padding: 0,
-                                  color: 'var(--text-link, #2563eb)',
-                                  cursor: 'pointer',
-                                  font: 'inherit',
-                                  textDecoration: 'underline',
-                                  textUnderlineOffset: 2,
-                                }}
-                                title="View profile"
-                              >
-                                {f.participantName}
-                              </button>
-                            ) : f.participantName
-                          )}</td>
-                          <td><Stars v={f.trainerRating} /></td>
-                          <td><Stars v={f.subjectRating} /></td>
-                          <td style={{ maxWidth: 200, fontSize: 12, color: 'var(--text-secondary)' }}>{f.comments || '-'}</td>
-                          <td style={{ maxWidth: 200, fontSize: 12 }}>
-                            {f.trainerResponse ? (
-                              <span style={{ color: 'var(--text-secondary)' }}>{f.trainerResponse}</span>
-                            ) : (
-                              <button className="btn btn-sm btn-primary" onClick={() => { setReplyModal(f); setReplyText(''); }}>
-                                <MessageSquare size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Reply
-                              </button>
-                            )}
-                          </td>
-                          <td>{fmtDate(f.submittedAt)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {totalFeedbackPages > 1 && (
-                  <Pagination
-                    currentPage={feedbackPage}
-                    totalPages={totalFeedbackPages}
-                    onPageChange={setFeedbackPage}
-                  />
-                )}
-              </>
-            )}
-          </div>
+          )}
         </motion.div>
       )}
 
@@ -325,61 +340,72 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="card">
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h3>Enrollment Requests</h3>
-                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Review and approve participant access requests</span>
-              </div>
-              <button className="btn btn-sm" onClick={fetchEnrollmentRequests}>Refresh</button>
-            </div>
-            
-            {enrollmentRequests.length === 0 ? (
-              <div className="empty-state" style={{ padding: '40px 0', textAlign: 'center' }}>
-                <Users size={48} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-                <p style={{ color: 'var(--text-muted)' }}>No pending enrollment requests.</p>
-              </div>
-            ) : (
-              <div className="table-wrapper">
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Participant</th>
-                      <th>Target Training</th>
-                      <th>Type</th>
-                      <th style={{ textAlign: 'center' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {enrollmentRequests.map(req => (
-                      <tr key={req.id}>
-                        <td>
-                          <div style={{ fontWeight: 600 }}>{req.participant?.name || 'Unknown'}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{req.participant?.email}</div>
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: 550 }}>{req.course?.title || req.training?.title || 'Unknown'}</div>
-                        </td>
-                        <td>
-                          <span className="ac-chip ac-chip-success">
-                            Training
-                          </span>
-                        </td>
-                        <td style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-                          <button className="btn btn-sm btn-primary" style={{ background: '#10b981', borderColor: '#10b981' }} onClick={() => handleApproveEnrollment(req.id)}>
-                            Approve
-                          </button>
-                          <button className="btn btn-sm btn-danger" onClick={() => handleRejectEnrollment(req.id)}>
-                            Reject
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <PageHeader
+            title="Enrollment Requests"
+            subtitle="Review and approve participant access requests to your training courses."
+            action={<Button size="sm" variant="secondary" onClick={fetchEnrollmentRequests}>Refresh</Button>}
+          />
+          {enrollmentRequests.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="No pending requests"
+              description="No participants are currently waiting for enrollment approval."
+            />
+          ) : (
+            <Table
+              columns={[
+                {
+                  key: 'participantName',
+                  header: 'Participant',
+                  render: (row) => (
+                    <div>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">{row.participant?.name || 'Unknown'}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">{row.participant?.email}</div>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'courseTitle',
+                  header: 'Target Training',
+                  render: (row) => (
+                    <div className="font-medium text-slate-700 dark:text-slate-300">
+                      {row.course?.title || row.training?.title || 'Unknown'}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'type',
+                  header: 'Type',
+                  render: () => <Badge color="success">Training</Badge>,
+                },
+                {
+                  key: 'actions',
+                  header: '',
+                  className: 'text-right',
+                  render: (row) => (
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        className="bg-emerald-600 hover:bg-emerald-700 border-emerald-500/20 text-white"
+                        onClick={() => handleApproveEnrollment(row.id)}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleRejectEnrollment(row.id)}
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+              data={enrollmentRequests}
+            />
+          )}
         </motion.div>
       )}
 
@@ -389,20 +415,20 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div>
-                <h3 style={{ margin: 0, fontFamily: "'Poppins', sans-serif" }}>Trainer Reports &amp; Analytics</h3>
-                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>View participant progress, quiz results, and review submissions</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-sm btn-secondary" onClick={() => navigate('/trainer/courses')}>
-                  <Monitor style={{ width: 14, height: 14, marginRight: 4 }} />
-                  Assessments
-                </button>
-                <button className="btn btn-sm btn-secondary" onClick={handleRegenerateCertificate}>Check/Issue Certificates</button>
-                <button className="btn btn-sm btn-primary" onClick={fetchTrainerReport}>Refresh Data</button>
-              </div>
-            </div>
+            <PageHeader
+              title="Trainer Reports & Analytics"
+              subtitle="View participant progress, quiz results, and review submissions."
+              action={
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => navigate('/trainer/courses')}>
+                    <Monitor size={14} className="mr-1" />
+                    Assessments
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={handleRegenerateCertificate}>Check/Issue Certificates</Button>
+                  <Button size="sm" variant="primary" onClick={fetchTrainerReport}>Refresh Data</Button>
+                </div>
+              }
+            />
 
           {!trainerReport ? (
             <div className="card" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
@@ -410,139 +436,81 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              {/* Stats Card */}
-              <div className="card" style={{ padding: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <TrendingUp style={{ color: '#4f46e5' }} />
-                  <div>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 550 }}>Average Progress Rate</div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Poppins', sans-serif" }}>{trainerReport.averageCompletion}%</div>
-                  </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <StatCard label="Average Progress Rate" value={`${trainerReport.averageCompletion}%`} icon={TrendingUp} variant="violet" />
               </div>
 
-              {/* Participant Progress Grid */}
-              <div className="card">
-                <div className="card-header">
-                  <h3>Participant Progress</h3>
-                </div>
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Participant Progress</h3>
                 {(!trainerReport.participantProgress || trainerReport.participantProgress.length === 0) ? (
-                  <div className="empty-state" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No participants enrolled yet.</div>
+                  <EmptyState icon={Users} title="No participants enrolled" description="No participants enrolled yet." />
                 ) : (
-                  <div className="table-wrapper">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Participant</th>
-                          <th>Training</th>
-                          <th>Type</th>
-                          <th>Lessons Completed</th>
-                          <th>Progress</th>
-                          <th>Avg Quiz Score</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {trainerReport.participantProgress.map((p, idx) => (
-                          <tr key={idx}>
-                            <td>
-                              <div style={{ fontWeight: 600 }}>{p.participantName}</div>
-                              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{p.participantEmail}</div>
-                            </td>
-                            <td>{p.title}</td>
-                            <td>
-                              <span className="ac-chip ac-chip-success">
-                                Training
-                              </span>
-                            </td>
-                            <td>{p.completedLessons} / {p.totalLessons}</td>
-                            <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ flex: 1, height: 6, background: 'rgba(0,0,0,0.1)', borderRadius: 3, overflow: 'hidden', minWidth: 60 }}>
-                                  <div style={{ width: `${p.progressPercent}%`, height: '100%', background: '#4f46e5' }}></div>
-                                </div>
-                                <span style={{ fontSize: 12, fontWeight: 600 }}>{p.progressPercent}%</span>
-                              </div>
-                            </td>
-                            <td>
-                              <span className="ac-chip ac-chip-success" style={{ fontWeight: 600 }}>
-                                {p.avgQuizScore}%
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <Table
+                    columns={[
+                      {
+                        key: 'participantName',
+                        header: 'Participant',
+                        render: (row) => (
+                          <div>
+                            <div className="font-semibold text-slate-800 dark:text-slate-200">{row.participantName}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">{row.participantEmail}</div>
+                          </div>
+                        ),
+                      },
+                      { key: 'title', header: 'Training' },
+                      { key: 'type', header: 'Type', render: () => <Badge color="success">Training</Badge> },
+                      { key: 'lessons', header: 'Lessons Completed', render: (row) => `${row.completedLessons} / ${row.totalLessons || 0}` },
+                      {
+                        key: 'progress',
+                        header: 'Progress',
+                        render: (row) => (
+                          <div className="w-36">
+                            <ProgressBar value={row.progressPercent} max={100} showLabel color="violet" />
+                          </div>
+                        ),
+                      },
+                      {
+                        key: 'avgQuizScore',
+                        header: 'Avg Quiz Score',
+                        render: (row) => <Badge color="success">{row.avgQuizScore}%</Badge>,
+                      },
+                    ]}
+                    data={trainerReport.participantProgress}
+                  />
                 )}
               </div>
 
-              {/* Pending Reviews */}
-              <div className="card">
-                <div className="card-header">
-                  <h3>Pending Assessment Reviews</h3>
-                </div>
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Pending Assessment Reviews</h3>
                 {(!trainerReport.pendingReviews || trainerReport.pendingReviews.length === 0) ? (
-                  <div className="empty-state" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No pending reviews. All submissions graded!</div>
+                  <EmptyState icon={CheckCircle} title="All Submissions Graded" description="No pending reviews. All submissions graded!" />
                 ) : (
-                  <div className="table-wrapper">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Participant</th>
-                          <th>Assessment</th>
-                          <th>Max Score</th>
-                          <th>Submitted At</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {trainerReport.pendingReviews.map((pr, idx) => (
-                          <tr key={idx}>
-                            <td style={{ fontWeight: 600 }}>{pr.participantName}</td>
-                            <td>{pr.assessmentTitle}</td>
-                            <td>{pr.maxScore}</td>
-                            <td>{fmtDate(pr.date)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <Table
+                    columns={[
+                      { key: 'participantName', header: 'Participant', className: 'font-semibold text-slate-800 dark:text-slate-200' },
+                      { key: 'assessmentTitle', header: 'Assessment' },
+                      { key: 'maxScore', header: 'Max Score' },
+                      { key: 'date', header: 'Submitted At', render: (row) => fmtDate(row.date) },
+                    ]}
+                    data={trainerReport.pendingReviews}
+                  />
                 )}
               </div>
 
-              {/* Quiz History */}
-              <div className="card">
-                <div className="card-header">
-                  <h3>Recent Quiz Results</h3>
-                </div>
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Recent Quiz Results</h3>
                 {(!trainerReport.quizScores || trainerReport.quizScores.length === 0) ? (
-                  <div className="empty-state" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No quiz submissions yet.</div>
+                  <EmptyState icon={FileText} title="No quiz submissions" description="No quiz submissions yet." />
                 ) : (
-                  <div className="table-wrapper">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Participant</th>
-                          <th>Quiz</th>
-                          <th>Score</th>
-                          <th>Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {trainerReport.quizScores.map((qs, idx) => (
-                          <tr key={idx}>
-                            <td style={{ fontWeight: 600 }}>{qs.participantName}</td>
-                            <td>{qs.quizTitle}</td>
-                            <td>
-                              <span className="ac-chip ac-chip-success" style={{ fontWeight: 600 }}>
-                                {qs.score}%
-                              </span>
-                            </td>
-                            <td>{fmtDate(qs.date)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <Table
+                    columns={[
+                      { key: 'participantName', header: 'Participant', className: 'font-semibold text-slate-800 dark:text-slate-200' },
+                      { key: 'quizTitle', header: 'Quiz' },
+                      { key: 'score', header: 'Score', render: (row) => <Badge color="success">{row.score}%</Badge> },
+                      { key: 'date', header: 'Date', render: (row) => fmtDate(row.date) },
+                    ]}
+                    data={trainerReport.quizScores}
+                  />
                 )}
               </div>
 

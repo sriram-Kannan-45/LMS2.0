@@ -16,7 +16,7 @@ const roles = [
   { 
     key: 'PARTICIPANT', 
     label: 'Participant', 
-    color: '#2563EB', 
+    color: '#7c3aed', 
     activeClass: 'trainer-submit-btn--blue',
     subtitle: 'Sign in to your Participant Portal',
     video: blueVideo,
@@ -25,7 +25,7 @@ const roles = [
   { 
     key: 'TRAINER', 
     label: 'Trainer', 
-    color: '#16A34A', 
+    color: '#10b981', 
     activeClass: 'trainer-submit-btn--green',
     subtitle: 'Sign in to your Trainer Hub',
     video: greenVideo,
@@ -34,7 +34,7 @@ const roles = [
   { 
     key: 'ADMIN', 
     label: 'Admin', 
-    color: '#DC2626', 
+    color: '#ef4444', 
     activeClass: 'trainer-submit-btn--red',
     subtitle: 'Sign in to your Admin Portal',
     video: redVideo,
@@ -350,7 +350,7 @@ export default function LoginPage({ onLogin, defaultRole }) {
                   border: 'none',
                   fontSize: '13px',
                   fontWeight: 700,
-                  color: '#2563eb',
+                  color: '#7c3aed',
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   padding: 0
