@@ -83,14 +83,14 @@ function StatusBadge({ status = 'DRAFT' }) {
   const isPublished = label === 'PUBLISHED'
   return (
     <span
-      className="inline-flex items-center rounded-full text-[10px] font-extrabold uppercase tracking-wider"
+      className="inline-flex items-center rounded-full text-[9px] font-extrabold uppercase tracking-wider"
       style={{
-        padding: '4px 10px',
+        padding: '3px 8px',
         background: '#ffffff',
         color: isPublished ? '#047857' : '#b45309',
         border: `1px solid ${isPublished ? '#a7f3d0' : '#fde68a'}`,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-        fontFamily: "'Inter', sans-serif"
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+        fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif'
       }}
     >
       {label}
@@ -104,22 +104,22 @@ function StatChip({ icon: Icon, label, color }) {
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 8,
-        padding: '6px 12px',
-        borderRadius: 12,
+        gap: 6,
+        padding: '4px 8px',
+        borderRadius: 8,
         background: '#F1F5F9',
         border: '1px solid #E2E8F0',
-        fontSize: 13,
+        fontSize: 11,
         fontWeight: 600,
         color: '#475569',
-        fontFamily: "'Inter', sans-serif"
+        fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif'
       }}
     >
       <div
         style={{
-          width: 24,
-          height: 24,
-          borderRadius: 8,
+          width: 20,
+          height: 20,
+          borderRadius: 6,
           background: color ? `${color}15` : 'rgba(0,0,0,0.05)',
           display: 'flex',
           alignItems: 'center',
@@ -127,7 +127,7 @@ function StatChip({ icon: Icon, label, color }) {
           color: color || '#475569'
         }}
       >
-        <Icon size={14} />
+        <Icon size={12} />
       </div>
       <span>{label}</span>
     </div>
@@ -138,11 +138,11 @@ function ProgressBar({ value = 0 }) {
   const pct = Math.min(100, Math.max(0, value || 0))
   return (
     <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#6B7280' }}>Progress</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{pct}%</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Progress</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>{pct}%</span>
       </div>
-      <div style={{ height: 8, background: '#E2E8F0', borderRadius: 9999, overflow: 'hidden', width: '100%' }}>
+      <div style={{ height: 5, background: '#E2E8F0', borderRadius: 9999, overflow: 'hidden', width: '100%' }}>
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
@@ -164,7 +164,7 @@ function CourseCover({ status, learners, artwork }) {
   return (
     <div
       style={{
-        height: 180,
+        height: 130,
         background: bg,
         position: 'relative',
         display: 'flex',
@@ -177,35 +177,35 @@ function CourseCover({ status, learners, artwork }) {
     >
       <div className="absolute inset-0 pointer-events-none" style={patternOverlay()} />
 
-      <div className="absolute top-4 left-4 z-10">
+      <div className="absolute top-3 left-3 z-10">
         <StatusBadge status={status} />
       </div>
 
-      <div className="absolute top-4 right-4 z-10">
+      <div className="absolute top-3 right-3 z-10">
         <span
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
-            padding: '5px 12px',
+            gap: '4px',
+            padding: '3px 8px',
             borderRadius: '999px',
-            fontSize: '11px',
+            fontSize: '10px',
             fontWeight: 700,
             background: 'rgba(15, 23, 42, 0.65)',
             backdropFilter: 'blur(8px)',
             color: '#FFFFFF',
             border: '1px solid rgba(255,255,255,0.1)',
-            fontFamily: "'Inter', sans-serif"
+            fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif'
           }}
         >
-          <Users size={12} /> {learners || 0} Learners
+          <Users size={11} /> {learners || 0} Learners
         </span>
       </div>
 
       <div
         style={{
-          width: 120,
-          height: 120,
+          width: 80,
+          height: 80,
           borderRadius: '50%',
           background: 'rgba(255, 255, 255, 0.15)',
           backdropFilter: 'blur(16px)',
@@ -213,10 +213,10 @@ function CourseCover({ status, learners, artwork }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)'
+          boxShadow: '0 6px 20px rgba(0, 0, 0, 0.1)'
         }}
       >
-        <CardIcon size={96} style={{ color: '#FFFFFF', opacity: 0.95 }} />
+        <CardIcon size={64} style={{ color: '#FFFFFF', opacity: 0.95 }} />
       </div>
     </div>
   )
@@ -224,25 +224,25 @@ function CourseCover({ status, learners, artwork }) {
 
 function ActionButtons({ onManage, onPreview, onMore }) {
   return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 'auto', flexShrink: 0 }}>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 'auto', flexShrink: 0 }}>
       <button
         onClick={onManage}
         style={{
           flex: 1,
-          height: 48,
-          borderRadius: 14,
+          height: 42,
+          borderRadius: 10,
           background: '#2563EB',
           color: '#FFFFFF',
           fontSize: 13,
           fontWeight: 700,
           border: 'none',
           cursor: 'pointer',
-          fontFamily: "'Inter', sans-serif",
+          fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 6,
-          boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)',
+          boxShadow: '0 2px 6px rgba(37, 99, 235, 0.2)',
           outline: 'none',
           transition: 'all 200ms ease'
         }}
@@ -255,15 +255,15 @@ function ActionButtons({ onManage, onPreview, onMore }) {
         onClick={onPreview}
         style={{
           flex: 1,
-          height: 48,
-          borderRadius: 14,
+          height: 42,
+          borderRadius: 10,
           background: '#FFFFFF',
           color: '#475569',
           fontSize: 13,
           fontWeight: 700,
           border: '1px solid #E5E7EB',
           cursor: 'pointer',
-          fontFamily: "'Inter', sans-serif",
+          fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -279,9 +279,9 @@ function ActionButtons({ onManage, onPreview, onMore }) {
       <button
         onClick={onMore}
         style={{
-          width: 48,
-          height: 48,
-          borderRadius: 14,
+          width: 42,
+          height: 42,
+          borderRadius: 10,
           background: '#FFFFFF',
           color: '#6B7280',
           border: '1px solid #E5E7EB',
@@ -294,7 +294,7 @@ function ActionButtons({ onManage, onPreview, onMore }) {
         }}
         className="hover:bg-slate-50 outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
       >
-        <MoreVertical size={20} />
+        <MoreVertical size={18} />
       </button>
     </div>
   )
@@ -313,21 +313,21 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
       whileHover={{
         y: -6,
         scale: 1.02,
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03)'
       }}
       style={{
-        height: 520,
+        height: 390,
         width: '100%',
-        borderRadius: 22,
+        borderRadius: 18,
         background: '#FFFFFF',
         border: '1px solid #E5E7EB',
-        boxShadow: '0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.04)',
+        boxShadow: '0 4px 12px -2px rgba(15, 23, 42, 0.04), 0 2px 4px -1px rgba(15, 23, 42, 0.02)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
         cursor: 'default',
         transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
-        fontFamily: "'Inter', sans-serif"
+        fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif'
       }}
     >
       <CourseCover
@@ -337,17 +337,17 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
         artwork={artwork}
       />
 
-      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <span style={{ fontSize: '13px', fontWeight: 500, color: '#6B7280' }}>
             {course.programTitle || 'General Training'}
           </span>
           <span
             style={{
               display: 'inline-flex',
-              padding: '3px 8px',
-              borderRadius: '6px',
-              fontSize: '11px',
+              padding: '2px 6px',
+              borderRadius: '5px',
+              fontSize: '10px',
               fontWeight: 700,
               background: difficulty === 'Advanced' ? '#FEE2E2' : difficulty === 'Beginner' ? '#D1FAE5' : '#FEF3C7',
               color: difficulty === 'Advanced' ? '#991B1B' : difficulty === 'Beginner' ? '#065F46' : '#92400E',
@@ -360,10 +360,10 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
 
         <h3
           style={{
-            fontSize: '28px',
+            fontSize: '22px',
             fontWeight: 700,
             color: '#111827',
-            margin: '0 0 8px',
+            margin: '0 0 6px',
             letterSpacing: '-0.02em',
             lineHeight: 1.25,
             whiteSpace: 'nowrap',
@@ -378,24 +378,24 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
         <p
           className="line-clamp-2"
           style={{
-            fontSize: '15px',
+            fontSize: '13px',
             color: '#6B7280',
-            margin: '0 0 16px',
-            lineHeight: 1.5,
+            margin: '0 0 10px',
+            lineHeight: 1.4,
             fontWeight: 400
           }}
         >
           {course.description || 'No description provided.'}
         </p>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', marginBottom: 18 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 8px', marginBottom: 12 }}>
           <StatChip icon={FileText} label={`${course.lessonCount || 0} Lessons`} color="#4F46E5" />
           <StatChip icon={Sparkles} label={`${course.quizCount || 0} Quizzes`} color="#F59E0B" />
           <StatChip icon={Users} label={`${course.enrolledCount || 0} Enrolled`} color="#22C55E" />
           <StatChip icon={BookOpen} label={`${course.resourceCount || 4} Resources`} color="#7C3AED" />
         </div>
 
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 14 }}>
           <ProgressBar value={course.progress || 0} />
         </div>
 
@@ -413,10 +413,10 @@ function SearchInput({ value, onChange }) {
   return (
     <div className="relative" style={{ flex: 1, maxWidth: 450, width: '100%' }}>
       <Search
-        size={20}
+        size={18}
         style={{
           position: 'absolute',
-          left: '16px',
+          left: '14px',
           top: '50%',
           transform: 'translateY(-50%)',
           color: '#9CA3AF',
@@ -430,19 +430,19 @@ function SearchInput({ value, onChange }) {
         onChange={(e) => onChange(e.target.value)}
         placeholder="Search courses..."
         style={{
-          height: 52,
+          height: 46,
           width: '100%',
-          borderRadius: 16,
-          paddingLeft: '48px',
+          borderRadius: 14,
+          paddingLeft: '44px',
           paddingRight: '16px',
-          fontSize: '15px',
+          fontSize: '14px',
           fontWeight: 400,
           background: '#FFFFFF',
           border: '1px solid #E5E7EB',
           outline: 'none',
-          fontFamily: "'Inter', sans-serif",
+          fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif',
           boxSizing: 'border-box',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)'
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
         }}
         className="focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 transition-all outline-none"
       />
@@ -454,7 +454,7 @@ function FilterTabs({ active, onChange }) {
   const options = ['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED']
   const labelMap = { ALL: 'All', DRAFT: 'Draft', PUBLISHED: 'Published', ARCHIVED: 'Archived' }
   return (
-    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       {options.map((opt) => {
         const isActive = active === opt
         return (
@@ -462,10 +462,10 @@ function FilterTabs({ active, onChange }) {
             key={opt}
             onClick={() => onChange(opt)}
             style={{
-              height: 44,
-              padding: '0 24px',
+              height: 40,
+              padding: '0 18px',
               borderRadius: 9999,
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: 600,
               cursor: 'pointer',
               display: 'inline-flex',
@@ -475,7 +475,7 @@ function FilterTabs({ active, onChange }) {
               color: isActive ? '#FFFFFF' : '#6B7280',
               border: `1px solid ${isActive ? '#2563EB' : '#E5E7EB'}`,
               transition: 'all 200ms ease',
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif',
               outline: 'none',
               boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
             }}
@@ -608,28 +608,28 @@ function CoursesList({ user, onOpenCourse }) {
       style={{
         maxWidth: 1440,
         margin: '0 auto',
-        padding: '32px 32px 64px',
+        padding: '24px 28px 48px', // Horizontal reduced by 15%, vertical by 25%
         background: '#F8FAFC',
         minHeight: '100vh',
-        fontFamily: "'Inter', sans-serif"
+        fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif'
       }}
     >
       {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6B7280', marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#6B7280', marginBottom: 8 }}>
         <span>Home</span>
         <span>/</span>
         <span style={{ fontWeight: 600, color: '#111827' }}>Trainings</span>
       </div>
 
       {/* Page Header */}
-      <div style={{ marginBottom: 32 }}>
+      <div style={{ marginBottom: 24 }}>
         <h1
           style={{
-            fontSize: '40px',
+            fontSize: '36px', // Refined to 36px Page Title
             fontWeight: 700,
             color: '#111827',
             margin: 0,
-            letterSpacing: '-0.03em'
+            letterSpacing: '-0.025em'
           }}
         >
           My Trainings
@@ -638,7 +638,7 @@ function CoursesList({ user, onOpenCourse }) {
           style={{
             fontSize: '15px',
             color: '#6B7280',
-            margin: '8px 0 0',
+            margin: '6px 0 0',
             fontWeight: 500
           }}
         >
@@ -650,15 +650,15 @@ function CoursesList({ user, onOpenCourse }) {
       <div
         style={{
           display: 'flex',
-          gap: 16,
+          gap: 12,
           alignItems: 'center',
           justifyContent: 'space-between',
           background: '#FFFFFF',
           border: '1px solid #E5E7EB',
-          borderRadius: 20,
-          padding: 20,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-          marginBottom: 32
+          borderRadius: 16,
+          padding: '16px 20px',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+          marginBottom: 24
         }}
         className="flex-col md:flex-row"
       >
@@ -667,47 +667,47 @@ function CoursesList({ user, onOpenCourse }) {
         <button
           onClick={() => setShowCreateModal(true)}
           style={{
-            height: 44,
-            padding: '0 24px',
+            height: 42, // Refined button height
+            padding: '0 20px',
             background: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)',
             color: '#FFFFFF',
             border: 'none',
-            borderRadius: 14,
+            borderRadius: 10, // Refined button radius
             fontSize: 13,
             fontWeight: 600,
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 8,
+            gap: 6,
             transition: 'all 200ms ease',
-            fontFamily: "'Inter', sans-serif",
-            boxShadow: '0 2px 8px rgba(37,99,235,0.25)',
+            fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif',
+            boxShadow: '0 2px 6px rgba(37,99,235,0.2)',
             outline: 'none'
           }}
           className="hover:scale-102 hover:shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
         >
-          <Plus size={16} /> Create Training
+          <Plus size={15} /> Create Training
         </button>
       </div>
 
       {/* Course Cards Grid - 2-Column Responsive Layout */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-[28px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px]">
           {[1, 2].map((i) => (
-            <div key={i} className="bg-white border border-slate-200 rounded-[22px] overflow-hidden animate-pulse shadow-sm" style={{ height: 520 }}>
-              <div className="h-[180px] bg-slate-100" />
-              <div className="p-6 space-y-4">
-                <div className="h-6 bg-slate-100 rounded w-1/3" />
-                <div className="h-8 bg-slate-100 rounded w-3/4" />
-                <div className="h-4 bg-slate-100 rounded w-full" />
-                <div className="h-10 bg-slate-100 rounded w-1/2" />
+            <div key={i} className="bg-white border border-slate-200 rounded-[18px] overflow-hidden animate-pulse shadow-sm" style={{ height: 390 }}>
+              <div className="h-[130px] bg-slate-100" />
+              <div className="p-5 space-y-3">
+                <div className="h-5 bg-slate-100 rounded w-1/3" />
+                <div className="h-6 bg-slate-100 rounded w-3/4" />
+                <div className="h-3 bg-slate-100 rounded w-full" />
+                <div className="h-8 bg-slate-100 rounded w-1/2" />
               </div>
             </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 px-6 border border-dashed border-slate-200 rounded-[22px] bg-white shadow-sm">
+        <div className="text-center py-20 px-6 border border-dashed border-slate-200 rounded-[18px] bg-white shadow-sm">
           <BookOpen size={48} className="mx-auto text-slate-300 mb-4" />
           <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: '0 0 8px' }}>
             {courses.length === 0 ? 'No courses assigned yet' : 'No courses match your filters'}
@@ -719,7 +719,7 @@ function CoursesList({ user, onOpenCourse }) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-[28px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px]">
           {filtered.map((c) => (
             <TrainingCard
               key={c.id}
