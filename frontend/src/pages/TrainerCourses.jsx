@@ -90,7 +90,7 @@ function StatusBadge({ status = 'DRAFT' }) {
         color: isPublished ? '#047857' : '#b45309',
         border: `1px solid ${isPublished ? '#a7f3d0' : '#fde68a'}`,
         boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-        fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif'
+        fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif'
       }}
     >
       {label}
@@ -107,12 +107,12 @@ function StatChip({ icon: Icon, label, color }) {
         gap: 6,
         padding: '4px 8px',
         borderRadius: 8,
-        background: '#F1F5F9',
-        border: '1px solid #E2E8F0',
-        fontSize: 11,
+        background: '#F8FAFC',
+        border: '1px solid #E5E7EB',
+        fontSize: 12,
         fontWeight: 600,
         color: '#475569',
-        fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif'
+        fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif'
       }}
     >
       <div
@@ -120,7 +120,7 @@ function StatChip({ icon: Icon, label, color }) {
           width: 20,
           height: 20,
           borderRadius: 6,
-          background: color ? `${color}15` : 'rgba(0,0,0,0.05)',
+          background: color ? `${color}10` : 'rgba(0,0,0,0.03)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -149,7 +149,7 @@ function ProgressBar({ value = 0 }) {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           style={{
             height: '100%',
-            background: 'linear-gradient(90deg, #2563EB 0%, #4F46E5 100%)',
+            background: 'linear-gradient(90deg, #2563EB 0%, #7C3AED 100%)',
             borderRadius: 9999
           }}
         />
@@ -164,7 +164,7 @@ function CourseCover({ status, learners, artwork }) {
   return (
     <div
       style={{
-        height: 130,
+        height: 140,
         background: bg,
         position: 'relative',
         display: 'flex',
@@ -175,6 +175,14 @@ function CourseCover({ status, learners, artwork }) {
         flexShrink: 0
       }}
     >
+      <div 
+        style={{ 
+          position: 'absolute', 
+          inset: 0, 
+          background: 'rgba(255, 255, 255, 0.03)', 
+          backdropFilter: 'blur(1px)' 
+        }} 
+      />
       <div className="absolute inset-0 pointer-events-none" style={patternOverlay()} />
 
       <div className="absolute top-3 left-3 z-10">
@@ -195,7 +203,7 @@ function CourseCover({ status, learners, artwork }) {
             backdropFilter: 'blur(8px)',
             color: '#FFFFFF',
             border: '1px solid rgba(255,255,255,0.1)',
-            fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif'
+            fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif'
           }}
         >
           <Users size={11} /> {learners || 0} Learners
@@ -204,19 +212,20 @@ function CourseCover({ status, learners, artwork }) {
 
       <div
         style={{
-          width: 80,
-          height: 80,
+          width: 72,
+          height: 72,
           borderRadius: '50%',
           background: 'rgba(255, 255, 255, 0.15)',
-          backdropFilter: 'blur(16px)',
+          backdropFilter: 'blur(12px)',
           border: '1px solid rgba(255, 255, 255, 0.25)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 6px 20px rgba(0, 0, 0, 0.1)'
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+          zIndex: 5
         }}
       >
-        <CardIcon size={64} style={{ color: '#FFFFFF', opacity: 0.95 }} />
+        <CardIcon size={36} style={{ color: '#FFFFFF', opacity: 0.95 }} />
       </div>
     </div>
   )
@@ -229,15 +238,15 @@ function ActionButtons({ onManage, onPreview, onMore }) {
         onClick={onManage}
         style={{
           flex: 1,
-          height: 42,
+          height: 38,
           borderRadius: 10,
           background: '#2563EB',
           color: '#FFFFFF',
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: 700,
           border: 'none',
           cursor: 'pointer',
-          fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif',
+          fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -255,15 +264,15 @@ function ActionButtons({ onManage, onPreview, onMore }) {
         onClick={onPreview}
         style={{
           flex: 1,
-          height: 42,
+          height: 38,
           borderRadius: 10,
           background: '#FFFFFF',
           color: '#475569',
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: 700,
           border: '1px solid #E5E7EB',
           cursor: 'pointer',
-          fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif',
+          fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -279,8 +288,8 @@ function ActionButtons({ onManage, onPreview, onMore }) {
       <button
         onClick={onMore}
         style={{
-          width: 42,
-          height: 42,
+          width: 38,
+          height: 38,
           borderRadius: 10,
           background: '#FFFFFF',
           color: '#6B7280',
@@ -308,6 +317,12 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
     return 'Intermediate'
   }, [course.title])
 
+  const formattedDate = useMemo(() => {
+    if (!course.updatedAt) return 'Updated recently'
+    const date = new Date(course.updatedAt)
+    return `Updated ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+  }, [course.updatedAt])
+
   return (
     <motion.div
       whileHover={{
@@ -316,9 +331,10 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
         boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03)'
       }}
       style={{
-        height: 390,
+        height: 430,
         width: '100%',
-        borderRadius: 18,
+        maxWidth: 460,
+        borderRadius: 20,
         background: '#FFFFFF',
         border: '1px solid #E5E7EB',
         boxShadow: '0 4px 12px -2px rgba(15, 23, 42, 0.04), 0 2px 4px -1px rgba(15, 23, 42, 0.02)',
@@ -327,7 +343,7 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
         overflow: 'hidden',
         cursor: 'default',
         transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
-        fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif'
+        fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif'
       }}
     >
       <CourseCover
@@ -378,10 +394,10 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
         <p
           className="line-clamp-2"
           style={{
-            fontSize: '13px',
+            fontSize: '14px',
             color: '#6B7280',
             margin: '0 0 10px',
-            lineHeight: 1.4,
+            lineHeight: 1.6,
             fontWeight: 400
           }}
         >
@@ -395,8 +411,14 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
           <StatChip icon={BookOpen} label={`${course.resourceCount || 4} Resources`} color="#7C3AED" />
         </div>
 
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 10 }}>
           <ProgressBar value={course.progress || 0} />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: 14 }}>
+          <span style={{ fontSize: 12, fontWeight: 500, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Calendar size={12} /> {formattedDate}
+          </span>
         </div>
 
         <ActionButtons
@@ -416,7 +438,7 @@ function SearchInput({ value, onChange }) {
         size={18}
         style={{
           position: 'absolute',
-          left: '14px',
+          left: '16px',
           top: '50%',
           transform: 'translateY(-50%)',
           color: '#9CA3AF',
@@ -428,21 +450,21 @@ function SearchInput({ value, onChange }) {
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search courses..."
+        placeholder="Search training..."
         style={{
-          height: 46,
+          height: 48,
           width: '100%',
-          borderRadius: 14,
-          paddingLeft: '44px',
+          borderRadius: 16,
+          paddingLeft: '48px',
           paddingRight: '16px',
           fontSize: '14px',
           fontWeight: 400,
           background: '#FFFFFF',
           border: '1px solid #E5E7EB',
           outline: 'none',
-          fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif',
+          fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif',
           boxSizing: 'border-box',
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)'
         }}
         className="focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 transition-all outline-none"
       />
@@ -462,7 +484,7 @@ function FilterTabs({ active, onChange }) {
             key={opt}
             onClick={() => onChange(opt)}
             style={{
-              height: 40,
+              height: 38,
               padding: '0 18px',
               borderRadius: 9999,
               fontSize: 12,
@@ -475,7 +497,7 @@ function FilterTabs({ active, onChange }) {
               color: isActive ? '#FFFFFF' : '#6B7280',
               border: `1px solid ${isActive ? '#2563EB' : '#E5E7EB'}`,
               transition: 'all 200ms ease',
-              fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif',
+              fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif',
               outline: 'none',
               boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
             }}
@@ -611,7 +633,7 @@ function CoursesList({ user, onOpenCourse }) {
         padding: '24px 28px 48px', // Horizontal reduced by 15%, vertical by 25%
         background: '#F8FAFC',
         minHeight: '100vh',
-        fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif'
+        fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif'
       }}
     >
       {/* Breadcrumb */}
@@ -622,10 +644,10 @@ function CoursesList({ user, onOpenCourse }) {
       </div>
 
       {/* Page Header */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 32 }}>
         <h1
           style={{
-            fontSize: '36px', // Refined to 36px Page Title
+            fontSize: '38px', // Premium 38px Title
             fontWeight: 700,
             color: '#111827',
             margin: 0,
@@ -636,13 +658,13 @@ function CoursesList({ user, onOpenCourse }) {
         </h1>
         <p
           style={{
-            fontSize: '15px',
+            fontSize: '15px', // 15px Body font
             color: '#6B7280',
-            margin: '6px 0 0',
+            margin: '8px 0 0',
             fontWeight: 500
           }}
         >
-          Manage your assigned courses and monitor learner progress.
+          Manage your assigned courses.
         </p>
       </div>
 
@@ -650,15 +672,15 @@ function CoursesList({ user, onOpenCourse }) {
       <div
         style={{
           display: 'flex',
-          gap: 12,
+          gap: 16,
           alignItems: 'center',
           justifyContent: 'space-between',
           background: '#FFFFFF',
           border: '1px solid #E5E7EB',
           borderRadius: 16,
           padding: '16px 20px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-          marginBottom: 24
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          marginBottom: 32 // Section gap 32px
         }}
         className="flex-col md:flex-row"
       >
@@ -667,13 +689,13 @@ function CoursesList({ user, onOpenCourse }) {
         <button
           onClick={() => setShowCreateModal(true)}
           style={{
-            height: 42, // Refined button height
+            height: 38, // Refined to small elegant 38px
             padding: '0 20px',
             background: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)',
             color: '#FFFFFF',
             border: 'none',
-            borderRadius: 10, // Refined button radius
-            fontSize: 13,
+            borderRadius: 10, // 10px radius
+            fontSize: 14, // 14px button text
             fontWeight: 600,
             cursor: 'pointer',
             display: 'inline-flex',
@@ -681,7 +703,7 @@ function CoursesList({ user, onOpenCourse }) {
             justifyContent: 'center',
             gap: 6,
             transition: 'all 200ms ease',
-            fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif',
+            fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif',
             boxShadow: '0 2px 6px rgba(37,99,235,0.2)',
             outline: 'none'
           }}
@@ -693,10 +715,10 @@ function CoursesList({ user, onOpenCourse }) {
 
       {/* Course Cards Grid - 2-Column Responsive Layout */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] justify-items-center">
           {[1, 2].map((i) => (
-            <div key={i} className="bg-white border border-slate-200 rounded-[18px] overflow-hidden animate-pulse shadow-sm" style={{ height: 390 }}>
-              <div className="h-[130px] bg-slate-100" />
+            <div key={i} className="bg-white border border-slate-200 rounded-[20px] overflow-hidden animate-pulse shadow-sm" style={{ height: 430, width: '100%', maxWidth: 460 }}>
+              <div className="h-[140px] bg-slate-100" />
               <div className="p-5 space-y-3">
                 <div className="h-5 bg-slate-100 rounded w-1/3" />
                 <div className="h-6 bg-slate-100 rounded w-3/4" />
@@ -707,7 +729,7 @@ function CoursesList({ user, onOpenCourse }) {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 px-6 border border-dashed border-slate-200 rounded-[18px] bg-white shadow-sm">
+        <div className="text-center py-20 px-6 border border-dashed border-slate-200 rounded-[20px] bg-white shadow-sm">
           <BookOpen size={48} className="mx-auto text-slate-300 mb-4" />
           <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: '0 0 8px' }}>
             {courses.length === 0 ? 'No courses assigned yet' : 'No courses match your filters'}
@@ -719,7 +741,7 @@ function CoursesList({ user, onOpenCourse }) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] justify-items-center">
           {filtered.map((c) => (
             <TrainingCard
               key={c.id}
