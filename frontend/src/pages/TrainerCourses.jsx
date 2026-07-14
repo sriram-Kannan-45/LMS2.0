@@ -4,7 +4,7 @@ import {
   ArrowLeft, Search, Plus, Pencil, Trash2,
   BookOpen, FileText, Users, BarChart3, Layers, Sparkles,
   CheckCircle2, AlertCircle, Folder, MessageSquare, Code,
-  ChevronDown, ChevronRight, User, Calendar, Video, ArrowRight, Play, Eye, Star, Coffee, MoreVertical
+  ChevronDown, ChevronRight, ChevronLeft, User, Calendar, Video, ArrowRight, Play, Eye, Star, Coffee, MoreVertical
 } from 'lucide-react'
 import { API, assetUrl, API_BASE } from '../api/api'
 import { Button, Badge, Table, PageHeader, EmptyState, StatCard } from '../components/ui'
@@ -85,76 +85,15 @@ function StatusBadge({ status = 'DRAFT' }) {
     <span
       className="inline-flex items-center rounded-full text-[9px] font-extrabold uppercase tracking-wider"
       style={{
-        padding: '3px 8px',
-        background: '#ffffff',
-        color: isPublished ? '#047857' : '#b45309',
-        border: `1px solid ${isPublished ? '#a7f3d0' : '#fde68a'}`,
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-        fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif'
+        padding: '4px 10px',
+        background: isPublished ? '#10B981' : '#F59E0B',
+        color: '#FFFFFF',
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08)',
+        fontFamily: '"Plus Jakarta Sans", "SF Pro Display", sans-serif'
       }}
     >
       {label}
     </span>
-  )
-}
-
-function StatChip({ icon: Icon, label, color }) {
-  return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '4px 8px',
-        borderRadius: 8,
-        background: '#F8FAFC',
-        border: '1px solid #E5E7EB',
-        fontSize: 12,
-        fontWeight: 600,
-        color: '#475569',
-        fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif'
-      }}
-    >
-      <div
-        style={{
-          width: 20,
-          height: 20,
-          borderRadius: 6,
-          background: color ? `${color}10` : 'rgba(0,0,0,0.03)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: color || '#475569'
-        }}
-      >
-        <Icon size={12} />
-      </div>
-      <span>{label}</span>
-    </div>
-  )
-}
-
-function ProgressBar({ value = 0 }) {
-  const pct = Math.min(100, Math.max(0, value || 0))
-  return (
-    <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7280' }}>Progress</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>{pct}%</span>
-      </div>
-      <div style={{ height: 5, background: '#E2E8F0', borderRadius: 9999, overflow: 'hidden', width: '100%' }}>
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          style={{
-            height: '100%',
-            background: 'linear-gradient(90deg, #2563EB 0%, #7C3AED 100%)',
-            borderRadius: 9999
-          }}
-        />
-      </div>
-    </div>
   )
 }
 
@@ -195,7 +134,7 @@ function CourseCover({ status, learners, artwork }) {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '4px',
-            padding: '3px 8px',
+            padding: '3px 10px',
             borderRadius: '999px',
             fontSize: '10px',
             fontWeight: 700,
@@ -206,7 +145,7 @@ function CourseCover({ status, learners, artwork }) {
             fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif'
           }}
         >
-          <Users size={11} /> {learners || 0} Learners
+          <Users size={11} /> {learners || 0} {learners === 1 ? 'Learner' : 'Learners'}
         </span>
       </div>
 
@@ -215,13 +154,13 @@ function CourseCover({ status, learners, artwork }) {
           width: 72,
           height: 72,
           borderRadius: '50%',
-          background: 'rgba(255, 255, 255, 0.15)',
+          background: 'rgba(15, 23, 42, 0.5)',
           backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255, 255, 255, 0.25)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
           zIndex: 5
         }}
       >
@@ -231,98 +170,7 @@ function CourseCover({ status, learners, artwork }) {
   )
 }
 
-function ActionButtons({ onManage, onPreview, onMore }) {
-  return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 'auto', flexShrink: 0 }}>
-      <button
-        onClick={onManage}
-        style={{
-          flex: 1,
-          height: 38,
-          borderRadius: 10,
-          background: '#2563EB',
-          color: '#FFFFFF',
-          fontSize: 14,
-          fontWeight: 700,
-          border: 'none',
-          cursor: 'pointer',
-          fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 6,
-          boxShadow: '0 2px 6px rgba(37, 99, 235, 0.2)',
-          outline: 'none',
-          transition: 'all 200ms ease'
-        }}
-        className="hover:bg-blue-700 outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
-      >
-        Manage
-      </button>
-
-      <button
-        onClick={onPreview}
-        style={{
-          flex: 1,
-          height: 38,
-          borderRadius: 10,
-          background: '#FFFFFF',
-          color: '#475569',
-          fontSize: 14,
-          fontWeight: 700,
-          border: '1px solid #E5E7EB',
-          cursor: 'pointer',
-          fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 6,
-          outline: 'none',
-          transition: 'all 200ms ease'
-        }}
-        className="hover:bg-slate-50 outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
-      >
-        Preview
-      </button>
-
-      <button
-        onClick={onMore}
-        style={{
-          width: 38,
-          height: 38,
-          borderRadius: 10,
-          background: '#FFFFFF',
-          color: '#6B7280',
-          border: '1px solid #E5E7EB',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          outline: 'none',
-          transition: 'all 200ms ease'
-        }}
-        className="hover:bg-slate-50 outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
-      >
-        <MoreVertical size={18} />
-      </button>
-    </div>
-  )
-}
-
-function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
-  const difficulty = useMemo(() => {
-    const t = (course.title || '').toLowerCase()
-    if (t.includes('adv') || t.includes('expert') || t.includes('ml') || t.includes('python')) return 'Advanced'
-    if (t.includes('intro') || t.includes('basic') || t.includes('begin')) return 'Beginner'
-    return 'Intermediate'
-  }, [course.title])
-
-  const formattedDate = useMemo(() => {
-    if (!course.updatedAt) return 'Updated recently'
-    const date = new Date(course.updatedAt)
-    return `Updated ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-  }, [course.updatedAt])
-
+function TrainingCard({ course, artwork, onManage }) {
   return (
     <motion.div
       whileHover={{
@@ -330,8 +178,9 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
         scale: 1.02,
         boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03)'
       }}
+      onClick={() => onManage(course.id)}
       style={{
-        height: 430,
+        height: 220, // Reduced card height
         width: '100%',
         maxWidth: 460,
         borderRadius: 20,
@@ -341,46 +190,25 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        cursor: 'default',
+        cursor: 'pointer', // Card is fully clickable
         transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
         fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif'
       }}
     >
       <CourseCover
-        title={course.title}
         status={course.status}
         learners={course.enrolledCount}
         artwork={artwork}
       />
 
-      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ fontSize: '13px', fontWeight: 500, color: '#6B7280' }}>
-            {course.programTitle || 'General Training'}
-          </span>
-          <span
-            style={{
-              display: 'inline-flex',
-              padding: '2px 6px',
-              borderRadius: '5px',
-              fontSize: '10px',
-              fontWeight: 700,
-              background: difficulty === 'Advanced' ? '#FEE2E2' : difficulty === 'Beginner' ? '#D1FAE5' : '#FEF3C7',
-              color: difficulty === 'Advanced' ? '#991B1B' : difficulty === 'Beginner' ? '#065F46' : '#92400E',
-              textTransform: 'uppercase'
-            }}
-          >
-            {difficulty}
-          </span>
-        </div>
-
+      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center' }}>
         <h3
           style={{
             fontSize: '22px',
             fontWeight: 700,
             color: '#111827',
-            margin: '0 0 6px',
-            letterSpacing: '-0.02em',
+            margin: 0,
+            letterSpacing: '-0.025em',
             lineHeight: 1.25,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -390,42 +218,6 @@ function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
         >
           {course.title}
         </h3>
-
-        <p
-          className="line-clamp-2"
-          style={{
-            fontSize: '14px',
-            color: '#6B7280',
-            margin: '0 0 10px',
-            lineHeight: 1.6,
-            fontWeight: 400
-          }}
-        >
-          {course.description || 'No description provided.'}
-        </p>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 8px', marginBottom: 12 }}>
-          <StatChip icon={FileText} label={`${course.lessonCount || 0} Lessons`} color="#4F46E5" />
-          <StatChip icon={Sparkles} label={`${course.quizCount || 0} Quizzes`} color="#F59E0B" />
-          <StatChip icon={Users} label={`${course.enrolledCount || 0} Enrolled`} color="#22C55E" />
-          <StatChip icon={BookOpen} label={`${course.resourceCount || 4} Resources`} color="#7C3AED" />
-        </div>
-
-        <div style={{ marginBottom: 10 }}>
-          <ProgressBar value={course.progress || 0} />
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: 14 }}>
-          <span style={{ fontSize: 12, fontWeight: 500, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Calendar size={12} /> {formattedDate}
-          </span>
-        </div>
-
-        <ActionButtons
-          onManage={onManage}
-          onPreview={onPreview}
-          onMore={onMore}
-        />
       </div>
     </motion.div>
   )
@@ -450,7 +242,7 @@ function SearchInput({ value, onChange }) {
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Search training..."
+        placeholder="Search courses..."
         style={{
           height: 48,
           width: '100%',
@@ -507,6 +299,77 @@ function FilterTabs({ active, onChange }) {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+function Pagination({ totalItems, itemsPerPage = 10, currentPage = 1 }) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 48,
+      fontFamily: '"Plus Jakarta Sans", sans-serif',
+      fontSize: 14,
+      color: '#6B7280'
+    }}>
+      <div>
+        Showing 1 to {totalItems} of {totalItems} courses
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button
+          disabled
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            border: '1px solid #E5E7EB',
+            background: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#9CA3AF',
+            cursor: 'not-allowed'
+          }}
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <button
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            border: 'none',
+            background: '#2563EB',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF',
+            fontWeight: 700,
+            cursor: 'default'
+          }}
+        >
+          1
+        </button>
+        <button
+          disabled
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            border: '1px solid #E5E7EB',
+            background: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#9CA3AF',
+            cursor: 'not-allowed'
+          }}
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
     </div>
   )
 }
@@ -717,13 +580,10 @@ function CoursesList({ user, onOpenCourse }) {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] justify-items-center">
           {[1, 2].map((i) => (
-            <div key={i} className="bg-white border border-slate-200 rounded-[20px] overflow-hidden animate-pulse shadow-sm" style={{ height: 430, width: '100%', maxWidth: 460 }}>
+            <div key={i} className="bg-white border border-slate-200 rounded-[20px] overflow-hidden animate-pulse shadow-sm" style={{ height: 220, width: '100%', maxWidth: 460 }}>
               <div className="h-[140px] bg-slate-100" />
-              <div className="p-5 space-y-3">
-                <div className="h-5 bg-slate-100 rounded w-1/3" />
-                <div className="h-6 bg-slate-100 rounded w-3/4" />
-                <div className="h-3 bg-slate-100 rounded w-full" />
-                <div className="h-8 bg-slate-100 rounded w-1/2" />
+              <div className="p-5 space-y-2">
+                <div className="h-6 bg-slate-100 rounded w-2/3" />
               </div>
             </div>
           ))}
@@ -741,18 +601,19 @@ function CoursesList({ user, onOpenCourse }) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] justify-items-center">
-          {filtered.map((c) => (
-            <TrainingCard
-              key={c.id}
-              course={c}
-              artwork={getCourseArtwork(c.title)}
-              onManage={onOpenCourse}
-              onPreview={onOpenCourse}
-              onMore={onOpenCourse}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] justify-items-center">
+            {filtered.map((c) => (
+              <TrainingCard
+                key={c.id}
+                course={c}
+                artwork={getCourseArtwork(c.title)}
+                onManage={onOpenCourse}
+              />
+            ))}
+          </div>
+          <Pagination totalItems={filtered.length} />
+        </>
       )}
 
       {/* ── Create Course Modal ─────────────────────────────── */}
