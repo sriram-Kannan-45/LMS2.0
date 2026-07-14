@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { FileText, Plus, Trash2, Loader2 } from 'lucide-react'
 import { API_BASE } from '../../../api/api'
+import { colors } from '../../../theme/tokens'
 
 function getAuthHeaders() {
   try {

@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowLeft, Search, Plus, Pencil, Trash2, GripVertical,
+  ArrowLeft, Search, Plus, Pencil, Trash2,
   BookOpen, FileText, Users, BarChart3, Layers, Sparkles,
-  CheckCircle2, AlertCircle, Calendar, Folder, MessageSquare, Code,
-  ChevronDown, ChevronRight
+  CheckCircle2, AlertCircle, Folder, MessageSquare, Code,
+  ChevronDown, ChevronRight, User, Calendar, Video, ArrowRight, Play, Eye, Star, Coffee
 } from 'lucide-react'
-import { API, assetUrl } from '../api/api'
+import { API, assetUrl, API_BASE } from '../api/api'
 import { Button, Badge, Table, PageHeader, EmptyState, StatCard, ProgressBar } from '../components/ui'
+import HeroBanner from '../components/saas/HeroBanner'
+import SearchBar from '../components/saas/SearchBar'
+import FilterPills from '../components/saas/FilterPills'
+import CourseCard from '../components/saas/CourseCard'
+import KpiCard from '../components/saas/KpiCard'
 import { useToast } from '../components/Toast'
 import MaterialManager from '../components/trainer/MaterialManager'
 import CourseQuizzesTab from '../components/trainer/CourseQuizzesTab'
@@ -22,19 +27,10 @@ import {
 
 function getCourseArtwork(title) {
   const t = (title || '').toLowerCase()
-  if (t.includes('python') || t.includes('django') || t.includes('ml')) {
-    return {
-      bg: 'linear-gradient(135deg, #1e3a8a 0%, #1e1b4b 100%)',
-      pattern: '',
-      icon: Code,
-      accentColor: 'border-blue-700',
-      label: 'Python / ML'
-    }
-  }
   if (t.includes('node') || t.includes('js') || t.includes('javascript')) {
     return {
-      bg: 'linear-gradient(135deg, #064e3b 0%, #047857 100%)',
-      pattern: 'radial-gradient(circle at 20% 30%, rgba(16, 185, 129, 0.15) 1px, transparent 1px) 0 0/16px 16px',
+      bg: 'linear-gradient(135deg, #059669, #0d9488)',
+      pattern: '',
       icon: Code,
       accentColor: 'border-emerald-500',
       label: 'JavaScript / Node.js'
@@ -42,26 +38,34 @@ function getCourseArtwork(title) {
   }
   if (t.includes('java') || t.includes('spring') || t.includes('backend')) {
     return {
-      bg: 'linear-gradient(135deg, #78350f 0%, #d97706 100%)',
-      pattern: 'repeating-linear-gradient(45deg, rgba(245, 158, 11, 0.1) 0px, rgba(245, 158, 11, 0.1) 2px, transparent 2px, transparent 10px)',
-      icon: Layers,
+      bg: 'linear-gradient(135deg, #ea580c, #f59e0b)',
+      pattern: '',
+      icon: Coffee,
       accentColor: 'border-amber-500',
       label: 'Java / Backend'
     }
   }
   if (t.includes('react') || t.includes('web') || t.includes('frontend') || t.includes('html') || t.includes('css')) {
     return {
-      bg: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
-      pattern: 'radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.2) 10%, transparent 10.1%) 0 0/24px 24px',
+      bg: 'linear-gradient(135deg, #2563eb, #3b82f6)',
+      pattern: '',
       icon: Sparkles,
       accentColor: 'border-blue-500',
       label: 'Frontend / Web'
     }
   }
+  if (t.includes('python') || t.includes('django') || t.includes('ml')) {
+    return {
+      bg: 'linear-gradient(135deg, #1e3a8a, #3b82f6)',
+      pattern: '',
+      icon: Code,
+      accentColor: 'border-blue-700',
+      label: 'Python / ML'
+    }
+  }
   return {
-    bg: 'linear-gradient(135deg, #1e293b 0%, #475569 100%)',
-    pattern: 'linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px)',
-    patternSize: '20px 20px',
+    bg: 'linear-gradient(135deg, #334155, #64748b)',
+    pattern: '',
     icon: BookOpen,
     accentColor: 'border-slate-500',
     label: 'General Training'
@@ -74,16 +78,6 @@ function StatusBadge({ value }) {
   return <span style={b}>{label}</span>;
 }
 
-function Stat({ icon, label, value }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.slate[600], fontSize: 13 }}>
-      <span style={{ color: colors.primary[600] }}>{icon}</span>
-      <span style={{ fontWeight: 600 }}>{value}</span>
-      <span style={{ color: colors.slate[400] }}>{label}</span>
-    </div>
-  )
-}
-
 function CoursesList({ user, onOpenCourse }) {
   const { error: showError, success } = useToast()
   const [loading, setLoading] = useState(true)
@@ -93,6 +87,12 @@ function CoursesList({ user, onOpenCourse }) {
   const [programs, setPrograms] = useState([])
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newCourse, setNewCourse] = useState({ title: '', description: '', trainingProgramId: '', status: 'DRAFT', thumbnailUrl: '' })
+  
+  // Feedback statistics
+  const [feedbackStats, setFeedbackStats] = useState({
+    avgRating: 0.0,
+    totalFeedbacks: 0
+  })
 
   const auth = () => ({ Authorization: `Bearer ${user.token}` })
 
@@ -112,8 +112,24 @@ function CoursesList({ user, onOpenCourse }) {
     }
   }
 
+  const fetchFeedbacks = async () => {
+    try {
+      const r = await fetch(`${API_BASE}/trainer/feedbacks`, { headers: auth() })
+      const d = await r.json()
+      if (d.success) {
+        setFeedbackStats({
+          avgRating: d.averageTrainerRating || 0.0,
+          totalFeedbacks: d.feedbacks?.length || 0
+        })
+      }
+    } catch (e) {
+      console.error('Failed to load feedbacks:', e.message)
+    }
+  }
+
   useEffect(() => {
     fetchCourses()
+    fetchFeedbacks()
 
     let aborted = false
     ;(async () => {
@@ -172,62 +188,81 @@ function CoursesList({ user, onOpenCourse }) {
     })
   }, [courses, search, statusFilter])
 
+  const totalEnrolled = useMemo(() => {
+    return courses.reduce((sum, c) => sum + (c.enrolledCount || 0), 0)
+  }, [courses])
+
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto px-8 py-8 bg-[#F8FAFC]">
-      <div className="relative z-20">
-        <PageHeader
-          title="My Trainings"
-          subtitle="Manage your assigned courses and monitor learner progress."
-          className="pt-4"
+    <div className="space-y-6 max-w-[1440px] mx-auto px-6 py-6 bg-[#F8FAFC] min-h-screen" style={{ fontFamily: "'Inter', sans-serif" }}>
+
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>My Trainings</h2>
+          <p style={{ fontSize: '14px', color: '#6B7280', margin: '4px 0 0' }}>
+            Manage your assigned courses and monitor learner progress.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          style={{
+            height: 38,
+            padding: '0 16px',
+            background: colors.brand.blueDark, // Consistent blue token
+            color: '#fff',
+            border: 'none',
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'all 200ms ease',
+            fontFamily: "'Inter', sans-serif",
+            boxShadow: '0 2px 8px rgba(37,99,235,0.2)',
+            outline: 'none'
+          }}
+          className="hover:bg-blue-700 hover:scale-102 outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] focus-visible:ring-offset-2"
+        >
+          <Plus size={15} /> Create Course
+        </button>
+      </div>
+
+      {/* Search + Filter Row */}
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white border border-[#E5E7EB] rounded-[20px] p-5 shadow-sm">
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search courses by title, description, or program…"
+          width={450}
+          height={40}
+          radius={10}
         />
+        <FilterPills active={statusFilter} onChange={setStatusFilter} />
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:max-w-md">
-          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search courses by title, description, or program…"
-            style={{ height: 48 }}
-            className="w-full pl-11 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus-ring shadow-sm"
-          />
-        </div>
-        <div className="flex gap-2 p-1 bg-white border border-slate-200 rounded-full shadow-sm">
-          {['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED'].map(s => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              style={{ padding: '6px 16px', borderRadius: 9999, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 0.2s' }}
-              className={statusFilter === s ? 'bg-[#2563EB] text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'}
-            >
-              {s === 'ALL' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
-            </button>
-          ))}
-        </div>
-      </div>
-
+      {/* Course Cards Grid - Full 3-column layout */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1,2,3].map(i => (
-            <div key={i} className="bg-white border border-slate-200 rounded-[20px] overflow-hidden animate-pulse" style={{ height: 350 }}>
-              <div className="h-40 bg-slate-100" />
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-white border border-slate-200 rounded-[20px] overflow-hidden animate-pulse" style={{ height: 330 }}>
+              <div className="h-[120px] bg-slate-100" />
               <div className="p-6 space-y-3">
-                <div className="h-5 bg-slate-100 rounded-lg w-3/4" />
-                <div className="h-3 bg-slate-100 rounded-lg w-1/2" />
-                <div className="h-3 bg-slate-100 rounded-lg w-full" />
+                <div className="h-5 bg-slate-100 rounded w-3/4" />
+                <div className="h-3 bg-slate-100 rounded w-1/2" />
+                <div className="h-3 bg-slate-100 rounded w-full" />
               </div>
             </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 24px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: 18 }}>
-          <BookOpen size={48} color="#cbd5e1" style={{ margin: '0 auto 12px' }} />
-          <h3 style={{ margin: '0 0 6px', color: '#1e293b', fontSize: 18, fontWeight: 600 }}>
+        <div className="text-center py-16 px-6 border border-dashed border-slate-200 rounded-[20px] bg-white shadow-sm">
+          <BookOpen size={44} className="mx-auto text-slate-300 mb-3" />
+          <h3 className="text-base font-semibold text-slate-800 mb-1">
             {courses.length === 0 ? 'No courses assigned yet' : 'No courses match your filters'}
           </h3>
-          <p style={{ margin: 0, color: '#64748b', fontSize: 14 }}>
+          <p className="text-xs text-slate-500">
             {courses.length === 0
               ? 'Ask your admin to assign you to a course under a Training Program.'
               : 'Try adjusting your search or status filter.'}
@@ -235,114 +270,20 @@ function CoursesList({ user, onOpenCourse }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((c, i) => {
-            const artwork = getCourseArtwork(c.title)
-            const CardIcon = artwork.icon || BookOpen
-
-            return (
-              <motion.div
-                key={c.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                whileHover={{ y: -6, transition: { duration: 0.2 } }}
-                className="bg-white border border-slate-200 rounded-[20px] overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col cursor-pointer group"
-                onClick={() => onOpenCourse(c.id)}
-                style={{ height: 350, width: '100%', position: 'relative' }}
-              >
-                {/* Banner Area */}
-                <div
-                  className="h-40 relative flex items-center justify-center text-white overflow-hidden"
-                  style={{
-                    background: c.thumbnailUrl ? `url(${assetUrl(c.thumbnailUrl)}) center/cover` : artwork.bg,
-                  }}
-                >
-                  <div className="absolute inset-0 bg-black/10 group-hover:bg-black/25 transition-colors duration-300" />
-                  
-                  {/* Floating Circle Logo overlay */}
-                  <div style={{
-                    width: 54, height: 54, borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.25)', backdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255,255,255,0.35)', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                  }} className="group-hover:scale-105 transition-transform duration-300">
-                    <CardIcon size={24} className="text-white" />
-                  </div>
-
-                  {/* Status Badge */}
-                  <div className="absolute top-4 left-4">
-                    <span style={{
-                      padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
-                      background: c.status === 'PUBLISHED' ? '#DCFCE7' : '#FFEFEB',
-                      color: c.status === 'PUBLISHED' ? '#15803D' : '#E11D48',
-                      textTransform: 'uppercase', letterSpacing: 0.5
-                    }}>
-                      {c.status}
-                    </span>
-                  </div>
-
-                  {/* Learner Count */}
-                  {c.enrolledCount > 0 && (
-                    <div className="absolute top-4 right-4 px-2.5 py-0.5 bg-black/45 backdrop-blur-md rounded-full text-white text-xs font-semibold border border-white/10">
-                      {c.enrolledCount} learners
-                    </div>
-                  )}
-                </div>
-
-                {/* Content Area */}
-                <div className="p-5 flex-1 flex flex-col" style={{ minWidth: 0 }}>
-                  <h3 className="text-[16px] font-bold text-slate-900 mb-1 line-clamp-1 group-hover:text-blue-600 transition-colors">
-                    {c.title}
-                  </h3>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-2">
-                    <Folder size={12} />
-                    <span>{c.programTitle || 'General Training'}</span>
-                  </div>
-                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed mb-4">
-                    {c.description || 'No description provided.'}
-                  </p>
-
-                  {/* Stats Row */}
-                  <div className="flex items-center gap-4 pt-4 mt-auto border-t border-slate-100">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                      <FileText size={14} className="text-[#4f46e5]" />
-                      <span>{c.lessonCount || 0} lessons</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                      <Sparkles size={14} className="text-[#f59e0b]" />
-                      <span>{c.quizCount || 0} quizzes</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                      <Users size={14} className="text-[#16a34a]" />
-                      <span>{c.enrolledCount || 0} enrolled</span>
-                    </div>
-                  </div>
-
-                  {/* Actions Row */}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 10, borderTop: '1px solid #f8fafc' }}>
-                    <button 
-                      style={{ flex: 1, padding: '8px 12px', background: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }} 
-                      className="hover:bg-[#1d4ed8]"
-                      onClick={(e) => { e.stopPropagation(); onOpenCourse(c.id); }}
-                    >
-                      Manage
-                    </button>
-                    <button 
-                      style={{ padding: '8px 12px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }} 
-                      className="hover:bg-slate-200"
-                      onClick={(e) => { e.stopPropagation(); onOpenCourse(c.id); }}
-                    >
-                      Preview
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )
-          })}
+          {filtered.map((c) => (
+            <CourseCard
+              key={c.id}
+              course={c}
+              artwork={getCourseArtwork(c.title)}
+              onManage={onOpenCourse}
+              onPreview={onOpenCourse}
+              onMore={onOpenCourse}
+            />
+          ))}
         </div>
       )}
 
-      {/* Render the Create Course Modal */}
+      {/* ── Create Course Modal ─────────────────────────────── */}
       <AnimatePresence>
         {showCreateModal && (
           <motion.div
@@ -544,7 +485,7 @@ function CourseDetail({ user, courseId, onBack }) {
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
             {[
-              { icon: FileText, label: 'Lessons', value: course.lessonCount || 0, color: '#4f46e5' },
+              { icon: FileText, label: 'Lessons', value: course.lessonCount || 0, color: colors.brand.violet },
               { icon: Sparkles, label: 'Quizzes', value: course.quizCount || 0, color: '#f59e0b' },
               { icon: Users, label: 'Enrolled', value: course.enrolledCount || 0, color: '#16a34a' },
             ].map((stat) => (
@@ -568,12 +509,16 @@ function CourseDetail({ user, courseId, onBack }) {
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
+              className={`inline-flex items-center gap-8 px-5 py-2.5 rounded-full text-xs font-semibold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] focus-visible:ring-offset-2 ${
+                tab === t.key ? '' : 'hover:bg-slate-100 hover:text-slate-700'
+              }`}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
                 padding: '10px 20px', borderRadius: 9999, fontSize: 13, fontWeight: 600,
                 border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.2s',
-                background: tab === t.key ? '#4f46e5' : 'transparent',
-                color: tab === t.key ? '#fff' : '#64748b'
+                background: tab === t.key ? colors.brand.indigo : 'transparent',
+                color: tab === t.key ? '#fff' : '#64748b',
+                outline: 'none'
               }}
             >
               {t.icon}

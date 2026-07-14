@@ -168,21 +168,42 @@ export const colors = {
   // Sidebar
   sidebar: {
     bg: '#0F172A',
-    bgEnd: '#0F172A',
-    activeBg: 'rgba(22, 163, 74, 0.1)',
-    activeText: '#16a34a',
-    hoverBg: 'rgba(255, 255, 255, 0.05)',
+    bgMid: '#16213E',
+    bgEnd: '#1E293B',
+    activeBg: '#2563EB',
+    activeText: '#ffffff',
+    hoverBg: 'rgba(255, 255, 255, 0.06)',
+  },
+
+  // Brand — Indigo/Violet (hero, logo, accent elements — ONLY here)
+  brand: {
+    indigo: '#4F46E5',
+    indigoDark: '#4338CA',
+    violet: '#7C3AED',
+    violetLight: '#8B5CF6',
+    violetTint: '#EDE9FE',
+    blue: '#3B82F6',
+    blueDark: '#2563EB',
+    blueTint: '#DBEAFE',
+    green: '#16A34A',
+    greenLight: '#10B981',
+    greenTint: '#DCFCE7',
+    amber: '#F59E0B',
+    amberTint: '#FEF3C7',
   },
 
   // Semantic gradients
   gradient: {
-    primary: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)',
-    primaryStrong: 'linear-gradient(135deg, #0f766e 0%, #0d9488 100%)',
-    hero: 'linear-gradient(135deg, #0d9488 0%, #14b8a6 50%, #06b6d4 100%)',
+    primary: 'linear-gradient(135deg, #0D9488 0%, #0F766E 100%)',
+    primaryStrong: 'linear-gradient(135deg, #0F766E 0%, #0D9488 100%)',
+    hero: 'linear-gradient(90deg, #2563EB 0%, #7C3AED 100%)',
+    logo: 'linear-gradient(135deg, #4F46E5, #7C3AED)',
     warm: 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)',
     success: 'linear-gradient(135deg, #16A34A 0%, #22C55E 100%)',
     danger: 'linear-gradient(135deg, #DC2626 0%, #EF4444 100%)',
-    sidebar: 'linear-gradient(180deg, #0F172A 0%, #0F172A 100%)',
+    sidebar: 'linear-gradient(180deg, #0F172A 0%, #16213E 50%, #1E293B 100%)',
+    courseNode: 'linear-gradient(135deg, #059669, #0D9488)',
+    courseJava: 'linear-gradient(135deg, #EA580C, #F59E0B)',
   },
 }
 
@@ -212,12 +233,12 @@ const baseBtn = {
 
 export const btnPrimary = {
   ...baseBtn,
-  background: colors.primary[600],
+  background: colors.secondary[600],
   color: colors.text.inverse,
   padding: '10px 20px',
   fontSize: '0.875rem',
   lineHeight: '1.25rem',
-  boxShadow: '0 1px 3px rgba(13, 148, 136, 0.25)',
+  boxShadow: '0 1px 3px rgba(37, 99, 235, 0.25)',
 }
 
 export const btnSecondary = {
@@ -305,7 +326,7 @@ function badge(baseBg, baseFg) {
 // Training / assessment statuses
 export const STATUS_BADGE = {
   DRAFT:              badge(colors.slate[100], colors.slate[600]),
-  PUBLISHED:          badge(colors.success[100], colors.success[700]),
+  PUBLISHED:          badge('#dcfce7', '#16a34a'),
   CLOSED:             badge(colors.danger[100], colors.danger[600]),
   RESULTS_PUBLISHED:  badge(colors.info[100], colors.info[700]),
   ARCHIVED:           badge('#F5F5F4', '#78716C'),
@@ -428,7 +449,7 @@ export const td = {
 
 export const cardStyle = {
   background: colors.surface.primary,
-  borderRadius: '18px',
+  borderRadius: '22px',
   border: `1px solid ${colors.border.default}`,
   boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.04)',
   overflow: 'hidden',

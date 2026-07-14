@@ -1018,7 +1018,7 @@ function AnalyticsTab({ assessment, auth }) {
     { label: 'Highest Score', value: analytics.highestScore != null ? `${Math.round(analytics.highestScore)}%` : '—', color: colors.success[600] },
     { label: 'Lowest Score', value: analytics.lowestScore != null ? `${Math.round(analytics.lowestScore)}%` : '—', color: colors.danger[600] },
     { label: 'Total Attempts', value: analytics.totalAttempts || 0, color: '#0891B2' },
-    { label: 'Avg. Time', value: analytics.averageTime ? `${Math.round(analytics.averageTime)}s` : '—', color: '#7C3AED' },
+    { label: 'Avg. Time', value: analytics.averageTime ? `${Math.round(analytics.averageTime)}s` : '—', color: colors.brand.violet },
     { label: 'Pass Rate', value: analytics.passRate != null ? `${Math.round(analytics.passRate)}%` : '—', color: colors.warning[600] },
   ]
 
