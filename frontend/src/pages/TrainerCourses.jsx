@@ -4,10 +4,10 @@ import {
   ArrowLeft, Search, Plus, Pencil, Trash2,
   BookOpen, FileText, Users, BarChart3, Layers, Sparkles,
   CheckCircle2, AlertCircle, Folder, MessageSquare, Code,
-  ChevronDown, ChevronRight, User, Calendar, Video, ArrowRight, Play, Eye, Star, Coffee
+  ChevronDown, ChevronRight, User, Calendar, Video, ArrowRight, Play, Eye, Star, Coffee, MoreVertical
 } from 'lucide-react'
 import { API, assetUrl, API_BASE } from '../api/api'
-import { Button, Badge, Table, PageHeader, EmptyState, StatCard, ProgressBar } from '../components/ui'
+import { Button, Badge, Table, PageHeader, EmptyState, StatCard } from '../components/ui'
 import HeroBanner from '../components/saas/HeroBanner'
 import SearchBar from '../components/saas/SearchBar'
 import FilterPills from '../components/saas/FilterPills'
@@ -72,10 +72,421 @@ function getCourseArtwork(title) {
   }
 }
 
-function StatusBadge({ value }) {
-  const label = value?.toUpperCase() || 'DRAFT';
-  const b = STATUS_BADGE[label] || STATUS_BADGE.DRAFT;
-  return <span style={b}>{label}</span>;
+function patternOverlay() {
+  return {
+    backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 14px)`,
+  }
+}
+
+function StatusBadge({ status = 'DRAFT' }) {
+  const label = (status || 'DRAFT').toUpperCase()
+  const isPublished = label === 'PUBLISHED'
+  return (
+    <span
+      className="inline-flex items-center rounded-full text-[10px] font-extrabold uppercase tracking-wider"
+      style={{
+        padding: '4px 10px',
+        background: '#ffffff',
+        color: isPublished ? '#047857' : '#b45309',
+        border: `1px solid ${isPublished ? '#a7f3d0' : '#fde68a'}`,
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+        fontFamily: "'Inter', sans-serif"
+      }}
+    >
+      {label}
+    </span>
+  )
+}
+
+function StatChip({ icon: Icon, label, color }) {
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 12px',
+        borderRadius: 12,
+        background: '#F1F5F9',
+        border: '1px solid #E2E8F0',
+        fontSize: 13,
+        fontWeight: 600,
+        color: '#475569',
+        fontFamily: "'Inter', sans-serif"
+      }}
+    >
+      <div
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 8,
+          background: color ? `${color}15` : 'rgba(0,0,0,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: color || '#475569'
+        }}
+      >
+        <Icon size={14} />
+      </div>
+      <span>{label}</span>
+    </div>
+  )
+}
+
+function ProgressBar({ value = 0 }) {
+  const pct = Math.min(100, Math.max(0, value || 0))
+  return (
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#6B7280' }}>Progress</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{pct}%</span>
+      </div>
+      <div style={{ height: 8, background: '#E2E8F0', borderRadius: 9999, overflow: 'hidden', width: '100%' }}>
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          style={{
+            height: '100%',
+            background: 'linear-gradient(90deg, #2563EB 0%, #4F46E5 100%)',
+            borderRadius: 9999
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function CourseCover({ status, learners, artwork }) {
+  const CardIcon = artwork?.icon || BookOpen
+  const bg = artwork?.bg || 'linear-gradient(135deg, #334155, #64748b)'
+  return (
+    <div
+      style={{
+        height: 180,
+        background: bg,
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#FFFFFF',
+        overflow: 'hidden',
+        flexShrink: 0
+      }}
+    >
+      <div className="absolute inset-0 pointer-events-none" style={patternOverlay()} />
+
+      <div className="absolute top-4 left-4 z-10">
+        <StatusBadge status={status} />
+      </div>
+
+      <div className="absolute top-4 right-4 z-10">
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '5px 12px',
+            borderRadius: '999px',
+            fontSize: '11px',
+            fontWeight: 700,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(8px)',
+            color: '#FFFFFF',
+            border: '1px solid rgba(255,255,255,0.1)',
+            fontFamily: "'Inter', sans-serif"
+          }}
+        >
+          <Users size={12} /> {learners || 0} Learners
+        </span>
+      </div>
+
+      <div
+        style={{
+          width: 120,
+          height: 120,
+          borderRadius: '50%',
+          background: 'rgba(255, 255, 255, 0.15)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 255, 255, 0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)'
+        }}
+      >
+        <CardIcon size={96} style={{ color: '#FFFFFF', opacity: 0.95 }} />
+      </div>
+    </div>
+  )
+}
+
+function ActionButtons({ onManage, onPreview, onMore }) {
+  return (
+    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 'auto', flexShrink: 0 }}>
+      <button
+        onClick={onManage}
+        style={{
+          flex: 1,
+          height: 48,
+          borderRadius: 14,
+          background: '#2563EB',
+          color: '#FFFFFF',
+          fontSize: 13,
+          fontWeight: 700,
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: "'Inter', sans-serif",
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)',
+          outline: 'none',
+          transition: 'all 200ms ease'
+        }}
+        className="hover:bg-blue-700 outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
+      >
+        Manage
+      </button>
+
+      <button
+        onClick={onPreview}
+        style={{
+          flex: 1,
+          height: 48,
+          borderRadius: 14,
+          background: '#FFFFFF',
+          color: '#475569',
+          fontSize: 13,
+          fontWeight: 700,
+          border: '1px solid #E5E7EB',
+          cursor: 'pointer',
+          fontFamily: "'Inter', sans-serif",
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          outline: 'none',
+          transition: 'all 200ms ease'
+        }}
+        className="hover:bg-slate-50 outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
+      >
+        Preview
+      </button>
+
+      <button
+        onClick={onMore}
+        style={{
+          width: 48,
+          height: 48,
+          borderRadius: 14,
+          background: '#FFFFFF',
+          color: '#6B7280',
+          border: '1px solid #E5E7EB',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          outline: 'none',
+          transition: 'all 200ms ease'
+        }}
+        className="hover:bg-slate-50 outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
+      >
+        <MoreVertical size={20} />
+      </button>
+    </div>
+  )
+}
+
+function TrainingCard({ course, artwork, onManage, onPreview, onMore }) {
+  const difficulty = useMemo(() => {
+    const t = (course.title || '').toLowerCase()
+    if (t.includes('adv') || t.includes('expert') || t.includes('ml') || t.includes('python')) return 'Advanced'
+    if (t.includes('intro') || t.includes('basic') || t.includes('begin')) return 'Beginner'
+    return 'Intermediate'
+  }, [course.title])
+
+  return (
+    <motion.div
+      whileHover={{
+        y: -6,
+        scale: 1.02,
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+      }}
+      style={{
+        height: 520,
+        width: '100%',
+        borderRadius: 22,
+        background: '#FFFFFF',
+        border: '1px solid #E5E7EB',
+        boxShadow: '0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.04)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        cursor: 'default',
+        transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
+        fontFamily: "'Inter', sans-serif"
+      }}
+    >
+      <CourseCover
+        title={course.title}
+        status={course.status}
+        learners={course.enrolledCount}
+        artwork={artwork}
+      />
+
+      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <span style={{ fontSize: '13px', fontWeight: 500, color: '#6B7280' }}>
+            {course.programTitle || 'General Training'}
+          </span>
+          <span
+            style={{
+              display: 'inline-flex',
+              padding: '3px 8px',
+              borderRadius: '6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              background: difficulty === 'Advanced' ? '#FEE2E2' : difficulty === 'Beginner' ? '#D1FAE5' : '#FEF3C7',
+              color: difficulty === 'Advanced' ? '#991B1B' : difficulty === 'Beginner' ? '#065F46' : '#92400E',
+              textTransform: 'uppercase'
+            }}
+          >
+            {difficulty}
+          </span>
+        </div>
+
+        <h3
+          style={{
+            fontSize: '28px',
+            fontWeight: 700,
+            color: '#111827',
+            margin: '0 0 8px',
+            letterSpacing: '-0.02em',
+            lineHeight: 1.25,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}
+          title={course.title}
+        >
+          {course.title}
+        </h3>
+
+        <p
+          className="line-clamp-2"
+          style={{
+            fontSize: '15px',
+            color: '#6B7280',
+            margin: '0 0 16px',
+            lineHeight: 1.5,
+            fontWeight: 400
+          }}
+        >
+          {course.description || 'No description provided.'}
+        </p>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', marginBottom: 18 }}>
+          <StatChip icon={FileText} label={`${course.lessonCount || 0} Lessons`} color="#4F46E5" />
+          <StatChip icon={Sparkles} label={`${course.quizCount || 0} Quizzes`} color="#F59E0B" />
+          <StatChip icon={Users} label={`${course.enrolledCount || 0} Enrolled`} color="#22C55E" />
+          <StatChip icon={BookOpen} label={`${course.resourceCount || 4} Resources`} color="#7C3AED" />
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <ProgressBar value={course.progress || 0} />
+        </div>
+
+        <ActionButtons
+          onManage={onManage}
+          onPreview={onPreview}
+          onMore={onMore}
+        />
+      </div>
+    </motion.div>
+  )
+}
+
+function SearchInput({ value, onChange }) {
+  return (
+    <div className="relative" style={{ flex: 1, maxWidth: 450, width: '100%' }}>
+      <Search
+        size={20}
+        style={{
+          position: 'absolute',
+          left: '16px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          color: '#9CA3AF',
+          pointerEvents: 'none',
+          zIndex: 10
+        }}
+      />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Search courses..."
+        style={{
+          height: 52,
+          width: '100%',
+          borderRadius: 16,
+          paddingLeft: '48px',
+          paddingRight: '16px',
+          fontSize: '15px',
+          fontWeight: 400,
+          background: '#FFFFFF',
+          border: '1px solid #E5E7EB',
+          outline: 'none',
+          fontFamily: "'Inter', sans-serif",
+          boxSizing: 'border-box',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)'
+        }}
+        className="focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 transition-all outline-none"
+      />
+    </div>
+  )
+}
+
+function FilterTabs({ active, onChange }) {
+  const options = ['ALL', 'DRAFT', 'PUBLISHED', 'ARCHIVED']
+  const labelMap = { ALL: 'All', DRAFT: 'Draft', PUBLISHED: 'Published', ARCHIVED: 'Archived' }
+  return (
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      {options.map((opt) => {
+        const isActive = active === opt
+        return (
+          <button
+            key={opt}
+            onClick={() => onChange(opt)}
+            style={{
+              height: 44,
+              padding: '0 24px',
+              borderRadius: 9999,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: isActive ? '#2563EB' : '#FFFFFF',
+              color: isActive ? '#FFFFFF' : '#6B7280',
+              border: `1px solid ${isActive ? '#2563EB' : '#E5E7EB'}`,
+              transition: 'all 200ms ease',
+              fontFamily: "'Inter', sans-serif",
+              outline: 'none',
+              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+            }}
+            className="hover:bg-slate-50 hover:text-slate-800 outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
+          >
+            {labelMap[opt]}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function CoursesList({ user, onOpenCourse }) {
@@ -193,85 +604,124 @@ function CoursesList({ user, onOpenCourse }) {
   }, [courses])
 
   return (
-    <div className="space-y-6 max-w-[1440px] mx-auto px-6 py-6 bg-[#F8FAFC] min-h-screen" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div
+      style={{
+        maxWidth: 1440,
+        margin: '0 auto',
+        padding: '32px 32px 64px',
+        background: '#F8FAFC',
+        minHeight: '100vh',
+        fontFamily: "'Inter', sans-serif"
+      }}
+    >
+      {/* Breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6B7280', marginBottom: 12 }}>
+        <span>Home</span>
+        <span>/</span>
+        <span style={{ fontWeight: 600, color: '#111827' }}>Trainings</span>
+      </div>
 
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>My Trainings</h2>
-          <p style={{ fontSize: '14px', color: '#6B7280', margin: '4px 0 0' }}>
-            Manage your assigned courses and monitor learner progress.
-          </p>
-        </div>
+      <div style={{ marginBottom: 32 }}>
+        <h1
+          style={{
+            fontSize: '40px',
+            fontWeight: 700,
+            color: '#111827',
+            margin: 0,
+            letterSpacing: '-0.03em'
+          }}
+        >
+          My Trainings
+        </h1>
+        <p
+          style={{
+            fontSize: '15px',
+            color: '#6B7280',
+            margin: '8px 0 0',
+            fontWeight: 500
+          }}
+        >
+          Manage your assigned courses and monitor learner progress.
+        </p>
+      </div>
+
+      {/* TrainingToolbar: Search + Filters + Create Button */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 16,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: '#FFFFFF',
+          border: '1px solid #E5E7EB',
+          borderRadius: 20,
+          padding: 20,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          marginBottom: 32
+        }}
+        className="flex-col md:flex-row"
+      >
+        <SearchInput value={search} onChange={setSearch} />
+        <FilterTabs active={statusFilter} onChange={setStatusFilter} />
         <button
           onClick={() => setShowCreateModal(true)}
           style={{
-            height: 38,
-            padding: '0 16px',
-            background: colors.brand.blueDark, // Consistent blue token
-            color: '#fff',
+            height: 44,
+            padding: '0 24px',
+            background: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)',
+            color: '#FFFFFF',
             border: 'none',
-            borderRadius: 10,
+            borderRadius: 14,
             fontSize: 13,
             fontWeight: 600,
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 6,
+            justifyContent: 'center',
+            gap: 8,
             transition: 'all 200ms ease',
             fontFamily: "'Inter', sans-serif",
-            boxShadow: '0 2px 8px rgba(37,99,235,0.2)',
+            boxShadow: '0 2px 8px rgba(37,99,235,0.25)',
             outline: 'none'
           }}
-          className="hover:bg-blue-700 hover:scale-102 outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] focus-visible:ring-offset-2"
+          className="hover:scale-102 hover:shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2"
         >
-          <Plus size={15} /> Create Course
+          <Plus size={16} /> Create Training
         </button>
       </div>
 
-      {/* Search + Filter Row */}
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white border border-[#E5E7EB] rounded-[20px] p-5 shadow-sm">
-        <SearchBar
-          value={search}
-          onChange={setSearch}
-          placeholder="Search courses by title, description, or program…"
-          width={450}
-          height={40}
-          radius={10}
-        />
-        <FilterPills active={statusFilter} onChange={setStatusFilter} />
-      </div>
-
-      {/* Course Cards Grid - Full 3-column layout */}
+      {/* Course Cards Grid - 2-Column Responsive Layout */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="bg-white border border-slate-200 rounded-[20px] overflow-hidden animate-pulse" style={{ height: 330 }}>
-              <div className="h-[120px] bg-slate-100" />
-              <div className="p-6 space-y-3">
-                <div className="h-5 bg-slate-100 rounded w-3/4" />
-                <div className="h-3 bg-slate-100 rounded w-1/2" />
-                <div className="h-3 bg-slate-100 rounded w-full" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-[28px]">
+          {[1, 2].map((i) => (
+            <div key={i} className="bg-white border border-slate-200 rounded-[22px] overflow-hidden animate-pulse shadow-sm" style={{ height: 520 }}>
+              <div className="h-[180px] bg-slate-100" />
+              <div className="p-6 space-y-4">
+                <div className="h-6 bg-slate-100 rounded w-1/3" />
+                <div className="h-8 bg-slate-100 rounded w-3/4" />
+                <div className="h-4 bg-slate-100 rounded w-full" />
+                <div className="h-10 bg-slate-100 rounded w-1/2" />
               </div>
             </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 px-6 border border-dashed border-slate-200 rounded-[20px] bg-white shadow-sm">
-          <BookOpen size={44} className="mx-auto text-slate-300 mb-3" />
-          <h3 className="text-base font-semibold text-slate-800 mb-1">
+        <div className="text-center py-20 px-6 border border-dashed border-slate-200 rounded-[22px] bg-white shadow-sm">
+          <BookOpen size={48} className="mx-auto text-slate-300 mb-4" />
+          <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: '0 0 8px' }}>
             {courses.length === 0 ? 'No courses assigned yet' : 'No courses match your filters'}
           </h3>
-          <p className="text-xs text-slate-500">
+          <p style={{ fontSize: '14px', color: '#6B7280', margin: 0 }}>
             {courses.length === 0
               ? 'Ask your admin to assign you to a course under a Training Program.'
               : 'Try adjusting your search or status filter.'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-[28px]">
           {filtered.map((c) => (
-            <CourseCard
+            <TrainingCard
               key={c.id}
               course={c}
               artwork={getCourseArtwork(c.title)}
