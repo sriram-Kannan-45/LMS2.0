@@ -29,7 +29,7 @@ function getCourseArtwork(title) {
   const t = (title || '').toLowerCase()
   if (t.includes('node') || t.includes('js') || t.includes('javascript')) {
     return {
-      bg: 'linear-gradient(135deg, #059669, #0d9488)',
+      bg: 'url("https://images.unsplash.com/photo-1618477388954-7852f32655ec?q=80&w=600&auto=format&fit=crop") center/cover',
       pattern: '',
       icon: Code,
       accentColor: 'border-emerald-500',
@@ -38,7 +38,7 @@ function getCourseArtwork(title) {
   }
   if (t.includes('java') || t.includes('spring') || t.includes('backend')) {
     return {
-      bg: 'linear-gradient(135deg, #ea580c, #f59e0b)',
+      bg: 'url("https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=600&auto=format&fit=crop") center/cover',
       pattern: '',
       icon: Coffee,
       accentColor: 'border-amber-500',
@@ -47,7 +47,7 @@ function getCourseArtwork(title) {
   }
   if (t.includes('react') || t.includes('web') || t.includes('frontend') || t.includes('html') || t.includes('css')) {
     return {
-      bg: 'linear-gradient(135deg, #2563eb, #3b82f6)',
+      bg: 'url("https://images.unsplash.com/photo-1633356122544-f134324a6cee?q=80&w=600&auto=format&fit=crop") center/cover',
       pattern: '',
       icon: Sparkles,
       accentColor: 'border-blue-500',
@@ -56,7 +56,7 @@ function getCourseArtwork(title) {
   }
   if (t.includes('python') || t.includes('django') || t.includes('ml')) {
     return {
-      bg: 'linear-gradient(135deg, #1e3a8a, #3b82f6)',
+      bg: 'url("https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=600&auto=format&fit=crop") center/cover',
       pattern: '',
       icon: Code,
       accentColor: 'border-blue-700',
@@ -64,7 +64,7 @@ function getCourseArtwork(title) {
     }
   }
   return {
-    bg: 'linear-gradient(135deg, #334155, #64748b)',
+    bg: 'url("https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=600&auto=format&fit=crop") center/cover',
     pattern: '',
     icon: BookOpen,
     accentColor: 'border-slate-500',
@@ -74,7 +74,7 @@ function getCourseArtwork(title) {
 
 function patternOverlay() {
   return {
-    backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 14px)`,
+    backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 14px)`,
   }
 }
 
@@ -103,7 +103,7 @@ function CourseCover({ status, learners, artwork }) {
   return (
     <div
       style={{
-        height: 140,
+        height: 130, // Proportional height
         background: bg,
         position: 'relative',
         display: 'flex',
@@ -118,8 +118,8 @@ function CourseCover({ status, learners, artwork }) {
         style={{ 
           position: 'absolute', 
           inset: 0, 
-          background: 'rgba(255, 255, 255, 0.03)', 
-          backdropFilter: 'blur(1px)' 
+          background: 'rgba(255, 255, 255, 0.01)', 
+          backdropFilter: 'blur(0.5px)' 
         }} 
       />
       <div className="absolute inset-0 pointer-events-none" style={patternOverlay()} />
@@ -151,10 +151,10 @@ function CourseCover({ status, learners, artwork }) {
 
       <div
         style={{
-          width: 72,
-          height: 72,
+          width: 64,
+          height: 64,
           borderRadius: '50%',
-          background: 'rgba(15, 23, 42, 0.5)',
+          background: 'rgba(15, 23, 42, 0.55)',
           backdropFilter: 'blur(12px)',
           border: '1px solid rgba(255, 255, 255, 0.1)',
           display: 'flex',
@@ -164,7 +164,7 @@ function CourseCover({ status, learners, artwork }) {
           zIndex: 5
         }}
       >
-        <CardIcon size={36} style={{ color: '#FFFFFF', opacity: 0.95 }} />
+        <CardIcon size={30} style={{ color: '#FFFFFF', opacity: 0.95 }} />
       </div>
     </div>
   )
@@ -180,9 +180,9 @@ function TrainingCard({ course, artwork, onManage }) {
       }}
       onClick={() => onManage(course.id)}
       style={{
-        height: 220, // Reduced card height
+        height: 220,
         width: '100%',
-        maxWidth: 460,
+        maxWidth: 360, // 30-35% size reduction, fits 3 in a row
         borderRadius: 20,
         background: '#FFFFFF',
         border: '1px solid #E5E7EB',
@@ -190,7 +190,7 @@ function TrainingCard({ course, artwork, onManage }) {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        cursor: 'pointer', // Card is fully clickable
+        cursor: 'pointer',
         transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
         fontFamily: '"Plus Jakarta Sans", "SF Pro Display", -apple-system, sans-serif'
       }}
@@ -201,18 +201,38 @@ function TrainingCard({ course, artwork, onManage }) {
         artwork={artwork}
       />
 
-      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center' }}>
+      <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'center', gap: 6 }}>
+        {/* Technology Badge */}
+        <span
+          style={{
+            alignSelf: 'flex-start',
+            padding: '2px 8px',
+            borderRadius: 6,
+            background: '#F1F5F9',
+            color: '#475569',
+            fontSize: 10,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.025em',
+            fontFamily: '"Plus Jakarta Sans", sans-serif'
+          }}
+        >
+          {artwork?.label || 'General Training'}
+        </span>
+
+        {/* Course Title */}
         <h3
           style={{
-            fontSize: '22px',
+            fontSize: '18px',
             fontWeight: 700,
             color: '#111827',
             margin: 0,
-            letterSpacing: '-0.025em',
-            lineHeight: 1.25,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.3,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
-            textOverflow: 'ellipsis'
+            textOverflow: 'ellipsis',
+            fontFamily: '"Plus Jakarta Sans", sans-serif'
           }}
           title={course.title}
         >
@@ -576,13 +596,14 @@ function CoursesList({ user, onOpenCourse }) {
         </button>
       </div>
 
-      {/* Course Cards Grid - 2-Column Responsive Layout */}
+      {/* Course Cards Grid - 3-Column Responsive Layout */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] justify-items-center">
-          {[1, 2].map((i) => (
-            <div key={i} className="bg-white border border-slate-200 rounded-[20px] overflow-hidden animate-pulse shadow-sm" style={{ height: 220, width: '100%', maxWidth: 460 }}>
-              <div className="h-[140px] bg-slate-100" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[24px] justify-items-center">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white border border-slate-200 rounded-[20px] overflow-hidden animate-pulse shadow-sm" style={{ height: 220, width: '100%', maxWidth: 360 }}>
+              <div className="h-[130px] bg-slate-100" />
               <div className="p-5 space-y-2">
+                <div className="h-4 bg-slate-100 rounded w-1/3" />
                 <div className="h-6 bg-slate-100 rounded w-2/3" />
               </div>
             </div>
@@ -602,7 +623,7 @@ function CoursesList({ user, onOpenCourse }) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-[24px] justify-items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[24px] justify-items-center">
             {filtered.map((c) => (
               <TrainingCard
                 key={c.id}
