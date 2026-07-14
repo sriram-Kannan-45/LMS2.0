@@ -14,7 +14,7 @@ const DIFFICULTY = {
   HARD:   { label: 'Hard',   bg: '#fef2f2', border: '#fecdd3', text: '#be123c' },
   MEDIUM: { label: 'Medium', bg: '#fffbeb', border: '#fde68a', text: '#b45309' },
   EASY:   { label: 'Easy',   bg: '#ecfdf5', border: '#a7f3d0', text: '#047857' },
-  MIXED:  { label: 'Mixed',  bg: '#f5f3ff', border: '#ddd6fe', text: '#6d28d9' },
+  MIXED:  { label: 'Mixed',  bg: '#f0fdfa', border: '#99f6e4', text: '#0F766E' },
 };
 
 function getDiff(level) {

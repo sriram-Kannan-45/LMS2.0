@@ -224,6 +224,18 @@ export const API = {
     DELETE:      (id) => `${API_BASE}/recordings/${id}`,
   },
 
+  PROFILE: {
+    GET:                  `${API_BASE}/profile/trainer/profile`,
+    UPDATE:               `${API_BASE}/profile/trainer/profile`,
+    PUBLIC:      (userId)=> `${API_BASE}/profile/public/${userId}`,
+    ADD_EXPERIENCE:       `${API_BASE}/profile/trainer/experience`,
+    UPDATE_EXPERIENCE:(id)=> `${API_BASE}/profile/trainer/experience/${id}`,
+    DELETE_EXPERIENCE:(id)=> `${API_BASE}/profile/trainer/experience/${id}`,
+    ADD_EDUCATION:        `${API_BASE}/profile/trainer/education`,
+    UPDATE_EDUCATION:(id) => `${API_BASE}/profile/trainer/education/${id}`,
+    DELETE_EDUCATION:(id) => `${API_BASE}/profile/trainer/education/${id}`,
+  },
+
 };
 
 export { API_BASE, BACKEND_ORIGIN };

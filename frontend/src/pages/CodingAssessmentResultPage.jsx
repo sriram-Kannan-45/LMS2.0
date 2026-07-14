@@ -56,7 +56,7 @@ export default function CodingAssessmentResultPage({ user }) {
   if (loading) {
     return (
       <div style={{ padding: '60px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <Loader2 className="animate-spin" size={32} color="#4f46e5" />
+        <Loader2 className="animate-spin" size={32} color="#0D9488" />
         <span style={{ marginTop: 12, fontSize: 14, color: '#64748b', fontWeight: 600 }}>Retrieving results…</span>
       </div>
     )
@@ -69,7 +69,7 @@ export default function CodingAssessmentResultPage({ user }) {
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', margin: '0 0 6px' }}>Unable to Load Results</h3>
         <p style={{ fontSize: 13, color: '#64748b', textAlign: 'center', maxWidth: 360, margin: '0 0 16px', lineHeight: 1.5 }}>{errorMsg}</p>
         <button onClick={() => navigate(`/trainings/${trainingId}`)} style={{
-          padding: '8px 20px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+          padding: '8px 20px', background: '#0D9488', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
         }}>Back to Training</button>
       </div>
     )
@@ -91,7 +91,7 @@ export default function CodingAssessmentResultPage({ user }) {
         background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
         padding: 32, textAlign: 'center', marginBottom: 20,
       }}>
-        <Code size={40} color="#4f46e5" style={{ marginBottom: 12 }} />
+        <Code size={40} color="#0D9488" style={{ marginBottom: 12 }} />
         <h1 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: '0 0 4px' }}>{result?.title || 'Coding Assessment'}</h1>
         <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 20px' }}>Assessment Complete</p>
 

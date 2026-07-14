@@ -105,7 +105,7 @@ export default function ParticipantDetailModal({ participant, token, onClose, on
               onClick={() => setActiveTab(tab.id)}
               className={`border-b-2 px-4 py-3 text-sm font-medium ${
                 activeTab === tab.id
-                  ? 'border-indigo-600 text-indigo-600'
+                  ? 'border-primary-600 text-primary-600'
                   : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
@@ -200,7 +200,7 @@ export default function ParticipantDetailModal({ participant, token, onClose, on
                 setWarningText('');
               }}
               disabled={!warningText.trim()}
-              className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-lg bg-primary-600 px-5 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
             >
               Send Warning
             </button>

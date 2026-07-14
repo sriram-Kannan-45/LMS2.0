@@ -7,7 +7,7 @@ const CustomTooltip = ({ active, payload, label }) => {
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-lg shadow-md text-xs">
         <p className="font-semibold text-slate-700 dark:text-slate-200 mb-1">{label}</p>
         {payload.map((item, idx) => (
-          <p key={idx} className="text-violet-600 dark:text-violet-400 font-bold">
+          <p key={idx} className="text-primary-600 dark:text-primary-400 font-bold">
             {item.name}: {item.value}
           </p>
         ))}
@@ -17,7 +17,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null
 }
 
-const defaultColors = ['#7c3aed', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#64748b']
+const defaultColors = ['#0D9488', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#64748b']
 
 // Area Chart component with gradient background
 export function LineAreaChart({
@@ -25,9 +25,9 @@ export function LineAreaChart({
   xKey = 'name',
   yKey = 'value',
   height = 240,
-  strokeColor = '#7c3aed',
-  fillColorStart = '#c084fc',
-  fillColorEnd = '#f3e8ff',
+  strokeColor = '#0D9488',
+  fillColorStart = '#5EEAD4',
+  fillColorEnd = '#F0FDFA',
 }) {
   return (
     <div style={{ width: '100%', height }}>
@@ -131,17 +131,17 @@ export function DonutChart({
 export function ProgressBar({
   value = 0,
   max = 100,
-  color = 'violet', // violet | emerald | amber | blue
+  color = 'primary', // primary | emerald | amber | blue
   showLabel = false,
   label = '',
 }) {
   const percent = Math.max(0, Math.min(100, Math.round((value / max) * 100)))
 
   const barColors = {
-    violet: 'bg-gradient-to-r from-violet-500 to-indigo-500',
+    primary: 'bg-gradient-to-r from-primary-500 to-primary-600',
     emerald: 'bg-gradient-to-r from-emerald-500 to-teal-500',
     amber: 'bg-gradient-to-r from-amber-500 to-orange-500',
-    blue: 'bg-gradient-to-r from-blue-500 to-indigo-500',
+    blue: 'bg-gradient-to-r from-blue-500 to-primary-500',
   }
 
   return (
@@ -154,7 +154,7 @@ export function ProgressBar({
       )}
       <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-300 ${barColors[color] || barColors.violet}`}
+          className={`h-full rounded-full transition-all duration-300 ${barColors[color] || barColors.primary}`}
           style={{ width: `${percent}%` }}
         />
       </div>

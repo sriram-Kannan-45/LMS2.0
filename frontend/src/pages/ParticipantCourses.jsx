@@ -8,6 +8,7 @@ import {
   Trophy, AlertCircle, User, Lock, MessageSquare, Code,
 } from 'lucide-react'
 import { API, assetUrl, API_BASE } from '../api/api'
+import { colors } from '../theme/tokens'
 import { useToast } from '../components/Toast'
 import DiscussionBoard from '../components/shared/DiscussionBoard'
 import { Button, Badge, Table, PageHeader, EmptyState, StatCard, ProgressBar } from '../components/ui'
@@ -83,20 +84,14 @@ function MyCoursesList({ user, onOpen }) {
               key={c.courseId}
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              whileHover={c.enrollmentStatus !== 'PENDING' ? { y: -3 } : {}}
-              onClick={() => {
-                if (c.enrollmentStatus === 'PENDING') {
-                  showError('Your enrollment request is pending approval by the trainer.')
-                  return
-                }
-                onOpen(c.courseId)
-              }}
-              className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 flex flex-col group ${c.enrollmentStatus === 'PENDING' ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
+              whileHover={{ y: -3 }}
+              onClick={() => onOpen(c.courseId)}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 flex flex-col group cursor-pointer"
             >
               <div
                 className="h-40 relative bg-cover bg-center flex items-center justify-center text-white"
                 style={{
-                  backgroundImage: c.thumbnailUrl ? `url(${assetUrl(c.thumbnailUrl)})` : 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                  backgroundImage: c.thumbnailUrl ? `url(${assetUrl(c.thumbnailUrl)})` : 'linear-gradient(135deg, #0D9488, #0D9488)',
                 }}
               >
                 {!c.thumbnailUrl && <BookOpen size={40} className="text-white/80 group-hover:scale-110 transition-transform duration-200" />}
@@ -112,17 +107,11 @@ function MyCoursesList({ user, onOpen }) {
                 </div>
 
                 <div className="space-y-3">
-                  {c.enrollmentStatus === 'PENDING' ? (
-                    <div className="w-full text-center">
-                      <Badge color="warning" className="w-full justify-center py-1 text-xs uppercase tracking-wider font-bold">Awaiting Approval</Badge>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
-                        <span>Progress</span>
-                        <span className="font-bold text-violet-600 dark:text-violet-400">{Math.round(c.progressPercent)}%</span>
-                      </div>
-                      <ProgressBar value={c.progressPercent} max={100} showLabel={false} color="violet" />
+                  <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
+                    <span>Progress</span>
+                    <span className="font-bold text-primary-600 dark:text-primary-400">{Math.round(c.progressPercent)}%</span>
+                  </div>
+                      <ProgressBar value={c.progressPercent} max={100} showLabel={false} color="primary" />
                       <Button
                         variant="primary"
                         className="w-full mt-2"
@@ -130,8 +119,6 @@ function MyCoursesList({ user, onOpen }) {
                       >
                         Continue
                       </Button>
-                    </>
-                  )}
                 </div>
               </div>
             </motion.div>
@@ -202,7 +189,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
           width: 200, height: 130, borderRadius: 10, flexShrink: 0,
           background: overview.course.thumbnailUrl
             ? `url(${assetUrl(overview.course.thumbnailUrl)}) center/cover`
-            : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            : 'linear-gradient(135deg, #14B8A6, #14B8A6)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
         }}>
           {!overview.course.thumbnailUrl && <BookOpen size={48} />}
@@ -216,7 +203,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
           <div style={{ marginTop: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
               <span>Training progress</span>
-              <span style={{ fontWeight: 700, color: '#4f46e5' }}>
+              <span style={{ fontWeight: 700, color: '#0D9488' }}>
                 {overview.stats.completedLessons} / {overview.stats.totalLessons} lessons · {Math.round(overview.enrollment.progressPercent)}%
               </span>
             </div>
@@ -242,7 +229,7 @@ function CourseView({ user, courseId, onBack, onOpenLesson }) {
             style={{
               flex: 1, padding: '10px 14px', border: 'none', cursor: 'pointer',
               borderRadius: 8, fontSize: 13, fontWeight: 600,
-              background: tab === t.key ? '#4f46e5' : 'transparent',
+              background: tab === t.key ? '#0D9488' : 'transparent',
               color: tab === t.key ? '#fff' : '#475569',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
@@ -297,7 +284,7 @@ function OverviewView({ course, stats }) {
         }}>
           <div style={{
             width: 40, height: 40, borderRadius: 999,
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff',
+            background: 'linear-gradient(135deg, #14B8A6, #14B8A6)', color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
           }}>
             {course.trainer.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
@@ -371,8 +358,8 @@ function LessonsView({ user, courseId, onOpenLesson }) {
         >
           <div style={{
             width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-            background: l.isLocked ? '#e2e8f0' : l.progress.status === 'COMPLETED' ? '#dcfce7' : l.progress.status === 'IN_PROGRESS' ? '#fef3c7' : '#eef2ff',
-            color: l.isLocked ? '#64748b' : l.progress.status === 'COMPLETED' ? '#15803d' : l.progress.status === 'IN_PROGRESS' ? '#92400e' : '#4f46e5',
+            background: l.isLocked ? '#e2e8f0' : l.progress.status === 'COMPLETED' ? '#dcfce7' : l.progress.status === 'IN_PROGRESS' ? '#fef3c7' : '#f0fdfa',
+            color: l.isLocked ? '#64748b' : l.progress.status === 'COMPLETED' ? '#15803d' : l.progress.status === 'IN_PROGRESS' ? '#92400e' : '#0D9488',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
           }}>
             {l.isLocked ? <Lock size={14} /> : l.progress.status === 'COMPLETED' ? <CheckCircle2 size={16} /> : (l.orderIndex + 1)}
@@ -471,7 +458,7 @@ function ResourcesView({ user, courseId }) {
                     target="_blank" rel="noreferrer"
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: 4,
-                      padding: '6px 10px', background: '#eef2ff', color: '#4f46e5',
+                      padding: '6px 10px', background: '#f0fdfa', color: '#0D9488',
                       borderRadius: 6, fontSize: 11, fontWeight: 600, textDecoration: 'none',
                     }}
                   >
@@ -624,7 +611,7 @@ function QuizzesView({ user, courseId, trainingId }) {
               disabled={q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED'}
               style={{
                 padding: '7px 12px',
-                background: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#4f46e5',
+                background: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#0D9488',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 6,
@@ -786,7 +773,7 @@ function CodingAssessmentsView({ user, courseId, trainingId }) {
               disabled={a.myStatus !== 'NOT_STARTED' && a.myStatus !== 'IN_PROGRESS' && a.resultStatus !== 'PUBLISHED'}
               style={{
                 padding: '7px 12px',
-                background: (a.myStatus !== 'NOT_STARTED' && a.myStatus !== 'IN_PROGRESS' && a.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#4f46e5',
+                background: (a.myStatus !== 'NOT_STARTED' && a.myStatus !== 'IN_PROGRESS' && a.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#0D9488',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 6,
@@ -955,7 +942,7 @@ function LessonView({ user, lessonId, onBack }) {
             style={{
               flex: 1, padding: '10px 14px', border: 'none', cursor: 'pointer',
               borderRadius: 8, fontSize: 13, fontWeight: 600,
-              background: tab === t.key ? '#4f46e5' : 'transparent',
+              background: tab === t.key ? '#0D9488' : 'transparent',
               color: tab === t.key ? '#fff' : '#475569',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
@@ -1048,7 +1035,7 @@ function LessonView({ user, lessonId, onBack }) {
                     disabled={q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED'}
                     style={{
                       padding: '8px 14px',
-                      background: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#4f46e5',
+                      background: (q.myStatus !== 'NOT_STARTED' && q.myStatus !== 'IN_PROGRESS' && q.resultStatus !== 'PUBLISHED') ? '#94a3b8' : '#0D9488',
                       color: '#fff',
                       border: 'none',
                       borderRadius: 6,
@@ -1094,9 +1081,9 @@ function LessonView({ user, lessonId, onBack }) {
                       onClick={() => setOpenAssessmentId(a.assessmentId)}
                       style={{
                         padding: '8px 14px',
-                        background: a.myStatus === 'NOT_STARTED' ? '#4f46e5' : '#fff',
-                        color: a.myStatus === 'NOT_STARTED' ? '#fff' : '#4f46e5',
-                        border: a.myStatus === 'NOT_STARTED' ? 'none' : '1px solid #4f46e5',
+                        background: a.myStatus === 'NOT_STARTED' ? '#0D9488' : '#fff',
+                        color: a.myStatus === 'NOT_STARTED' ? '#fff' : '#0D9488',
+                        border: a.myStatus === 'NOT_STARTED' ? 'none' : '1px solid #0D9488',
                         borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                       }}
                     >
@@ -1139,7 +1126,7 @@ function MaterialCard({ material }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#4f46e5' }}>{MAT_ICON[m.materialType]}</span>
+          <span style={{ color: '#0D9488' }}>{MAT_ICON[m.materialType]}</span>
           <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{m.title}</span>
         </div>
         {(m.fileUrl || m.linkUrl) && (
@@ -1148,7 +1135,7 @@ function MaterialCard({ material }) {
             target="_blank" rel="noreferrer"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
-              padding: '6px 10px', background: '#eef2ff', color: '#4f46e5',
+              padding: '6px 10px', background: '#f0fdfa', color: '#0D9488',
               borderRadius: 6, fontSize: 11, fontWeight: 600, textDecoration: 'none',
             }}
           >
@@ -1321,7 +1308,7 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
       })
       const d = await r.json()
       if (d.success) {
-        success(d.message || 'Enrollment request submitted!')
+        success(d.message || 'Enrolled successfully!')
         onEnrollSuccess?.()
         await fetchExplore()
       } else {
@@ -1335,7 +1322,7 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
     <div style={{ padding: '20px 0' }}>
       <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: '#0f172a' }}>Explore Trainings</h2>
       <p style={{ marginTop: 4, color: '#64748b', fontSize: 14 }}>
-        Discover and request enrollment in published trainings.
+        Discover and enroll in published trainings.
       </p>
 
       {loading ? (
@@ -1349,7 +1336,7 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
             No new trainings to explore
           </h3>
           <p style={{ margin: 0, color: '#94a3b8', fontSize: 13 }}>
-            You've requested enrollment in all published trainings!
+            You're already enrolled in all published trainings!
           </p>
         </div>
       ) : (
@@ -1372,7 +1359,7 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
                 height: 140, position: 'relative',
                 background: c.thumbnailUrl
                   ? `url(${assetUrl(c.thumbnailUrl)}) center/cover`
-                  : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  : 'linear-gradient(135deg, #14B8A6, #14B8A6)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
               }}>
                 {!c.thumbnailUrl && <BookOpen size={42} />}
@@ -1406,7 +1393,7 @@ function ExploreCatalog({ user, onEnrollSuccess }) {
                     onClick={() => handleEnroll(c.courseId)}
                     style={{
                       width: '100%', padding: '9px 14px',
-                      background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8,
+                      background: '#0D9488', color: '#fff', border: 'none', borderRadius: 8,
                       fontSize: 13, fontWeight: 600, cursor: 'pointer',
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                       opacity: enrollingId === c.courseId ? 0.7 : 1,
@@ -1465,7 +1452,7 @@ const inputStyle = {
 }
 const btnPrimary = {
   display: 'inline-flex', alignItems: 'center',
-  padding: '10px 18px', background: '#4f46e5', color: '#fff', border: 'none',
+  padding: '10px 18px', background: '#0D9488', color: '#fff', border: 'none',
   borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
 }
 const btnSecondary = {

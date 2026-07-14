@@ -1,150 +1,104 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Calendar, Users, Star, FileText, CheckCircle, XCircle, Clock, MessageSquare, TrendingUp, Monitor, Shield } from 'lucide-react'
-import TrainerForm from '../components/TrainerForm'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Calendar, Users, Star, FileText, CheckCircle, Clock, MessageSquare,
+  TrendingUp, BookOpen, Award, BarChart3, ArrowRight, Activity
+} from 'lucide-react'
 import NotesSection from '../components/trainer/notes/NotesSection'
 import ParticipantProfileView from '../components/shared/ParticipantProfileView'
 import TrainerCourses from './TrainerCourses'
 import { useToast } from '../components/Toast'
 import Pagination from '../components/Pagination'
-import SortableTableHeader from '../components/SortableTableHeader'
-import { Button, Badge, Table, PageHeader, EmptyState, StatCard, ProgressBar } from '../components/ui'
-
+import { Button, Badge, EmptyState, StatCard, ProgressBar } from '../components/ui'
 import { API_BASE } from '../api/api'
 
 const API = API_BASE
 
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06 } }
+}
+const item = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } }
+}
+
 function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
   const navigate = useNavigate()
-  const { success, error: showError, info } = useToast()
-  const tab = activeTab === 'trainings' ? 'courses' : (activeTab || 'courses')
+  const { success, error: showError } = useToast()
+  const tab = activeTab === 'trainings' ? 'courses' : (activeTab || 'overview')
   const [trainings, setTrainings] = useState([])
   const [feedbacks, setFeedbacks] = useState([])
-  const [stats, setStats] = useState({ totalTrainings: 0, avgTrainerRating: 0, avgSubjectRating: 0, totalFeedbacks: 0 })
-  const [feedbackSort, setFeedbackSort] = useState({ key: '', direction: 'asc' })
+  const [stats, setStats] = useState({
+    totalTrainings: 0, avgTrainerRating: 0, totalFeedbacks: 0,
+    totalLearners: 0, publishedCourses: 0,
+  })
   const [feedbackPage, setFeedbackPage] = useState(1)
   const feedbackItemsPerPage = 5
-
-  const auth = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` })
-
+  const [recentActivity, setRecentActivity] = useState([])
   const [replyModal, setReplyModal] = useState(null)
   const [replyText, setReplyText] = useState('')
   const [viewingParticipant, setViewingParticipant] = useState(null)
-  const [enrollmentRequests, setEnrollmentRequests] = useState([])
   const [trainerReport, setTrainerReport] = useState(null)
 
-  const fetchEnrollmentRequests = async () => {
-    try {
-      const r = await fetch(`${API}/trainer/enrollment-requests`, { headers: auth() })
-      const d = await r.json()
-      if (r.ok && d.success) {
-        setEnrollmentRequests(d.pendingRequests || [])
-      }
-    } catch (e) {
-      console.error('fetchEnrollmentRequests error:', e.message)
-    }
-  }
+  const auth = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` })
 
   const fetchTrainerReport = async () => {
     try {
       const r = await fetch(`${API}/reports/trainer`, { headers: auth() })
       const d = await r.json()
-      if (r.ok && d.success) {
-        setTrainerReport(d.data)
-      }
-    } catch (e) {
-      console.error('fetchTrainerReport error:', e.message)
-    }
-  }
-
-  const handleApproveEnrollment = async (requestId) => {
-    try {
-      const r = await fetch(`${API}/trainer/enrollment-requests/${requestId}/approve`, {
-        method: 'POST',
-        headers: auth()
-      })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error)
-      success('Enrollment request approved successfully!')
-      fetchEnrollmentRequests()
-    } catch (e) {
-      showError(e.message)
-    }
-  }
-
-  const handleRejectEnrollment = async (requestId) => {
-    try {
-      const r = await fetch(`${API}/trainer/enrollment-requests/${requestId}/reject`, {
-        method: 'POST',
-        headers: auth()
-      })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error)
-      success('Enrollment request rejected.')
-      fetchEnrollmentRequests()
-    } catch (e) {
-      showError(e.message)
-    }
+      if (r.ok && d.success) setTrainerReport(d.data)
+    } catch (e) { console.error('fetchTrainerReport error:', e.message) }
   }
 
   const handleRegenerateCertificate = async () => {
     try {
-      const r = await fetch(`${API}/trainer/certificates/regenerate`, {
-        method: 'POST',
-        headers: auth()
-      })
+      const r = await fetch(`${API}/trainer/certificates/regenerate`, { method: 'POST', headers: auth() })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error)
-      success('Certificate check/regeneration triggered successfully!')
+      success('Certificate check/regeneration triggered!')
       fetchTrainerReport()
-    } catch (e) {
-      showError(e.message)
-    }
+    } catch (e) { showError(e.message) }
   }
-
-  useEffect(() => {
-    if (tab === 'enrollments') {
-      fetchEnrollmentRequests()
-    } else if (tab === 'reports') {
-      fetchTrainerReport()
-    }
-  }, [tab])
 
   useEffect(() => {
     fetchTrainings()
     fetchFeedbacks()
   }, [])
 
+  useEffect(() => {
+    if (tab === 'reports') fetchTrainerReport()
+  }, [tab])
+
   const fetchTrainings = async () => {
     try {
       const r = await fetch(`${API}/trainer/trainings`, { headers: auth() })
       const d = await r.json()
-      console.log('DEBUG - API Response (/trainer/trainings):', d)
       const list = d.trainings || []
       setTrainings(list)
-      setStats(p => ({ ...p, totalTrainings: list.length }))
-    } catch (e) {
-      console.error('DEBUG - fetchTrainings error:', e.message)
-    }
+      const published = list.filter(t => t.status === 'PUBLISHED').length
+      const totalLearners = list.reduce((sum, t) => sum + (t.enrolledCount || t.participantCount || 0), 0)
+      setStats(p => ({ ...p, totalTrainings: list.length, publishedCourses: published, totalLearners }))
+      const activities = list.slice(0, 8).map((t, i) => ({
+        id: i, type: 'course', icon: BookOpen,
+        color: t.status === 'PUBLISHED' ? 'text-emerald-500' : 'text-amber-500',
+        bg: t.status === 'PUBLISHED' ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-amber-50 dark:bg-amber-950/30',
+        message: `"${t.title}" is ${t.status === 'PUBLISHED' ? 'published' : 'in draft'}`,
+        time: t.updatedAt || t.createdAt,
+      }))
+      setRecentActivity(activities)
+    } catch (e) { console.error('fetchTrainings error:', e.message) }
   }
 
   const fetchFeedbacks = async () => {
     try {
       const r = await fetch(`${API}/trainer/feedbacks`, { headers: auth() })
       const d = await r.json()
-      console.log('DEBUG - API Response (/trainer/feedbacks):', d)
       const list = d.feedbacks || []
       setFeedbacks(list)
-      setStats(p => ({
-        ...p,
-        avgTrainerRating: d.averageTrainerRating || 0,
-        avgSubjectRating: d.averageSubjectRating || 0,
-        totalFeedbacks: list.length
-      }))
-    } catch (e) {
-      console.error('DEBUG - fetchFeedbacks error:', e.message)
-    }
+      setStats(p => ({ ...p, avgTrainerRating: d.averageTrainerRating || 0, totalFeedbacks: list.length }))
+    } catch (e) { console.error('fetchFeedbacks error:', e.message) }
   }
 
   const handleReply = async (e) => {
@@ -154,514 +108,390 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
         method: 'POST', headers: auth(), body: JSON.stringify({ trainerResponse: replyText })
       })
       const d = await r.json().catch(() => ({}))
-      console.log("STATUS:", r.status);
-      console.log("DATA:", d);
-
-      if (!r.ok || d.success === false) {
-        showError(d.error || d.message || 'Failed to save reply')
-        return
-      }
-
-      success('Reply submitted successfully!')
-      setReplyModal(null)
-      setReplyText('')
-      fetchFeedbacks()
-    } catch (e) {
-      showError(e.message)
-    }
+      if (!r.ok || d.success === false) { showError(d.error || 'Failed to save reply'); return }
+      success('Reply submitted!')
+      setReplyModal(null); setReplyText(''); fetchFeedbacks()
+    } catch (e) { showError(e.message) }
   }
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'
-  const Stars = ({ v }) => <span className="stars">{[1,2,3,4,5].map(s => <span key={s} className={`star ${s<=v?'filled':''}`}>&#9733;</span>)}</span>
-  const initials = (name) => name ? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2) : 'TR'
+  const fmtTimeAgo = (d) => {
+    if (!d) return ''
+    const diff = Date.now() - new Date(d).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 60) return `${mins}m ago`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `${hours}h ago`
+    return `${Math.floor(hours / 24)}d ago`
+  }
+  const initials = (name) => name ? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'TR'
+  const Stars = ({ v }) => (
+    <span className="flex gap-0.5">
+      {[1,2,3,4,5].map(s => (
+        <Star key={s} size={13} className={s <= v ? 'fill-amber-400 text-amber-400' : 'text-slate-200 dark:text-slate-700'} />
+      ))}
+    </span>
+  )
 
-  // Sort feedbacks
-  const sortedFeedbacks = [...feedbacks].sort((a, b) => {
-    if (!feedbackSort.key) return 0
-    const aVal = a[feedbackSort.key] ?? ''
-    const bVal = b[feedbackSort.key] ?? ''
-    const comparison = String(aVal).localeCompare(String(bVal))
-    return feedbackSort.direction === 'asc' ? comparison : -comparison
-  })
-
-  // Paginate feedbacks
-  const paginatedFeedbacks = sortedFeedbacks.slice(
+  const paginatedFeedbacks = [...feedbacks].slice(
     (feedbackPage - 1) * feedbackItemsPerPage,
     feedbackPage * feedbackItemsPerPage
   )
-  const totalFeedbackPages = Math.ceil(sortedFeedbacks.length / feedbackItemsPerPage)
-
-  const handleFeedbackSort = (key) => {
-    setFeedbackSort(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }))
-  }
+  const totalFeedbackPages = Math.ceil(feedbacks.length / feedbackItemsPerPage)
 
   return (
-    <div className="dashboard">
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-label">Assigned Trainings</div>
-          <div className="stat-value">{stats.totalTrainings}</div>
-        </div>
-        <div className="stat-card green">
-          <div className="stat-label">Feedback Responses</div>
-          <div className="stat-value">{stats.totalFeedbacks}</div>
-        </div>
-        <div className="stat-card blue">
-          <div className="stat-label">Avg Trainer Rating</div>
-          <div className="stat-value">{stats.avgTrainerRating}</div>
-        </div>
-        <div className="stat-card orange">
-          <div className="stat-label">Avg Subject Rating</div>
-          <div className="stat-value">{stats.avgSubjectRating}</div>
-        </div>
-      </div>
+    <motion.div variants={container} initial="hidden" animate="show" className="max-w-[1600px] mx-auto px-8 py-8 min-h-screen">
+      {/* Welcome Banner & KPI Cards only on Overview tab */}
+      {tab === 'overview' && (
+        <>
+          {/* Welcome Banner */}
+          <motion.div
+            variants={item}
+            style={{
+              height: 170,
+              background: 'linear-gradient(135deg, #2563EB 0%, #4F46E5 50%, #7C3AED 100%)',
+              borderRadius: 24,
+              padding: '24px 32px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              color: '#fff',
+              marginBottom: 32,
+              boxShadow: '0 4px 20px rgba(37,99,235,0.15)'
+            }}
+            className="flex-col md:flex-row gap-4"
+          >
+            <div>
+              <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' }}>
+                Welcome back, {user.name} 👋
+              </h1>
+              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', margin: '6px 0 0' }}>
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {[
+                { label: 'Manage Courses', action: () => onTabChange('courses') },
+                { label: 'Analytics', action: () => onTabChange('reports') },
+                { label: 'Create Training', action: () => {
+                  onTabChange('courses');
+                  setTimeout(() => {
+                    const event = new CustomEvent('open-create-course');
+                    window.dispatchEvent(event);
+                  }, 150);
+                }},
+                { label: 'View Profile', action: () => onTabChange('profile') }
+              ].map(btn => (
+                <button key={btn.label} onClick={btn.action} style={{
+                  padding: '10px 16px', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255,255,255,0.3)', borderRadius: 12, color: '#fff', fontSize: 13,
+                  fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                }} className="hover:bg-white hover:text-[#2563EB]">
+                  {btn.label}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* KPI Cards */}
+          <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <KpiCard icon={BookOpen} label="Total Trainings" value={stats.totalTrainings} trend="+8%" trendColor="green" progress={60} bgIcon="#EFF6FF" colorIcon="#2563EB" />
+            <KpiCard icon={Users} label="Active Learners" value={stats.totalLearners} trend="+12%" trendColor="green" progress={75} bgIcon="#ECFDF5" colorIcon="#10B981" />
+            <KpiCard icon={Star} label="Average Rating" value={stats.avgTrainerRating ? Number(stats.avgTrainerRating).toFixed(1) : '—'} trend="+2.4%" trendColor="green" progress={92} bgIcon="#FFFBEB" colorIcon="#D97706" />
+            <KpiCard icon={MessageSquare} label="Feedback Received" value={stats.totalFeedbacks} trend="+5%" trendColor="green" progress={45} bgIcon="#EEF2F6" colorIcon="#475569" />
+          </motion.div>
+        </>
+      )}
+
+      {/* Tab Content */}
+      {tab === 'overview' && (
+        <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Recent Activity */}
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Recent Activity</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Latest updates from your courses</p>
+              </div>
+              <button onClick={() => onTabChange('courses')} className="text-xs font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1">
+                View all <ArrowRight size={12} />
+              </button>
+            </div>
+            <div className="p-5">
+              {recentActivity.length === 0 ? (
+                <EmptyState icon={Activity} title="No activity yet" description="Activity from your courses will appear here." />
+              ) : (
+                <div className="space-y-3">
+                  {recentActivity.map((a, i) => (
+                    <motion.div
+                      key={a.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                    >
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${a.bg}`}>
+                        <a.icon size={16} className={a.color} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-700 dark:text-slate-300 truncate">{a.message}</p>
+                        <p className="text-[11px] text-slate-400">{fmtTimeAgo(a.time)}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Stats Sidebar */}
+          <div className="space-y-6">
+            {/* Rating Summary */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">Rating Summary</h3>
+              {feedbacks.length === 0 ? (
+                <p className="text-sm text-slate-400">No feedback yet</p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="text-3xl font-bold text-slate-900 dark:text-slate-100">{Number(stats.avgTrainerRating || 0).toFixed(1)}</div>
+                    <div>
+                      <Stars v={Math.round(stats.avgTrainerRating)} />
+                      <p className="text-xs text-slate-500 mt-0.5">{stats.totalFeedbacks} reviews</p>
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button onClick={() => onTabChange('feedback')} className="w-full text-center text-xs font-medium text-primary-600 hover:text-primary-700 py-2 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-950/30 transition-colors">
+                      View all feedback →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Courses Summary */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">Courses</h3>
+              <div className="space-y-3">
+                {trainings.slice(0, 4).map((t) => (
+                  <div key={t.id} className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center justify-center shrink-0">
+                      <BookOpen size={14} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{t.title}</p>
+                      <p className="text-[11px] text-slate-400">{t.enrolledCount || t.participantCount || 0} learners</p>
+                    </div>
+                    <Badge color={t.status === 'PUBLISHED' ? 'success' : 'warning'} className="text-[10px]">
+                      {t.status === 'PUBLISHED' ? 'Live' : 'Draft'}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+              {trainings.length > 4 && (
+                <button onClick={() => onTabChange('courses')} className="w-full text-center text-xs font-medium text-primary-600 hover:text-primary-700 py-2 mt-3 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-950/30 transition-colors">
+                  View all {trainings.length} courses →
+                </button>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {tab === 'courses' && (
-        <TrainerCourses user={user} />
+        <motion.div variants={item}>
+          <TrainerCourses user={user} />
+        </motion.div>
       )}
 
       {tab === 'feedback' && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <PageHeader
-            title="Feedback Received"
-            subtitle="View ratings and comments submitted by training participants."
-          />
-          {feedbacks.length === 0 ? (
-            <EmptyState
-              icon={MessageSquare}
-              title="No Feedback Yet"
-              description="Feedback from participants will appear here once they start submitting."
-            />
-          ) : (
-            <div className="space-y-4">
-              <Table
-                columns={[
-                  {
-                    key: 'trainingTitle',
-                    header: (
-                      <SortableTableHeader sortKey="trainingTitle" currentSort={feedbackSort.key} sortDirection={feedbackSort.direction} onSort={handleFeedbackSort}>
-                        Training
-                      </SortableTableHeader>
-                    ),
-                    render: (row) => <strong className="text-slate-800 dark:text-slate-200">{row.trainingTitle}</strong>
-                  },
-                  {
-                    key: 'participant',
-                    header: 'Participant',
-                    render: (row) => row.anonymous ? <Badge color="neutral">Anonymous</Badge> : (
-                      row.participantId ? (
-                        <button
-                          type="button"
-                          onClick={() => setViewingParticipant({ id: row.participantId, name: row.participantName })}
-                          className="text-violet-600 hover:text-violet-700 hover:underline text-sm font-medium focus:outline-none cursor-pointer"
-                          title="View profile"
-                        >
-                          {row.participantName}
-                        </button>
-                      ) : row.participantName
-                    )
-                  },
-                  {
-                    key: 'trainerRating',
-                    header: (
-                      <SortableTableHeader sortKey="trainerRating" currentSort={feedbackSort.key} sortDirection={feedbackSort.direction} onSort={handleFeedbackSort} numeric>
-                        Trainer Rating
-                      </SortableTableHeader>
-                    ),
-                    render: (row) => <Stars v={row.trainerRating} />
-                  },
-                  {
-                    key: 'subjectRating',
-                    header: (
-                      <SortableTableHeader sortKey="subjectRating" currentSort={feedbackSort.key} sortDirection={feedbackSort.direction} onSort={handleFeedbackSort} numeric>
-                        Subject Rating
-                      </SortableTableHeader>
-                    ),
-                    render: (row) => <Stars v={row.subjectRating} />
-                  },
-                  {
-                    key: 'comments',
-                    header: 'Comments',
-                    className: 'max-w-[200px] truncate text-slate-500 text-xs',
-                    render: (row) => row.comments || '-'
-                  },
-                  {
-                    key: 'trainerResponse',
-                    header: 'My Reply',
-                    className: 'max-w-[200px]',
-                    render: (row) => row.trainerResponse ? (
-                      <span className="text-slate-500 text-xs">{row.trainerResponse}</span>
-                    ) : (
-                      <Button size="sm" variant="primary" onClick={() => { setReplyModal(row); setReplyText(''); }}>
-                        <MessageSquare size={12} className="mr-1" /> Reply
-                      </Button>
-                    )
-                  },
-                  {
-                    key: 'submittedAt',
-                    header: 'Date',
-                    render: (row) => fmtDate(row.submittedAt)
-                  }
-                ]}
-                data={paginatedFeedbacks}
-              />
-              {totalFeedbackPages > 1 && (
-                <Pagination
-                  currentPage={feedbackPage}
-                  totalPages={totalFeedbackPages}
-                  onPageChange={setFeedbackPage}
-                />
+        <motion.div variants={item}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Feedback Received</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Ratings and comments from participants</p>
+                </div>
+                <div className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
+                  <Star size={14} className="fill-amber-400 text-amber-400" />
+                  <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">{stats.avgTrainerRating ? Number(stats.avgTrainerRating).toFixed(1) : '—'}</span>
+                </div>
+              </div>
+            </div>
+            <div className="p-6">
+              {feedbacks.length === 0 ? (
+                <EmptyState icon={MessageSquare} title="No Feedback Yet" description="Feedback from participants will appear here." />
+              ) : (
+                <div className="space-y-4">
+                  {paginatedFeedbacks.map((fb, i) => (
+                    <motion.div
+                      key={fb.id || i}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="flex gap-4 p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm font-semibold shrink-0">
+                        {fb.anonymous ? '?' : initials(fb.participantName)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">{fb.anonymous ? 'Anonymous' : fb.participantName}</span>
+                          <span className="text-xs text-slate-400">·</span>
+                          <span className="text-xs text-slate-400">{fmtDate(fb.submittedAt)}</span>
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                          for <span className="font-medium text-slate-700 dark:text-slate-300">{fb.trainingTitle}</span>
+                        </div>
+                        <div className="flex items-center gap-4 mb-2">
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-slate-500">Trainer:</span>
+                            <Stars v={fb.trainerRating} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-slate-500">Subject:</span>
+                            <Stars v={fb.subjectRating} />
+                          </div>
+                        </div>
+                        {fb.comments && (
+                          <p className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">{fb.comments}</p>
+                        )}
+                        {fb.trainerResponse ? (
+                          <div className="mt-2 text-xs text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/30 rounded-lg p-2">
+                            <span className="font-semibold">Your reply:</span> {fb.trainerResponse}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setReplyModal(fb); setReplyText(''); }}
+                            className="mt-2 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                          >
+                            Reply →
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                  {totalFeedbackPages > 1 && (
+                    <Pagination currentPage={feedbackPage} totalPages={totalFeedbackPages} onPageChange={setFeedbackPage} />
+                  )}
+                </div>
               )}
             </div>
-          )}
+          </div>
         </motion.div>
       )}
 
       {tab === 'notes' && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
+        <motion.div variants={item}>
           <NotesSection user={user} />
         </motion.div>
       )}
 
-      {tab === 'enrollments' && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <PageHeader
-            title="Enrollment Requests"
-            subtitle="Review and approve participant access requests to your training courses."
-            action={<Button size="sm" variant="secondary" onClick={fetchEnrollmentRequests}>Refresh</Button>}
-          />
-          {enrollmentRequests.length === 0 ? (
-            <EmptyState
-              icon={Users}
-              title="No pending requests"
-              description="No participants are currently waiting for enrollment approval."
-            />
-          ) : (
-            <Table
-              columns={[
-                {
-                  key: 'participantName',
-                  header: 'Participant',
-                  render: (row) => (
-                    <div>
-                      <div className="font-semibold text-slate-800 dark:text-slate-200">{row.participant?.name || 'Unknown'}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">{row.participant?.email}</div>
-                    </div>
-                  ),
-                },
-                {
-                  key: 'courseTitle',
-                  header: 'Target Training',
-                  render: (row) => (
-                    <div className="font-medium text-slate-700 dark:text-slate-300">
-                      {row.course?.title || row.training?.title || 'Unknown'}
-                    </div>
-                  ),
-                },
-                {
-                  key: 'type',
-                  header: 'Type',
-                  render: () => <Badge color="success">Training</Badge>,
-                },
-                {
-                  key: 'actions',
-                  header: '',
-                  className: 'text-right',
-                  render: (row) => (
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        className="bg-emerald-600 hover:bg-emerald-700 border-emerald-500/20 text-white"
-                        onClick={() => handleApproveEnrollment(row.id)}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => handleRejectEnrollment(row.id)}
-                      >
-                        Reject
-                      </Button>
-                    </div>
-                  ),
-                },
-              ]}
-              data={enrollmentRequests}
-            />
-          )}
-        </motion.div>
-      )}
-
       {tab === 'reports' && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-            <PageHeader
-              title="Trainer Reports & Analytics"
-              subtitle="View participant progress, quiz results, and review submissions."
-              action={
+        <motion.div variants={item}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Reports & Analytics</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Participant progress, quiz results, and submissions</p>
+                </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => navigate('/trainer/courses')}>
-                    <Monitor size={14} className="mr-1" />
-                    Assessments
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={handleRegenerateCertificate}>Check/Issue Certificates</Button>
-                  <Button size="sm" variant="primary" onClick={fetchTrainerReport}>Refresh Data</Button>
+                  <Button size="sm" variant="secondary" onClick={handleRegenerateCertificate}>Issue Certificates</Button>
+                  <Button size="sm" variant="primary" onClick={fetchTrainerReport}>Refresh</Button>
                 </div>
-              }
-            />
-
-          {!trainerReport ? (
-            <div className="card" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Loading report data...</span>
+              </div>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard label="Average Progress Rate" value={`${trainerReport.averageCompletion}%`} icon={TrendingUp} variant="violet" />
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Participant Progress</h3>
-                {(!trainerReport.participantProgress || trainerReport.participantProgress.length === 0) ? (
-                  <EmptyState icon={Users} title="No participants enrolled" description="No participants enrolled yet." />
-                ) : (
-                  <Table
-                    columns={[
-                      {
-                        key: 'participantName',
-                        header: 'Participant',
-                        render: (row) => (
-                          <div>
-                            <div className="font-semibold text-slate-800 dark:text-slate-200">{row.participantName}</div>
-                            <div className="text-xs text-slate-400 mt-0.5">{row.participantEmail}</div>
-                          </div>
-                        ),
-                      },
-                      { key: 'title', header: 'Training' },
-                      { key: 'type', header: 'Type', render: () => <Badge color="success">Training</Badge> },
-                      { key: 'lessons', header: 'Lessons Completed', render: (row) => `${row.completedLessons} / ${row.totalLessons || 0}` },
-                      {
-                        key: 'progress',
-                        header: 'Progress',
-                        render: (row) => (
-                          <div className="w-36">
-                            <ProgressBar value={row.progressPercent} max={100} showLabel color="violet" />
-                          </div>
-                        ),
-                      },
-                      {
-                        key: 'avgQuizScore',
-                        header: 'Avg Quiz Score',
-                        render: (row) => <Badge color="success">{row.avgQuizScore}%</Badge>,
-                      },
-                    ]}
-                    data={trainerReport.participantProgress}
-                  />
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Pending Assessment Reviews</h3>
-                {(!trainerReport.pendingReviews || trainerReport.pendingReviews.length === 0) ? (
-                  <EmptyState icon={CheckCircle} title="All Submissions Graded" description="No pending reviews. All submissions graded!" />
-                ) : (
-                  <Table
-                    columns={[
-                      { key: 'participantName', header: 'Participant', className: 'font-semibold text-slate-800 dark:text-slate-200' },
-                      { key: 'assessmentTitle', header: 'Assessment' },
-                      { key: 'maxScore', header: 'Max Score' },
-                      { key: 'date', header: 'Submitted At', render: (row) => fmtDate(row.date) },
-                    ]}
-                    data={trainerReport.pendingReviews}
-                  />
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Recent Quiz Results</h3>
-                {(!trainerReport.quizScores || trainerReport.quizScores.length === 0) ? (
-                  <EmptyState icon={FileText} title="No quiz submissions" description="No quiz submissions yet." />
-                ) : (
-                  <Table
-                    columns={[
-                      { key: 'participantName', header: 'Participant', className: 'font-semibold text-slate-800 dark:text-slate-200' },
-                      { key: 'quizTitle', header: 'Quiz' },
-                      { key: 'score', header: 'Score', render: (row) => <Badge color="success">{row.score}%</Badge> },
-                      { key: 'date', header: 'Date', render: (row) => fmtDate(row.date) },
-                    ]}
-                    data={trainerReport.quizScores}
-                  />
-                )}
-              </div>
-
-              {/* Assessment Scores */}
-              <div className="card">
-                <div className="card-header">
-                  <h3>Graded Assessments</h3>
-                </div>
-                {(!trainerReport.assessmentScores || trainerReport.assessmentScores.length === 0) ? (
-                  <div className="empty-state" style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No graded submissions yet.</div>
-                ) : (
-                  <div className="table-wrapper">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Participant</th>
-                          <th>Assessment</th>
-                          <th>Score</th>
-                          <th>Status</th>
-                          <th>Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {trainerReport.assessmentScores.map((as, idx) => (
-                          <tr key={idx}>
-                            <td style={{ fontWeight: 600 }}>{as.participantName}</td>
-                            <td>{as.assessmentTitle}</td>
-                            <td>{as.score} / {as.maxScore}</td>
-                            <td>
-                              <span className={`ac-chip ${as.status === 'PUBLISHED' ? 'ac-chip-success' : 'ac-chip-primary'}`}>
-                                {as.status}
-                              </span>
-                            </td>
-                            <td>{fmtDate(as.date)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            <div className="p-6">
+              {!trainerReport ? (
+                <div className="flex items-center justify-center h-48">
+                  <div className="text-center">
+                    <Activity size={32} className="mx-auto mb-3 text-slate-300" />
+                    <p className="text-sm text-slate-500">Loading report data...</p>
                   </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <StatCard label="Average Progress" value={`${trainerReport.averageCompletion || 0}%`} icon={TrendingUp} variant="primary" />
+                    <StatCard label="Pending Reviews" value={trainerReport.pendingReviews?.length || 0} icon={Clock} variant="amber" />
+                    <StatCard label="Quiz Submissions" value={trainerReport.quizScores?.length || 0} icon={FileText} variant="blue" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Participant Progress</h3>
+                    {(!trainerReport.participantProgress || trainerReport.participantProgress.length === 0) ? (
+                      <EmptyState icon={Users} title="No participants enrolled" description="No participants enrolled yet." />
+                    ) : (
+                      <div className="space-y-2">
+                        {trainerReport.participantProgress.slice(0, 5).map((p, i) => (
+                          <div key={i} className="flex items-center gap-4 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-xs font-semibold">
+                              {initials(p.participantName)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-slate-800 dark:text-slate-200">{p.participantName}</div>
+                              <div className="text-xs text-slate-500">{p.title}</div>
+                            </div>
+                            <div className="w-24">
+                              <ProgressBar value={p.progressPercent} max={100} showLabel color="primary" />
+                            </div>
+                            <Badge color="success">{p.avgQuizScore}%</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </motion.div>
-      )}
-
-      {tab === 'profile' && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <div style={{
-            background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #2563eb 100%)',
-            borderRadius: 16, padding: '32px 32px 24px', marginBottom: 24,
-            position: 'relative', overflow: 'hidden'
-          }}>
-            <div style={{
-              position: 'absolute', top: -40, right: -40, width: 200, height: 200,
-              borderRadius: '50%', background: 'rgba(255,255,255,0.06)'
-            }} />
-            <div style={{
-              position: 'absolute', bottom: -60, left: '30%', width: 160, height: 160,
-              borderRadius: '50%', background: 'rgba(255,255,255,0.04)'
-            }} />
-            <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 20 }}>
-              <div style={{
-                width: 72, height: 72, borderRadius: '50%',
-                background: 'rgba(255,255,255,0.2)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 28, fontWeight: 700, fontFamily: "'Poppins', sans-serif",
-                border: '3px solid rgba(255,255,255,0.4)'
-              }}>
-                {user.name ? user.name.trim().split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'TR'}
-              </div>
-              <div>
-                <h2 style={{ margin: 0, color: '#fff', fontSize: 22, fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>{user.name}</h2>
-                <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>{user.email}</p>
-                <span style={{
-                  display: 'inline-block', marginTop: 8, padding: '3px 12px', borderRadius: 999,
-                  background: 'rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, fontWeight: 700,
-                  textTransform: 'uppercase', letterSpacing: '0.5px'
-                }}>
-                  TRAINER
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 20, marginBottom: 24 }}>
-            <div style={{
-              flex: 1, background: '#fff', borderRadius: 12, padding: '20px 24px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0'
-            }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Account</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>Active</div>
-              <div style={{ fontSize: 12, color: '#22c55e', marginTop: 2 }}>● Verified Trainer</div>
-            </div>
-            <div style={{
-              flex: 1, background: '#fff', borderRadius: 12, padding: '20px 24px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0'
-            }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Trainings</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{stats.totalTrainings}</div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Assigned courses</div>
-            </div>
-            <div style={{
-              flex: 1, background: '#fff', borderRadius: 12, padding: '20px 24px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0'
-            }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Avg. Rating</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', marginTop: 4, fontFamily: "'Poppins', sans-serif" }}>{stats.avgTrainerRating || '—'}</div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>From feedback</div>
-            </div>
-          </div>
-
-          <div style={{
-            background: '#fff', borderRadius: 12, padding: 28,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif" }}>Personal Information</h3>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Update your profile details and photo</p>
-              </div>
-            </div>
-            <TrainerForm user={user} />
           </div>
         </motion.div>
       )}
 
-      {replyModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h3>Reply to Feedback</h3>
-              <button className="modal-close" onClick={() => setReplyModal(null)}>&#10005;</button>
-            </div>
-            <form onSubmit={handleReply}>
-              <div className="form-group">
-                <label className="form-label">Your Response</label>
-                <textarea className="form-control" value={replyText} required onChange={e => setReplyText(e.target.value)} placeholder="Type your response..." />
+      {/* Reply Modal */}
+      <AnimatePresence>
+        {replyModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+            onClick={() => setReplyModal(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Reply to Feedback</h3>
+                <p className="text-sm text-slate-500 mt-1">from {replyModal.participantName}</p>
               </div>
-              <div className="modal-footer">
-                <button type="button" className="btn" onClick={() => setReplyModal(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Submit Reply</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <form onSubmit={handleReply} className="p-6">
+                <textarea
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                  rows={4}
+                  value={replyText}
+                  required
+                  onChange={e => setReplyText(e.target.value)}
+                  placeholder="Type your response..."
+                />
+                <div className="flex justify-end gap-3 mt-4">
+                  <button type="button" onClick={() => setReplyModal(null)} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-5 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors">
+                    Submit Reply
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <ParticipantProfileView
         open={!!viewingParticipant}
@@ -669,6 +499,50 @@ function TrainerDashboard({ user, onLogout, activeTab, onTabChange }) {
         fallback={viewingParticipant ? { name: viewingParticipant.name } : null}
         onClose={() => setViewingParticipant(null)}
       />
+    </motion.div>
+  )
+}
+
+function KpiCard({ icon: Icon, label, value, trend, trendColor, progress, bgIcon, colorIcon }) {
+  return (
+    <div style={{
+      height: 140, padding: '20px 24px', background: '#fff', border: '1px solid #E5E7EB',
+      borderRadius: 18, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.05)', position: 'relative', overflow: 'hidden'
+    }} className="hover:-translate-y-0.5 hover:shadow-md transition-all duration-250">
+      {/* Top row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{
+          width: 38, height: 38, borderRadius: '50%', background: bgIcon,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', color: colorIcon
+        }}>
+          <Icon size={20} />
+        </div>
+        {trend && (
+          <span style={{
+            display: 'inline-flex', padding: '2px 8px', borderRadius: 9999, fontSize: 11, fontWeight: 700,
+            background: trendColor === 'green' ? '#DCFCE7' : '#FEF3C7',
+            color: trendColor === 'green' ? '#15803D' : '#D97706'
+          }}>
+            {trend}
+          </span>
+        )}
+      </div>
+
+      {/* Value & Label row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: 32, fontWeight: 700, color: '#111827', lineHeight: 1.1 }}>{value}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#6B7280', marginTop: 4 }}>{label}</span>
+        </div>
+        {progress !== undefined && (
+          <div style={{ width: 80, paddingBottom: 6 }}>
+            <div style={{ height: 4, width: '100%', background: '#E5E7EB', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progress}%`, background: '#2563EB', borderRadius: 999 }} />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

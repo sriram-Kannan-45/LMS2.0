@@ -16,7 +16,7 @@ const roles = [
   { 
     key: 'PARTICIPANT', 
     label: 'Participant', 
-    color: '#7c3aed', 
+    color: '#0D9488', 
     activeClass: 'trainer-submit-btn--blue',
     subtitle: 'Sign in to your Participant Portal',
     video: blueVideo,
@@ -350,7 +350,7 @@ export default function LoginPage({ onLogin, defaultRole }) {
                   border: 'none',
                   fontSize: '13px',
                   fontWeight: 700,
-                  color: '#7c3aed',
+                  color: '#0D9488',
                   cursor: 'pointer',
                   fontFamily: 'Poppins, sans-serif',
                   padding: 0

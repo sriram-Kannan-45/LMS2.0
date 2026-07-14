@@ -50,8 +50,8 @@ const T = {
   muted: '#3f3f46',
   text: '#fafafa',
   subtle: '#a1a1aa',
-  indigo: '#6366f1',
-  indigoDim: '#4338ca',
+  indigo: '#0D9488',
+  indigoDim: '#0F766E',
   green: '#22c55e',
   amber: '#f59e0b',
   red: '#ef4444',
@@ -362,7 +362,7 @@ function TopBar({ statusLabel, statusDot }) {
           style={{
             background: `linear-gradient(135deg, ${T.indigo} 0%, ${T.indigoDim} 100%)`,
             borderRadius: 7,
-            boxShadow: '0 0 0 1px rgba(99,102,241,0.3), 0 4px 16px rgba(99,102,241,0.25)',
+            boxShadow: '0 0 0 1px rgba(13,148,136,0.3), 0 4px 16px rgba(13,148,136,0.25)',
           }}
           aria-hidden
         >
@@ -512,7 +512,7 @@ function Orb() {
         style={{
           inset: 0,
           borderRadius: '50%',
-          border: `1px solid rgba(99,102,241,0.10)`,
+          border: `1px solid rgba(13,148,136,0.10)`,
         }}
         aria-hidden
       />
@@ -522,7 +522,7 @@ function Orb() {
         style={{
           inset: 20,
           borderRadius: '50%',
-          border: `1px solid rgba(99,102,241,0.20)`,
+          border: `1px solid rgba(13,148,136,0.20)`,
         }}
         aria-hidden
       />
@@ -533,7 +533,7 @@ function Orb() {
           inset: 40,
           borderRadius: '50%',
           background: `radial-gradient(circle at 30% 25%, ${T.indigoDim} 0%, #1e1b4b 100%)`,
-          boxShadow: '0 0 60px rgba(99,102,241,0.30), 0 0 0 1px rgba(99,102,241,0.35) inset',
+          boxShadow: '0 0 60px rgba(13,148,136,0.30), 0 0 0 1px rgba(13,148,136,0.35) inset',
         }}
       >
         <ShieldCheck size={64} color="#ffffff" strokeWidth={1.6} />
@@ -597,12 +597,12 @@ function RightPanel({
         <span
           className="mono inline-flex items-center gap-2 rounded-full px-3 py-1 text-[13px] font-semibold"
           style={{
-            background: 'rgba(99,102,241,0.15)',
+            background: 'rgba(13,148,136,0.15)',
             color: T.indigo,
-            border: '1px solid rgba(99,102,241,0.30)',
+            border: '1px solid rgba(13,148,136,0.30)',
           }}
         >
-          {passedCount} <span style={{ color: 'rgba(99,102,241,0.6)' }}>/</span> {items.length} verified
+          {passedCount} <span style={{ color: 'rgba(13,148,136,0.6)' }}>/</span> {items.length} verified
         </span>
       </div>
 
@@ -718,18 +718,18 @@ function ChecklistCard({ index, label, hint, state, icon: Icon }) {
       hint: '#4ade80',
     },
     [PENDING]: {
-      border: 'rgba(99,102,241,0.30)',
-      bg: 'rgba(99,102,241,0.05)',
-      iconBg: 'rgba(99,102,241,0.20)',
+      border: 'rgba(13,148,136,0.30)',
+      bg: 'rgba(13,148,136,0.05)',
+      iconBg: 'rgba(13,148,136,0.20)',
       iconBorder: 'none',
       iconColor: T.indigo,
       title: T.text,
       hint: T.indigo,
     },
     [ACTION]: {
-      border: 'rgba(99,102,241,0.30)',
-      bg: 'rgba(99,102,241,0.05)',
-      iconBg: 'rgba(99,102,241,0.20)',
+      border: 'rgba(13,148,136,0.30)',
+      bg: 'rgba(13,148,136,0.05)',
+      iconBg: 'rgba(13,148,136,0.20)',
       iconBorder: 'none',
       iconColor: T.indigo,
       title: T.text,
@@ -875,17 +875,17 @@ function BeginButton({ submitting, disabled, onClick }) {
       className="inline-flex items-center gap-2 text-[15px] font-semibold text-white"
       style={{
         background: disabled
-          ? 'rgba(99,102,241,0.15)'
-          : `linear-gradient(135deg, #6366f1 0%, #4338ca 100%)`,
+          ? 'rgba(13,148,136,0.15)'
+          : `linear-gradient(135deg, #0D9488 0%, #0F766E 100%)`,
         padding: '12px 28px',
         borderRadius: 10,
-        border: disabled ? '1px solid rgba(99,102,241,0.20)' : '1px solid rgba(99,102,241,0.5)',
+        border: disabled ? '1px solid rgba(13,148,136,0.20)' : '1px solid rgba(13,148,136,0.5)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.45 : 1,
         color: disabled ? 'rgba(255,255,255,0.4)' : '#ffffff',
         boxShadow: disabled
           ? 'none'
-          : '0 0 0 1px rgba(99,102,241,0.5), 0 4px 24px rgba(99,102,241,0.45), 0 0 40px rgba(99,102,241,0.20)',
+          : '0 0 0 1px rgba(13,148,136,0.5), 0 4px 24px rgba(13,148,136,0.45), 0 0 40px rgba(13,148,136,0.20)',
         transition: 'box-shadow 200ms ease, opacity 200ms ease, background 200ms ease',
       }}
     >

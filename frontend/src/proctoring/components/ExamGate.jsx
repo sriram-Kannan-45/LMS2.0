@@ -33,14 +33,14 @@ const Step = ({ icon: Icon, label, ok, active, hint, onClick }) => (
     className="flex items-start gap-3 rounded-lg border px-4 py-3 transition select-none"
     style={{
       borderColor: ok ? '#a7f3d0' : active ? '#c7d2fe' : '#e2e8f0',
-      background: ok ? '#ecfdf5' : active ? '#eef2ff' : '#f8fafc',
+      background: ok ? '#ecfdf5' : active ? '#f0fdfa' : '#f8fafc',
       cursor: onClick ? 'pointer' : 'default',
     }}
   >
     <span
       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
       style={{
-        background: ok ? '#10b981' : active ? '#4f46e5' : '#cbd5e1',
+        background: ok ? '#10b981' : active ? '#0D9488' : '#cbd5e1',
         color: '#ffffff',
       }}
     >
@@ -148,7 +148,7 @@ export default function ExamGate({ quizId, quizTitle, attemptId, onReady, onCanc
   if (!authReady) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-primary-600" />
       </div>
     );
   }

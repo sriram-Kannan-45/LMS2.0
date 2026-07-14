@@ -8,7 +8,6 @@ import { ToastProvider } from './components/Toast'
 import { AppThemeProvider } from './context/AppThemeContext'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminLogin from './pages/AdminLogin'
-import AdminRecordings from './pages/AdminRecordings'
 import ExamPage from './pages/ExamPage'
 import ExamResultPage from './pages/ExamResultPage'
 import ForgotPassword from './pages/ForgotPassword'
@@ -20,6 +19,8 @@ import ParticipantQuizResultPage from './pages/ParticipantQuizResultPage'
 import PreExamReadiness from './pages/PreExamReadiness'
 import Register from './pages/Register'
 import TrainerDashboard from './pages/TrainerDashboard'
+import TrainerProfile from './pages/TrainerProfile'
+import AdminTrainerProfile from './pages/AdminTrainerProfile'
 import TrainerLogin from './pages/TrainerLogin'
 import TrainerRecordings from './pages/TrainerRecordings'
 import TrainerRecordingDetail from './pages/TrainerRecordingDetail'
@@ -274,10 +275,10 @@ function AppRoutes({ user, onLogin, onLogout }) {
       />
 
       <Route
-        path="/admin/recordings"
+        path="/admin/trainer/:userId"
         element={
           user?.role === 'ADMIN' ? (
-            <AdminRecordings user={user} />
+            <DashboardWrapper component={AdminTrainerProfile} user={user} onLogout={onLogout} />
           ) : (
             <Navigate to="/login" state={{ fromRole: 'ADMIN' }} replace />
           )
@@ -289,6 +290,17 @@ function AppRoutes({ user, onLogin, onLogout }) {
         element={
           user?.role === 'TRAINER' ? (
             <DashboardWrapper component={TrainerDashboard} user={user} onLogout={onLogout} />
+          ) : (
+            <Navigate to="/login" state={{ fromRole: 'TRAINER' }} replace />
+          )
+        }
+      />
+
+      <Route
+        path="/trainer/profile"
+        element={
+          user?.role === 'TRAINER' ? (
+            <DashboardWrapper component={TrainerProfile} user={user} onLogout={onLogout} />
           ) : (
             <Navigate to="/login" state={{ fromRole: 'TRAINER' }} replace />
           )

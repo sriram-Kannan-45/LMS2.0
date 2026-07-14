@@ -78,8 +78,8 @@ export default function OverviewSection({
 
         <div className="stat-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Award size={18} style={{ color: '#8b5cf6' }} />
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(20,184,166,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Award size={18} style={{ color: '#14B8A6' }} />
             </div>
           </div>
           <span className="stat-label">Quizzes</span>
@@ -134,8 +134,8 @@ export default function OverviewSection({
 
         <div className="card" style={{ cursor: 'pointer' }} onClick={onClickQuiz}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Sparkles size={20} style={{ color: '#8b5cf6' }} />
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(20,184,166,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Sparkles size={20} style={{ color: '#14B8A6' }} />
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600 }}>AI Quizzes</div>

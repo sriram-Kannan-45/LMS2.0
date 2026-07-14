@@ -283,7 +283,7 @@ function Register() {
 
         .classic-accent-bar {
           height: 5px;
-          background: linear-gradient(90deg, #6366f1, #a855f7);
+          background: linear-gradient(90deg, #0D9488, #2DD4BF);
           width: 100%;
         }
 
@@ -306,7 +306,7 @@ function Register() {
         .classic-logo-icon {
           width: 42px;
           height: 42px;
-          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          background: linear-gradient(135deg, #0D9488, #14B8A6);
           border-radius: 10px;
           color: #ffffff;
           display: flex;
@@ -392,7 +392,7 @@ function Register() {
 
         .classic-input-wrapper.focused {
           background: #ffffff;
-          border-color: #3b82f6;
+          border-color: #0D9488;
           box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
         }
 
@@ -421,7 +421,7 @@ function Register() {
         /* ── Button ── */
         .classic-btn {
           height: 44px;
-          background: linear-gradient(135deg, #2563eb, #3b82f6);
+          background: linear-gradient(135deg, #0F766E, #0D9488);
           color: #ffffff;
           border: none;
           border-radius: 10px;
@@ -441,7 +441,7 @@ function Register() {
         .classic-btn:hover {
           transform: translateY(-1px);
           box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
-          background: linear-gradient(135deg, #1d4ed8, #2563eb);
+          background: linear-gradient(135deg, #1d4ed8, #0F766E);
         }
 
         .classic-btn:active {
@@ -476,7 +476,7 @@ function Register() {
           background: none;
           border: none;
           font-weight: 600;
-          color: #6366f1;
+          color: #0D9488;
           cursor: pointer;
           padding: 0;
           font-family: inherit;
@@ -485,7 +485,7 @@ function Register() {
         }
 
         .classic-register-link:hover {
-          color: #4f46e5;
+          color: #0D9488;
           text-decoration: underline;
         }
 

@@ -3,18 +3,18 @@ export default function ActivityFeedItem({
   title,
   description,
   timestamp,
-  iconVariant = 'violet', // violet | emerald | amber | blue | neutral
+  iconVariant = 'primary', // primary | emerald | amber | blue | neutral
   className = '',
 }) {
   const iconColors = {
-    violet: 'bg-violet-50 text-violet-600 border-violet-100 dark:bg-violet-950/20 dark:text-violet-400 dark:border-violet-900/30',
+    primary: 'bg-primary-50 text-primary-600 border-primary-100 dark:bg-primary-950/20 dark:text-primary-400 dark:border-primary-900/30',
     emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30',
     amber: 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30',
     blue: 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/30',
     neutral: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700/50',
   }
 
-  const iconCls = iconColors[iconVariant] || iconColors.violet
+  const iconCls = iconColors[iconVariant] || iconColors.primary
 
   return (
     <div className={`flex items-start gap-4 py-3.5 first:pt-0 last:pb-0 ${className}`}>

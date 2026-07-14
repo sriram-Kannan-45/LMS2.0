@@ -260,13 +260,13 @@ export default function ParticipantQuizResultPage({ user }) {
 
           {/* Scored Header */}
           <div style={{
-            background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+            background: 'linear-gradient(135deg, #0D9488 0%, #134e4a 100%)',
             color: '#fff',
             padding: '32px 24px',
             borderRadius: 16,
             textAlign: 'center',
             marginBottom: 24,
-            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)'
+            boxShadow: '0 4px 12px rgba(13, 148, 136, 0.15)'
           }}>
             <Trophy size={36} style={{ margin: '0 auto 10px', color: '#fbbf24' }} />
             <h2 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700 }}>Your Quiz Result</h2>

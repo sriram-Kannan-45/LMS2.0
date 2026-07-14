@@ -2,6 +2,8 @@ const { sequelize } = require('../config/db');
 const User = require('./user');
 const Training = require('./training');
 const TrainerProfile = require('./trainerProfile');
+const TrainerExperience = require('./trainerExperience');
+const TrainerEducation = require('./trainerEducation');
 const Enrollment = require('./enrollment');
 const Feedback = require('./feedback');
 
@@ -75,6 +77,14 @@ const CodingResult = require('./codingResult');
 // User <-> TrainerProfile
 User.hasOne(TrainerProfile, { foreignKey: 'userId', as: 'profile' });
 TrainerProfile.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+// User <-> TrainerExperience (1:M)
+User.hasMany(TrainerExperience, { foreignKey: 'userId', as: 'experiences' });
+TrainerExperience.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+// User <-> TrainerEducation (1:M)
+User.hasMany(TrainerEducation, { foreignKey: 'userId', as: 'educations' });
+TrainerEducation.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 // Training (now: TrainingProgram) <-> Trainer (User) — legacy
 // Kept so the older trainingController/trainingRoutes continue to function.
@@ -321,6 +331,8 @@ module.exports = {
   User,
   Training,
   TrainerProfile,
+  TrainerExperience,
+  TrainerEducation,
   Enrollment,
   Feedback,
   Notification,

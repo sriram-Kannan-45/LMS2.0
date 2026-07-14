@@ -169,7 +169,7 @@ const CodeEditor = ({
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         {mounting && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: theme === 'vs-dark' ? '#1e1e1e' : '#ffffff', zIndex: 10 }}>
-            <Loader2 size={20} className="animate-spin" color="#6366f1" />
+            <Loader2 size={20} className="animate-spin" color="#14B8A6" />
           </div>
         )}
         <Editor height="100%" language={monacoLanguage} value={value} theme={theme} onChange={onChange} onMount={handleEditorDidMount} options={editorOptions} />

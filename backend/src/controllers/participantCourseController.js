@@ -258,11 +258,11 @@ async function enroll(req, res) {
 
     const [enrollment, created] = await Enrollment.findOrCreate({
       where: { courseId, participantId: req.user.id },
-      defaults: { courseId, participantId: req.user.id, status: 'PENDING', progressPercent: 0 },
+      defaults: { courseId, participantId: req.user.id, status: 'ENROLLED', progressPercent: 0 },
     });
     const shouldNotify = created || enrollment.status === 'CANCELLED';
     if (!created && enrollment.status === 'CANCELLED') {
-      await enrollment.update({ status: 'PENDING', progressPercent: 0 });
+      await enrollment.update({ status: 'ENROLLED', progressPercent: 0 });
     }
 
     if (shouldNotify) {
@@ -279,7 +279,7 @@ async function enroll(req, res) {
       for (const tId of trainerIds) {
         await NotificationService.createNotification({
           userId: tId,
-          message: `${user?.name || 'A participant'} has requested to enroll in course: ${course.title}`,
+          message: `${user?.name || 'A participant'} has enrolled in course: ${course.title}`,
           type: 'ENROLLMENT',
           actionUrl: `/trainer`,
           relatedEntityId: enrollment.id,
@@ -290,7 +290,7 @@ async function enroll(req, res) {
       // Notify Participant
       await NotificationService.createNotification({
         userId: req.user.id,
-        message: `Your enrollment request for course: ${course.title} has been submitted.`,
+        message: `You have been enrolled in course: ${course.title}.`,
         type: 'ENROLLMENT',
         actionUrl: `/participant`,
         relatedEntityId: enrollment.id,
@@ -300,7 +300,7 @@ async function enroll(req, res) {
 
     res.status(created ? 201 : 200).json({
       success: true,
-      message: created ? 'Enrollment request submitted for approval' : (enrollment.status === 'PENDING' ? 'Enrollment request already pending' : 'Already enrolled'),
+      message: created ? 'Enrolled successfully' : (enrollment.status === 'ENROLLED' ? 'Already enrolled' : 'Enrolled successfully'),
       enrollment: {
         id: enrollment.id,
         courseId: enrollment.courseId,

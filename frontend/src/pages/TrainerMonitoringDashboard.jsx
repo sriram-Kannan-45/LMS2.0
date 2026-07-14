@@ -4,6 +4,7 @@ import { API_BASE } from '../api/api';
 import { useSocket } from '../hooks/useSocket';
 import ParticipantCard from '../components/ParticipantCard';
 import ParticipantDetailModal from '../components/ParticipantDetailModal';
+import { colors } from '../theme/tokens';
 
 const authHeaders = (token) => ({
   'Content-Type': 'application/json',
@@ -20,7 +21,6 @@ export default function TrainerMonitoringDashboard({ user }) {
   const [loading, setLoading] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState(null);
 
-  // Fetch sessions
   useEffect(() => {
     if (!token) return;
     axios
@@ -29,7 +29,6 @@ export default function TrainerMonitoringDashboard({ user }) {
       .catch((err) => console.error('Failed to load sessions:', err));
   }, [token]);
 
-  // Fetch participants when session selected
   useEffect(() => {
     if (!selectedSessionId || !token) return;
 
@@ -57,7 +56,6 @@ export default function TrainerMonitoringDashboard({ user }) {
     };
   }, [selectedSessionId, token]);
 
-  // Join trainer socket room
   useEffect(() => {
     if (!socket || !selectedSessionId) return;
 
@@ -161,7 +159,6 @@ export default function TrainerMonitoringDashboard({ user }) {
         socket?.emit('force-submit', { attemptId, reason: 'Force submitted by trainer' });
       }
 
-      // Refresh participants to reflect state changes
       const res = await axios.get(
         `${API_BASE}/trainer/sessions/${selectedSessionId}/participants`,
         { headers: authHeaders(token) }
@@ -184,7 +181,7 @@ export default function TrainerMonitoringDashboard({ user }) {
           <select
             value={selectedSessionId || ''}
             onChange={(e) => setSelectedSessionId(Number(e.target.value))}
-            className="rounded-lg border bg-white px-4 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none"
+            className="rounded-lg border bg-white px-4 py-2 text-sm text-slate-700 focus:border-primary-500 focus:outline-none"
           >
             <option value="">Select a session</option>
             {sessions.map((s) => (

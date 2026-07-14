@@ -50,7 +50,7 @@ export default function ParticipantCard({ participant, latestScreenshot, onClick
             className="h-10 w-10 rounded-full object-cover"
           />
         ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700">
             {participant.name?.charAt(0).toUpperCase() || '?'}
           </div>
         )}

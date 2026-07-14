@@ -1,7 +1,7 @@
 import Card from './Card'
 
 const colorMap = {
-  violet: { bg: 'bg-violet-50 dark:bg-violet-950/30', border: 'border-violet-200/50 dark:border-violet-800/50', text: 'text-violet-600 dark:text-violet-400' },
+  primary: { bg: 'bg-primary-50 dark:bg-primary-950/30', border: 'border-primary-200/50 dark:border-primary-800/50', text: 'text-primary-600 dark:text-primary-400' },
   emerald: { bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200/50 dark:border-emerald-800/50', text: 'text-emerald-600 dark:text-emerald-400' },
   amber: { bg: 'bg-amber-50 dark:bg-amber-950/30', border: 'border-amber-200/50 dark:border-amber-800/50', text: 'text-amber-600 dark:text-amber-400' },
   blue: { bg: 'bg-blue-50 dark:bg-blue-950/30', border: 'border-blue-200/50 dark:border-blue-800/50', text: 'text-blue-600 dark:text-blue-400' },
@@ -13,10 +13,10 @@ export default function StatCard({
   value,
   trend,
   trendColor = 'success', // success | danger | warning
-  variant = 'violet',
+  variant = 'primary',
   className = '',
 }) {
-  const colors = colorMap[variant] || colorMap.violet
+  const colors = colorMap[variant] || colorMap.primary
 
   return (
     <Card hover className={`stat-card--premium p-6 ${className}`}>

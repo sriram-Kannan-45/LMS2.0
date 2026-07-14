@@ -464,9 +464,9 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {participantReport.certificates.map((cert, idx) => (
-                <div key={idx} className="bg-white dark:bg-slate-900 border-2 border-violet-500/30 dark:border-violet-500/20 rounded-2xl p-6 shadow-md bg-gradient-to-br from-violet-500/5 to-white dark:to-slate-900 relative overflow-hidden">
-                  <div className="border border-violet-500/20 p-5 rounded-xl text-center space-y-4">
-                    <div className="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase tracking-widest">
+                <div key={idx} className="bg-white dark:bg-slate-900 border-2 border-primary-500/30 dark:border-primary-500/20 rounded-2xl p-6 shadow-md bg-gradient-to-br from-primary-500/5 to-white dark:to-slate-900 relative overflow-hidden">
+                  <div className="border border-primary-500/20 p-5 rounded-xl text-center space-y-4">
+                    <div className="text-xs font-bold text-primary-500 dark:text-primary-400 uppercase tracking-widest">
                       Wave Init LMS Certificate
                     </div>
                     <div className="text-xl font-bold text-slate-800 dark:text-slate-100">
@@ -475,7 +475,7 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
                     <div className="text-xs text-slate-400">
                       This is proudly presented to
                     </div>
-                    <div className="text-lg font-bold text-slate-800 dark:text-slate-100 underline decoration-violet-500 decoration-2 underline-offset-4">
+                    <div className="text-lg font-bold text-slate-800 dark:text-slate-100 underline decoration-primary-500 decoration-2 underline-offset-4">
                       {user.name}
                     </div>
                     <div className="text-xs text-slate-400">
@@ -503,11 +503,11 @@ function ParticipantDashboard({ user, onLogout, activeTab, onTabChange }) {
                             <title>Certificate - ${cert.title}</title>
                             <style>
                               body { font-family: 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #fff; color: #000; }
-                              .cert-container { border: 15px double #7c3aed; padding: 50px; width: 650px; text-align: center; border-radius: 4px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
+                              .cert-container { border: 15px double #0D9488; padding: 50px; width: 650px; text-align: center; border-radius: 4px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
                               .title { font-size: 32px; font-weight: 700; color: #1e1b4b; margin-bottom: 10px; }
                               .subtitle { font-size: 16px; color: #4b5563; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; }
                               .presented { font-size: 14px; font-style: italic; color: #6b7280; margin-bottom: 20px; }
-                              .name { font-size: 28px; font-weight: 700; color: #7c3aed; border-bottom: 2px solid #e5e7eb; display: inline-block; padding-bottom: 5px; margin-bottom: 30px; }
+                              .name { font-size: 28px; font-weight: 700; color: #0D9488; border-bottom: 2px solid #e5e7eb; display: inline-block; padding-bottom: 5px; margin-bottom: 30px; }
                               .reason { font-size: 14px; color: #4b5563; line-height: 1.6; margin-bottom: 40px; }
                               .course-title { font-size: 20px; font-weight: 600; color: #1f2937; }
                               .footer { display: flex; justify-content: space-between; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 20px; }

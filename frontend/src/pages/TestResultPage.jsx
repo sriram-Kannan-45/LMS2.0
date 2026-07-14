@@ -17,7 +17,7 @@ export default function TestResultPage() {
         </div>
         <Link
           to="/participant"
-          className="inline-block rounded-lg bg-indigo-600 px-6 py-2.5 font-semibold text-white hover:bg-indigo-700"
+          className="inline-block rounded-lg bg-primary-600 px-6 py-2.5 font-semibold text-white hover:bg-primary-700"
         >
           Back to Dashboard
         </Link>

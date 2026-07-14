@@ -11,7 +11,7 @@ export default function EmptyState({
 }) {
   return (
     <div className={`flex flex-col items-center justify-center text-center py-16 px-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-sm ${className}`}>
-      <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-400 border border-violet-100 dark:border-violet-900/30">
+      <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 bg-primary-50 text-primary-600 dark:bg-primary-950/30 dark:text-primary-400 border border-primary-100 dark:border-primary-900/30">
         <Icon size={24} />
       </div>
       <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1.5">

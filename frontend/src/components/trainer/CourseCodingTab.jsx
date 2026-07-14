@@ -6,12 +6,7 @@ import {
 } from 'lucide-react'
 import { API } from '../../api/api'
 import { useToast } from '../Toast'
-
-const STATUS_BADGE = {
-  DRAFT:     { bg: '#f1f5f9', fg: '#475569' },
-  PUBLISHED: { bg: '#dcfce7', fg: '#15803d' },
-  CLOSED:    { bg: '#fee2e2', fg: '#dc2626' },
-}
+import { colors, btnPrimary as _btnPrimary, btnSecondary as _btnSecondary, btnDanger as _btnDanger, iconBtn as _iconBtn, STATUS_BADGE as _STATUS_BADGE, lblStyle as _lblStyle, inputStyle as _inputStyle, th as _th, td as _td, skeletonStyle, typography } from '../../theme/tokens'
 
 function Badge({ value, map }) {
   const v = map[value] || map.DRAFT
@@ -65,7 +60,7 @@ function AICodingWizard({ user, courseId, onClose, onGenerated }) {
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={() => !generating && onClose()}
       style={{
-        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
+        position: 'fixed', inset: 0, background: colors.bg.overlay,
         zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
       }}
     >
@@ -74,21 +69,21 @@ function AICodingWizard({ user, courseId, onClose, onGenerated }) {
         exit={{ scale: 0.95, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: '#fff', borderRadius: 14, width: '100%', maxWidth: 540,
+          background: colors.surface.primary, borderRadius: 14, width: '100%', maxWidth: 540,
           boxShadow: '0 25px 60px -10px rgba(0,0,0,0.25)', overflow: 'hidden',
         }}
       >
         <div style={{
-          padding: '18px 20px', borderBottom: '1px solid #e2e8f0',
+          padding: '18px 20px', borderBottom: `1px solid ${colors.border.default}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div>
-            <div style={lblTiny}>AI Coding Wizard</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+            <div style={_lblTiny}>AI Coding Wizard</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: colors.slate[900] }}>
               Generate Coding Assessment with AI
             </div>
           </div>
-          <button onClick={onClose} style={iconBtn('#f1f5f9', '#475569')}>
+          <button onClick={onClose} style={iconBtn(colors.slate[100], colors.slate[600])}>
             <X size={16} />
           </button>
         </div>
@@ -100,46 +95,44 @@ function AICodingWizard({ user, courseId, onClose, onGenerated }) {
           }}>
             <div style={{
               width: 40, height: 40, border: '4px solid #f3f3f3',
-              borderTop: '4px solid #4f46e5', borderRadius: '50%',
+              borderTop: `4px solid ${colors.primary[600]}`, borderRadius: '50%',
               animation: 'spin 1s linear infinite',
             }} />
             <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-            <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginTop: 8 }}>
-              AI is crafting your coding assessment...
-            </div>
-            <div style={{ fontSize: 13, color: '#64748b', maxWidth: 360 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: colors.slate[900] }}>AI is crafting your coding assessment...</div>
+            <div style={{ fontSize: 13, color: colors.slate[400], maxWidth: 360 }}>
               Generating problems with test cases and solutions. This may take up to 60 seconds.
             </div>
           </div>
         ) : (
           <form onSubmit={handleGenerate} style={{ padding: 20 }}>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ ...lblStyle, marginTop: 0 }}>Topic or Prompt <span style={{ color: '#dc2626' }}>*</span></label>
+              <label style={{ ..._lblStyle, marginTop: 0 }}>Topic or Prompt <span style={{ color: colors.danger[600] }}>*</span></label>
               <textarea
                 value={promptText}
                 onChange={(e) => setPromptText(e.target.value)}
                 placeholder="e.g. JavaScript array methods, Python data structures, etc."
                 rows={4}
-                style={{ ...inputStyle, resize: 'vertical', fontSize: 13 }}
+                style={{ ..._inputStyle, resize: 'vertical', fontSize: 13 }}
                 required
               />
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: colors.slate[400], marginTop: 4 }}>
                 Describe the coding topics or skills you want to assess.
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
               <div>
-                <label style={{ ...lblStyle, marginTop: 0 }}>Number of Problems</label>
-                <select value={problemCount} onChange={(e) => setProblemCount(e.target.value)} style={inputStyle}>
+                <label style={{ ..._lblStyle, marginTop: 0 }}>Number of Problems</label>
+                <select value={problemCount} onChange={(e) => setProblemCount(e.target.value)} style={_inputStyle}>
                   {[1, 2, 3, 5, 7, 10].map(n => (
                     <option key={n} value={n}>{n} Problem{n > 1 ? 's' : ''}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label style={{ ...lblStyle, marginTop: 0 }}>Difficulty</label>
-                <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} style={inputStyle}>
+                <label style={{ ..._lblStyle, marginTop: 0 }}>Difficulty</label>
+                <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} style={_inputStyle}>
                   <option value="Easy">Easy</option>
                   <option value="Medium">Medium</option>
                   <option value="Hard">Hard</option>
@@ -148,21 +141,21 @@ function AICodingWizard({ user, courseId, onClose, onGenerated }) {
             </div>
 
             <div style={{ marginBottom: 20 }}>
-              <label style={{ ...lblStyle, marginTop: 0 }}>Languages (comma-separated)</label>
+              <label style={{ ..._lblStyle, marginTop: 0 }}>Languages (comma-separated)</label>
               <input
                 value={languages}
                 onChange={(e) => setLanguages(e.target.value)}
                 placeholder="e.g. javascript, python, java, cpp"
-                style={inputStyle}
+                style={_inputStyle}
               />
             </div>
 
             <div style={{
               display: 'flex', justifyContent: 'flex-end', gap: 10,
-              borderTop: '1px solid #e2e8f0', paddingTop: 16,
+              borderTop: `1px solid ${colors.border.default}`, paddingTop: 16,
             }}>
-              <button type="button" onClick={onClose} style={btnSecondary}>Cancel</button>
-              <button type="submit" style={{ ...btnPrimary, background: 'linear-gradient(135deg, #8b5cf6, #6366f1)' }}>
+              <button type="button" onClick={onClose} style={_btnSecondary}>Cancel</button>
+              <button type="submit" style={{ ..._btnPrimary, background: `linear-gradient(135deg, ${colors.primary[400]}, ${colors.primary[600]})` }}>
                 <Sparkles size={14} style={{ marginRight: 6 }} /> Generate Assessment
               </button>
             </div>
@@ -222,12 +215,11 @@ export default function CourseCodingTab({ user, courseId, onCountChange }) {
 
   return (
     <div>
-      {/* Top bar */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginBottom: 16, flexWrap: 'wrap', gap: 12,
       }}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: '#0f172a' }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: colors.slate[900] }}>
           {assessments.length} coding assessment{assessments.length !== 1 ? 's' : ''}
         </h3>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -235,8 +227,8 @@ export default function CourseCodingTab({ user, courseId, onCountChange }) {
             onClick={() => setShowWizard(true)}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '10px 16px', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
-              color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+              padding: '10px 16px', background: `linear-gradient(135deg, ${colors.primary[400]}, ${colors.primary[600]})`,
+              color: colors.text.inverse, border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
               cursor: 'pointer',
             }}
           >
@@ -246,8 +238,8 @@ export default function CourseCodingTab({ user, courseId, onCountChange }) {
             onClick={handleCreate}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '10px 16px', background: '#fff', color: '#4f46e5',
-              border: '1px solid #4f46e5', borderRadius: 8, fontSize: 13, fontWeight: 600,
+              padding: '10px 16px', background: colors.surface.primary, color: colors.secondary[600],
+              border: `1px solid ${colors.secondary[600]}`, borderRadius: 8, fontSize: 13, fontWeight: 600,
               cursor: 'pointer',
             }}
           >
@@ -256,65 +248,64 @@ export default function CourseCodingTab({ user, courseId, onCountChange }) {
         </div>
       </div>
 
-      {/* Assessment table */}
       {loading ? (
-        <div style={{ height: 240, background: '#f1f5f9', borderRadius: 10 }} />
+        <div style={{ height: 240, background: colors.slate[100], borderRadius: 10 }} />
       ) : assessments.length === 0 ? (
         <div style={{
           padding: '40px 24px', textAlign: 'center',
-          background: '#fff', border: '1px dashed #cbd5e1', borderRadius: 12,
+          background: colors.surface.primary, border: `1px dashed ${colors.border.dashed}`, borderRadius: 12,
         }}>
-          <Code size={40} color="#cbd5e1" style={{ margin: '0 auto 8px' }} />
-          <p style={{ margin: '0 0 6px', color: '#475569', fontWeight: 600 }}>No coding assessments yet</p>
-          <p style={{ margin: 0, color: '#94a3b8', fontSize: 13 }}>
+          <Code size={40} color={colors.slate[300]} style={{ margin: '0 auto 8px' }} />
+          <p style={{ margin: '0 0 6px', color: colors.slate[600], fontWeight: 600 }}>No coding assessments yet</p>
+          <p style={{ margin: 0, color: colors.slate[400], fontSize: 13 }}>
             Click <strong>Create Assessment</strong> to add the first one.
           </p>
         </div>
       ) : (
         <div style={{
-          background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden',
+          background: colors.surface.primary, border: `1px solid ${colors.border.default}`, borderRadius: 12, overflow: 'hidden',
         }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead style={{ background: '#f8fafc' }}>
+            <thead style={{ background: colors.slate[50] }}>
               <tr>
-                <th style={th}>Title</th>
-                <th style={th}>Problems</th>
-                <th style={th}>Languages</th>
-                <th style={th}>Status</th>
-                <th style={th}>Actions</th>
+                <th style={_th}>Title</th>
+                <th style={_th}>Problems</th>
+                <th style={_th}>Languages</th>
+                <th style={_th}>Status</th>
+                <th style={_th}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {assessments.map(a => (
-                <tr key={a.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-                  <td style={td}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{a.title || 'Untitled'}</div>
+                <tr key={a.id} style={{ borderTop: `1px solid ${colors.slate[100]}` }}>
+                  <td style={_td}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: colors.slate[900] }}>{a.title || 'Untitled'}</div>
                   </td>
-                  <td style={{ ...td, color: '#475569', fontSize: 13 }}>{a.problemCount ?? a.problems?.length ?? 0}</td>
-                  <td style={{ ...td, fontSize: 12, color: '#64748b' }}>
+                  <td style={{ ..._td, color: colors.slate[600] }}>{a.problemCount ?? a.problems?.length ?? 0}</td>
+                  <td style={{ ..._td, fontSize: 12, color: colors.slate[500] }}>
                     {(a.languages || []).length > 0 ? a.languages.join(', ') : '—'}
                   </td>
-                  <td style={td}><Badge value={a.status} map={STATUS_BADGE} /></td>
-                  <td style={td}>
+                  <td style={_td}><Badge value={a.status} map={_STATUS_BADGE} /></td>
+                  <td style={_td}>
                     <div style={{ display: 'flex', gap: 4 }}>
                       <button
                         title="View / Manage"
                         onClick={() => navigate(`/trainer/coding/${a.id}`)}
-                        style={iconBtn('#e0e7ff', '#4338ca')}
+                        style={iconBtn(colors.secondary[100], colors.secondary[700])}
                       >
                         <Eye size={12} />
                       </button>
                       <button
                         title="Edit"
                         onClick={() => navigate(`/trainer/coding/${a.id}`)}
-                        style={iconBtn('#eef2ff', '#4f46e5')}
+                        style={iconBtn(colors.primary[100], colors.primary[600])}
                       >
                         <Pencil size={12} />
                       </button>
                       <button
                         title="Delete"
                         onClick={() => handleDelete(a)}
-                        style={iconBtn('#fee2e2', '#dc2626')}
+                        style={iconBtn(colors.danger[100], colors.danger[600])}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -327,7 +318,6 @@ export default function CourseCodingTab({ user, courseId, onCountChange }) {
         </div>
       )}
 
-      {/* AI Wizard modal */}
       <AnimatePresence>
         {showWizard && (
           <AICodingWizard
@@ -343,26 +333,8 @@ export default function CourseCodingTab({ user, courseId, onCountChange }) {
 }
 
 // ── shared helpers ──
-const lblStyle = { display: 'block', fontSize: 11, fontWeight: 700, color: '#475569',
-                   marginTop: 14, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }
-const lblTiny = { fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }
-const inputStyle = {
-  width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: 8,
-  fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', background: '#fff',
-}
-const btnPrimary = {
-  display: 'inline-flex', alignItems: 'center', padding: '10px 18px',
-  background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8,
-  fontSize: 13, fontWeight: 600, cursor: 'pointer',
-}
-const btnSecondary = {
-  padding: '10px 18px', background: '#fff', color: '#475569', border: '1px solid #cbd5e1',
-  borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-}
+const _lblTiny = { fontSize: 10, fontWeight: 600, color: colors.slate[400], textTransform: 'uppercase', letterSpacing: 1 }
 const iconBtn = (bg, fg) => ({
   width: 28, height: 28, border: 'none', cursor: 'pointer', borderRadius: 6,
   background: bg, color: fg, display: 'flex', alignItems: 'center', justifyContent: 'center',
 })
-const th = { padding: 12, textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#475569',
-             textTransform: 'uppercase', letterSpacing: 0.5 }
-const td = { padding: 12, verticalAlign: 'middle' }

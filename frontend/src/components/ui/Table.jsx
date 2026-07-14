@@ -39,9 +39,9 @@ export default function Table({
                       {sortKey !== col.key ? (
                         <ArrowUpDown size={12} />
                       ) : sortOrder === 'asc' ? (
-                        <ArrowUp size={12} className="text-violet-600 dark:text-violet-400" />
+                        <ArrowUp size={12} className="text-primary-600 dark:text-primary-400" />
                       ) : (
-                        <ArrowDown size={12} className="text-violet-600 dark:text-violet-400" />
+                        <ArrowDown size={12} className="text-primary-600 dark:text-primary-400" />
                       )}
                     </span>
                   )}

@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Download, AlertTriangle, ChevronRight, Clock, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, Download, ChevronRight, Clock, Video, Calendar, Mail, Check, Loader2, X } from 'lucide-react'
 import { API_BASE } from '../api/api'
 import { useToast } from '../components/Toast'
 import VideoPlayer from '../components/shared/VideoPlayer'
+import { colors, SEVERITY_STYLES, skeletonStyle, typography, cardStyle } from '../theme/tokens'
 
 const auth = (user) => ({ Authorization: `Bearer ${user.token}` })
 
@@ -51,22 +52,6 @@ const violationLabels = {
   TRAINER_WARNING: 'Trainer Warning',
 }
 
-const severityStyles = {
-  CRITICAL: 'bg-red-100 text-red-800 border-red-200',
-  HIGH: 'bg-orange-100 text-orange-800 border-orange-200',
-  MEDIUM: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  LOW: 'bg-blue-100 text-blue-800 border-blue-200',
-  INFO: 'bg-gray-100 text-gray-600 border-gray-200',
-}
-
-const severityDot = {
-  CRITICAL: 'bg-red-500',
-  HIGH: 'bg-orange-500',
-  MEDIUM: 'bg-yellow-500',
-  LOW: 'bg-blue-500',
-  INFO: 'bg-gray-400',
-}
-
 function Timeline({ markers, recordingStart, recordingDuration, onSeek }) {
   const barRef = useRef(null)
 
@@ -81,19 +66,23 @@ function Timeline({ markers, recordingStart, recordingDuration, onSeek }) {
     <div className="relative">
       <div
         ref={barRef}
-        className="relative h-2 bg-gray-200 rounded-full cursor-pointer overflow-hidden group"
+        className="relative h-2 rounded-full cursor-pointer overflow-hidden group"
+        style={{ background: colors.slate[200] }}
         onClick={handleClick}
       >
-        <div className="absolute inset-0 bg-purple-500/10 group-hover:bg-purple-500/20 transition-colors" />
-        {markers.map((m, i) => (
-          <div
-            key={i}
-            className={`absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full ${severityDot[m.severity] || 'bg-gray-500'} ring-2 ring-white shadow-sm cursor-pointer hover:scale-150 transition-transform z-10`}
-            style={{ left: `${Math.max(0, Math.min(100, m.position))}%` }}
-            title={`${violationLabels[m.type] || m.type} at ${fmtTime(m.occurredAt)}`}
-            onClick={(e) => { e.stopPropagation(); onSeek?.(m.seekTime) }}
-          />
-        ))}
+        <div className="absolute inset-0 bg-primary-500/10 group-hover:bg-primary-500/20 transition-colors" />
+        {markers.map((m, i) => {
+          const sev = SEVERITY_STYLES[m.severity]
+          return (
+            <div
+              key={i}
+              className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full ring-2 ring-white shadow-sm cursor-pointer hover:scale-150 transition-transform z-10"
+              style={{ left: `${Math.max(0, Math.min(100, m.position))}%`, background: sev ? sev.fg : colors.slate[400] }}
+              title={`${violationLabels[m.type] || m.type} at ${fmtTime(m.occurredAt)}`}
+              onClick={(e) => { e.stopPropagation(); onSeek?.(m.seekTime) }}
+            />
+          )
+        })}
       </div>
       <div className="flex justify-between text-xs text-gray-400 mt-1">
         <span>0:00</span>
@@ -125,7 +114,6 @@ export default function TrainerRecordingDetail({ user }) {
         if (!r.ok) throw new Error(d.message || 'Failed to load')
         setRecording(d.data.recording)
         setQuizResult(d.data.quizResult)
-        // Exclude monitoring-only events from user-facing display
         const MONITORING_EVENTS = new Set(['HEARTBEAT_LOST', 'HEARTBEAT_RESTORED', 'SESSION_STARTED', 'SESSION_RESUMED'])
         setViolations((d.data.violations || []).filter(v => !MONITORING_EVENTS.has(v.type)))
         setStreamUrl(`${API_BASE}/recordings/${id}/stream?token=${user.token}`)
@@ -196,7 +184,7 @@ export default function TrainerRecordingDetail({ user }) {
     return (
       <div className="p-6 text-center text-gray-400">
         <div className="spinner mx-auto mb-2" />
-        <p style={{ fontSize: 13, color: '#6B7280' }}>Loading recording...</p>
+        <p style={{ fontSize: 13, color: colors.slate[500] }}>Loading recording...</p>
       </div>
     )
   }
@@ -205,7 +193,7 @@ export default function TrainerRecordingDetail({ user }) {
     return (
       <div className="dashboard">
         <div className="empty-state" style={{ marginTop: 40 }}>
-          <div className="empty-icon">🎥</div>
+          <div className="empty-icon"><Video size={48} /></div>
           <h3>Recording Not Found</h3>
           <p>The recording you're looking for doesn't exist or has been removed.</p>
           <button onClick={() => navigate('/trainer/recordings')} className="btn btn-primary" style={{ marginTop: 16 }}>
@@ -226,7 +214,6 @@ export default function TrainerRecordingDetail({ user }) {
       animate={{ opacity: 1, y: 0 }}
       className="dashboard"
     >
-      {/* ── Page Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
           <button onClick={() => navigate('/trainer/recordings')}
@@ -234,8 +221,8 @@ export default function TrainerRecordingDetail({ user }) {
             <ArrowLeft size={18} />
           </button>
           <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 2, fontWeight: 500 }}>Trainer Portal › Recordings › Detail</p>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#111827', fontFamily: "'Poppins', sans-serif" }} className="truncate">
+            <p style={{ fontSize: 13, color: colors.slate[500], marginBottom: 2, fontWeight: 500 }}>Trainer Portal › Recordings › Detail</p>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: colors.text.primary, fontFamily: typography.fontFamily }} className="truncate">
               {recording.quiz?.title || 'Quiz Recording'} &mdash; {recording.participant?.name || 'Unknown'}
             </h1>
           </div>
@@ -243,26 +230,23 @@ export default function TrainerRecordingDetail({ user }) {
         <RecordingStatusBadge status={recording.status} />
       </div>
 
-      {/* ── Meta bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 13, color: '#6B7280' }}>🗓 {fmtDate(recording.recordedAt)}</span>
+        <span style={{ fontSize: 13, color: colors.slate[500], display: 'inline-flex', alignItems: 'center', gap: 4 }}><Calendar size={14} /> {fmtDate(recording.recordedAt)}</span>
         {recording.durationSeconds && (
-          <span style={{ fontSize: 13, color: '#6B7280' }}>⏱ {Math.floor(recording.durationSeconds / 60)}m {recording.durationSeconds % 60}s</span>
+          <span style={{ fontSize: 13, color: colors.slate[500], display: 'inline-flex', alignItems: 'center', gap: 4 }}><Clock size={14} /> {Math.floor(recording.durationSeconds / 60)}m {recording.durationSeconds % 60}s</span>
         )}
         {recording.fileSizeMb && (
-          <span style={{ fontSize: 13, color: '#6B7280' }}>💾 {Number(recording.fileSizeMb).toFixed(1)} MB</span>
+          <span style={{ fontSize: 13, color: colors.slate[500], display: 'inline-flex', alignItems: 'center', gap: 4 }}><Download size={14} /> {Number(recording.fileSizeMb).toFixed(1)} MB</span>
         )}
         {recording.participant?.email && (
-          <span style={{ fontSize: 13, color: '#9CA3AF' }}>✉ {recording.participant.email}</span>
+          <span style={{ fontSize: 13, color: colors.slate[400], display: 'inline-flex', alignItems: 'center', gap: 4 }}><Mail size={14} /> {recording.participant.email}</span>
         )}
       </div>
 
-      {/* ── Main grid: video + details (equal split, no empty space) ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
 
-        {/* ── Left: Video + Timeline ── */}
         <div className="flex flex-col gap-3">
-          <div className="bg-[#0F172A] rounded-xl overflow-hidden shadow-lg">
+          <div className="rounded-xl overflow-hidden shadow-lg" style={{ background: colors.slate[900] }}>
             <div className="aspect-video">
               {streamUrl ? (
                 <VideoPlayer ref={videoRef} src={streamUrl} className="w-full h-full" onDuration={handleDurationUpdate} />
@@ -273,10 +257,10 @@ export default function TrainerRecordingDetail({ user }) {
           </div>
 
           {violations.length > 0 && recording?.durationSeconds && (
-            <div className="card" style={{ padding: '14px 16px' }}>
-              <div className="card-header" style={{ padding: 0, marginBottom: 10, border: 0 }}>
+            <div style={{ ...cardStyle, padding: '14px 16px' }}>
+              <div style={{ padding: 0, marginBottom: 10, border: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600 }}>Violation Timeline</h3>
-                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{violations.length} event{violations.length > 1 ? 's' : ''}</span>
+                <span style={{ fontSize: 13, color: colors.text.secondary }}>{violations.length} event{violations.length > 1 ? 's' : ''}</span>
               </div>
               <Timeline
                 markers={timelineMarkers}
@@ -288,49 +272,46 @@ export default function TrainerRecordingDetail({ user }) {
           )}
         </div>
 
-        {/* ── Right: Quiz + Violations + Download (fills remaining height) ── */}
         <div className="flex flex-col gap-3" style={{ minHeight: 0 }}>
 
-          {/* Quiz Performance */}
-          <div className="card" style={{ padding: '14px 16px' }}>
-            <div className="card-header" style={{ padding: 0, marginBottom: 12, border: 0 }}>
+          <div style={{ ...cardStyle, padding: '14px 16px' }}>
+            <div style={{ padding: 0, marginBottom: 12, border: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ fontSize: 16, fontWeight: 600 }}>Quiz Performance</h3>
             </div>
             {quizResult ? (
               <div className="flex items-center gap-2">
-                <div style={{ flex: 1, background: '#F3F0FF', borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#7C3AED' }}>{pct != null ? `${Math.round(pct)}%` : '-'}</div>
-                  <div style={{ fontSize: 12, color: '#7C3AED', fontWeight: 500, marginTop: 2 }}>Score</div>
+                <div style={{ flex: 1, background: colors.primary[50], borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: colors.primary[600] }}>{pct != null ? `${Math.round(pct)}%` : '-'}</div>
+                  <div style={{ fontSize: 12, color: colors.primary[600], fontWeight: 500, marginTop: 2 }}>Score</div>
                 </div>
-                <div style={{ flex: 1, background: '#ECFDF5', borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#10B981' }}>{correct != null ? `${correct}/${total}` : '-'}</div>
-                  <div style={{ fontSize: 12, color: '#10B981', fontWeight: 500, marginTop: 2 }}>Correct</div>
+                <div style={{ flex: 1, background: colors.success[50], borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: colors.success[500] }}>{correct != null ? `${correct}/${total}` : '-'}</div>
+                  <div style={{ fontSize: 12, color: colors.success[500], fontWeight: 500, marginTop: 2 }}>Correct</div>
                 </div>
                 {quizResult.attempt?.timeTaken && (
-                  <div style={{ flex: 1, background: '#F9FAFB', borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>{Math.floor(quizResult.attempt.timeTaken / 60)}m</div>
-                    <div style={{ fontSize: 12, color: '#6B7280', fontWeight: 500, marginTop: 2 }}>Time</div>
+                  <div style={{ flex: 1, background: colors.surface.secondary, borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: colors.text.primary }}>{Math.floor(quizResult.attempt.timeTaken / 60)}m</div>
+                    <div style={{ fontSize: 12, color: colors.slate[500], fontWeight: 500, marginTop: 2 }}>Time</div>
                   </div>
                 )}
               </div>
             ) : (
-              <p style={{ fontSize: 14, color: '#9CA3AF' }}>No quiz result data available.</p>
+              <p style={{ fontSize: 14, color: colors.slate[400] }}>No quiz result data available.</p>
             )}
           </div>
 
-          {/* Violations — fills remaining space */}
-          <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-            <div className="card-header" style={{ padding: 0, marginBottom: 10, border: 0, flexShrink: 0 }}>
+          <div style={{ ...cardStyle, padding: '14px 16px', display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+            <div style={{ padding: 0, marginBottom: 10, border: 0, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ fontSize: 16, fontWeight: 600 }}>Violation Log</h3>
               {violations.length > 0 && (
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#DC2626', background: '#FEF2F2', padding: '2px 10px', borderRadius: 100 }}>{violations.length}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: colors.danger[600], background: colors.danger[50], padding: '2px 10px', borderRadius: 100 }}>{violations.length}</span>
               )}
             </div>
             {violations.length > 0 ? (
               <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
                 <table className="w-full" style={{ borderCollapse: 'collapse', fontSize: 14 }}>
                   <thead>
-                    <tr style={{ fontSize: 11, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <tr style={{ fontSize: 11, color: colors.slate[400], textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 8, paddingRight: 8 }}>Type</th>
                       <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 8, paddingRight: 8 }}>Severity</th>
                       <th style={{ textAlign: 'left', fontWeight: 600, paddingBottom: 8, paddingRight: 8 }}>Time</th>
@@ -343,27 +324,27 @@ export default function TrainerRecordingDetail({ user }) {
                         ? (new Date(v.occurredAt).getTime() - new Date(recording.recordedAt).getTime()) / 1000
                         : null
                       const canSeek = seekTime != null && seekTime >= 0 && seekTime <= (recording?.durationSeconds || 0)
+                      const sev = SEVERITY_STYLES[v.severity] || { bg: colors.slate[100], fg: colors.slate[600] }
                       return (
                         <tr
                           key={v.id}
                           onClick={() => canSeek && handleSeekTo(seekTime)}
-                          style={{ cursor: canSeek ? 'pointer' : 'default', borderBottom: '1px solid #F3F4F6' }}
+                          style={{ cursor: canSeek ? 'pointer' : 'default', borderBottom: `1px solid ${colors.slate[100]}` }}
                           className="hover:bg-gray-50 transition-colors"
                         >
                           <td style={{ padding: '7px 8px 7px 0' }}>
                             <div className="flex items-center gap-2">
-                              <span style={{ width: 6, height: 6, borderRadius: '50%', display: 'inline-block', flexShrink: 0, background: severityDot[v.severity] || '#9CA3AF' }} />
-                              <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{violationLabels[v.type] || v.type}</span>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', display: 'inline-block', flexShrink: 0, background: sev.fg }} />
+                              <span style={{ fontSize: 14, fontWeight: 500, color: colors.text.primary }}>{violationLabels[v.type] || v.type}</span>
                             </div>
                           </td>
                           <td style={{ padding: '7px 8px 7px 0' }}>
-                            <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 100, border: '1px solid', whiteSpace: 'nowrap', display: 'inline-block' }}
-                              className={severityStyles[v.severity] || 'bg-gray-50 text-gray-600 border-gray-200'}>
+                            <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 100, border: '1px solid', whiteSpace: 'nowrap', display: 'inline-block', background: sev.bg, color: sev.fg, borderColor: sev.bg }}>
                               {v.severity}
                             </span>
                           </td>
-                          <td style={{ padding: '7px 8px 7px 0', fontSize: 14, color: '#6B7280', whiteSpace: 'nowrap' }}>{fmtTime(v.occurredAt)}</td>
-                          <td style={{ padding: '7px 0', color: '#D1D5DB' }}>{canSeek && <ChevronRight size={14} />}</td>
+                          <td style={{ padding: '7px 8px 7px 0', fontSize: 14, color: colors.slate[500], whiteSpace: 'nowrap' }}>{fmtTime(v.occurredAt)}</td>
+                          <td style={{ padding: '7px 0', color: colors.slate[300] }}>{canSeek && <ChevronRight size={14} />}</td>
                         </tr>
                       )
                     })}
@@ -372,12 +353,11 @@ export default function TrainerRecordingDetail({ user }) {
               </div>
             ) : (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <p style={{ fontSize: 14, color: '#9CA3AF' }}>No violations recorded</p>
+                <p style={{ fontSize: 14, color: colors.slate[400] }}>No violations recorded</p>
               </div>
             )}
           </div>
 
-          {/* Download */}
           <button
             onClick={handleDownload}
             className="btn btn-primary w-full flex items-center justify-center gap-2"
@@ -393,13 +373,18 @@ export default function TrainerRecordingDetail({ user }) {
 
 function RecordingStatusBadge({ status }) {
   const styles = {
-    ready: 'bg-green-100 text-green-700 border-green-200',
-    processing: 'bg-amber-100 text-amber-700 border-amber-200',
-    failed: 'bg-red-100 text-red-700 border-red-200',
+    ready: { bg: colors.success[100], fg: colors.success[700], border: colors.success[200] },
+    processing: { bg: colors.warning[100], fg: colors.warning[700], border: colors.warning[200] },
+    failed: { bg: colors.danger[100], fg: colors.danger[700], border: colors.danger[200] },
   }
-  const labels = { ready: '✓ Ready', processing: '⏳ Processing', failed: '✕ Failed' }
+  const labels = {
+    ready: <><Check size={12} /> Ready</>,
+    processing: <><Loader2 size={12} className="animate-spin" /> Processing</>,
+    failed: <><X size={12} /> Failed</>,
+  }
+  const s = styles[status] || { bg: colors.slate[100], fg: colors.slate[600], border: colors.slate[200] }
   return (
-    <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${styles[status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+    <span style={{ fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 100, border: '1px solid', background: s.bg, color: s.fg, borderColor: s.border, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
       {labels[status] || status}
     </span>
   )

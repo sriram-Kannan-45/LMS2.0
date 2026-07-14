@@ -28,8 +28,8 @@ export default function EmptyState({ onRefresh, filtered = false, title, descrip
         className="mb-4 flex h-14 w-14 items-center justify-center"
         style={{
           background:
-            'linear-gradient(135deg, rgba(91,95,199,0.10), rgba(139,92,246,0.10))',
-          border: '1px solid rgba(91,95,199,0.18)',
+            'linear-gradient(135deg, rgba(13,148,136,0.10), rgba(20,184,166,0.10))',
+          border: '1px solid rgba(13,148,136,0.18)',
           borderRadius: 14,
           color: 'var(--indigo)',
         }}

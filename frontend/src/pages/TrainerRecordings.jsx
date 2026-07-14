@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Search, Filter, Monitor } from 'lucide-react'
+import { Search, Filter, Monitor, Video, AlertTriangle, Play } from 'lucide-react'
 import { API_BASE } from '../api/api'
 import { useToast } from '../components/Toast'
+import { colors, cardStyle, skeletonStyle, typography } from '../theme/tokens'
 
 const auth = (user) => ({ Authorization: `Bearer ${user.token}` })
 
@@ -133,23 +134,21 @@ export default function TrainerRecordings({ user }) {
 
   return (
     <div className="dashboard">
-      {/* ── Page Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 4, fontWeight: 500 }}>Trainer Portal › Recordings</p>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#111827', fontFamily: "'Poppins', sans-serif" }}>
+          <p style={{ fontSize: 13, color: colors.slate[500], marginBottom: 4, fontWeight: 500 }}>Trainer Portal › Recordings</p>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: colors.text.primary, fontFamily: typography.fontFamily }}>
             Session Recordings
           </h1>
-          <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
+          <p style={{ fontSize: 13, color: colors.slate[500], marginTop: 4 }}>
             View screen recordings from your quiz sessions
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Monitor size={18} style={{ color: '#9CA3AF' }} />
+          <Monitor size={18} style={{ color: colors.slate[400] }} />
         </div>
       </div>
 
-      {/* ── Stats Grid ── */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
         <div className="stat-card">
           <div className="stat-label">Total Recordings</div>
@@ -165,16 +164,15 @@ export default function TrainerRecordings({ user }) {
         </div>
       </div>
 
-      {/* ── Filter Bar ── */}
       <motion.div variants={itemVariants} className="card" style={{ marginBottom: 24, padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <Filter size={14} style={{ color: '#6B7280' }} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Filters</span>
+          <Filter size={14} style={{ color: colors.slate[500] }} />
+          <span style={{ fontSize: 14, fontWeight: 600, color: colors.text.primary }}>Filters</span>
         </div>
 
         <div className="form-grid-2" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
           <div style={{ position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }} />
+            <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: colors.slate[400] }} />
             <input
               type="text"
               placeholder="Search participant..."
@@ -236,7 +234,7 @@ export default function TrainerRecordings({ user }) {
           <div className="card-header">
             <div>
               <h3>Recordings ({total})</h3>
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Screen recordings from your quiz sessions</span>
+              <span style={{ fontSize: 13, color: colors.text.secondary }}>Screen recordings from your quiz sessions</span>
             </div>
             <select
               value={sortBy}
@@ -252,7 +250,7 @@ export default function TrainerRecordings({ user }) {
 
           {total === 0 ? (
             <div className="empty-state">
-              <div className="empty-icon">🎥</div>
+              <div className="empty-icon"><Video size={48} /></div>
               <h3>No Recordings Found</h3>
               <p>Recordings will appear here after participants complete your proctored quiz sessions with screen sharing enabled.</p>
             </div>
@@ -280,7 +278,7 @@ export default function TrainerRecordings({ user }) {
                         <tr key={rec.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                           <td className="py-4 px-5">
                             <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                              <div className="w-9 h-9 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                                 {pName.charAt(0).toUpperCase()}
                               </div>
                               <div>
@@ -294,7 +292,7 @@ export default function TrainerRecordings({ user }) {
                           <td className="py-4 px-5 text-gray-500">{formatDuration(rec.durationSeconds)}</td>
                           <td className="py-4 px-5">
                             {rec.violationCount > 0
-                              ? <span className="text-yellow-600 font-medium">⚠️ {rec.violationCount}</span>
+                              ? <span className="text-yellow-600 font-medium"><AlertTriangle size={14} /> {rec.violationCount}</span>
                               : <span className="text-gray-300">—</span>
                             }
                           </td>
@@ -313,8 +311,8 @@ export default function TrainerRecordings({ user }) {
                           </td>
                           <td className="py-4 px-5">
                             <button onClick={() => navigate(`/trainer/recordings/${rec.id}`)}
-                              className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg transition-colors">
-                              ▶ Watch
+                              className="px-4 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-lg transition-colors">
+                              <Play size={12} /> Watch
                             </button>
                           </td>
                         </tr>
@@ -351,7 +349,7 @@ export default function TrainerRecordings({ user }) {
                       return (
                         <button key={n} onClick={() => setPage(n)}
                           className={`px-3 py-1 rounded text-sm font-medium ${
-                            n === page ? 'bg-purple-600 text-white' : 'text-gray-500 hover:bg-gray-100'
+                            n === page ? 'bg-primary-600 text-white' : 'text-gray-500 hover:bg-gray-100'
                           }`}>{n}</button>
                       )
                     })}

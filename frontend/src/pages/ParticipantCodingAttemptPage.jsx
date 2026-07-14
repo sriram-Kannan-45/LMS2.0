@@ -375,7 +375,7 @@ function ParticipantCodingAttemptInner({ user }) {
   }, [screenRecording, stopRecording])
 
   if (loading || restoring) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#94a3b8' }}><Loader2 size={24} className="animate-spin" /></div>
-  if (errorMsg) return <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: 20, textAlign: 'center' }}><AlertCircle size={32} color="#dc2626" style={{ marginBottom: 12 }} /><div style={{ fontSize: 16, fontWeight: 600, color: '#dc2626', marginBottom: 8 }}>{errorMsg}</div><button onClick={() => navigate(`/trainings/${trainingId}`)} style={{ padding: '8px 20px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Go Back</button></div>
+  if (errorMsg) return <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', padding: 20, textAlign: 'center' }}><AlertCircle size={32} color="#dc2626" style={{ marginBottom: 12 }} /><div style={{ fontSize: 16, fontWeight: 600, color: '#dc2626', marginBottom: 8 }}>{errorMsg}</div><button onClick={() => navigate(`/trainings/${trainingId}`)} style={{ padding: '8px 20px', background: '#0D9488', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Go Back</button></div>
 
   if (!consented) return (
     <AssessmentConsentGate quiz={assessment ? { id: assessment.id, title: assessment.title, description: assessment.description, timeLimit: assessment.timeLimit } : null} attemptId={Number(attemptId)} onConsented={handleConsented} onCancel={handleCancel} onScreenShareReady={handleScreenShareReady} />
@@ -391,7 +391,7 @@ function ParticipantCodingAttemptInner({ user }) {
     main: { display: 'flex', flex: 1, overflow: 'hidden' },
     leftPanel: { width: '40%', minWidth: 340, maxWidth: 520, overflow: 'auto', borderRight: '1px solid #0f3460', background: '#1a1a2e' },
     problemNav: { display: 'flex', gap: 4, padding: '12px 16px', borderBottom: '1px solid #0f3460', background: '#16213e' },
-    problemBtn: (active) => ({ padding: '4px 12px', border: active ? '1px solid #6366f1' : '1px solid #333', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: active ? 700 : 500, background: active ? '#2d2a5e' : '#1a1a3e', color: active ? '#818cf8' : '#666' }),
+    problemBtn: (active) => ({ padding: '4px 12px', border: active ? '1px solid #0D9488' : '1px solid #333', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: active ? 700 : 500, background: active ? '#2d2a5e' : '#1a1a3e', color: active ? '#818cf8' : '#666' }),
     rightPanel: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
     editorContainer: { flex: 1, overflow: 'hidden', borderBottom: '1px solid #0f3460' },
     bottomPanel: { flex: '0 0 auto', maxHeight: '35%', display: 'flex', flexDirection: 'column' },
@@ -400,7 +400,7 @@ function ParticipantCodingAttemptInner({ user }) {
     tabBtn: (active) => ({ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 600, background: active ? '#2d2a5e' : 'transparent', color: active ? '#818cf8' : '#888' }),
     actionBtn: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: 'transparent', color: '#888', border: '1px solid #333', borderRadius: 4, cursor: 'pointer', fontSize: 11, fontWeight: 600 },
     runBtn: (disabled) => ({ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', background: disabled ? '#333' : '#059669', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 }),
-    submitBtn: (disabled) => ({ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', background: disabled ? '#333' : '#6366f1', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 }),
+    submitBtn: (disabled) => ({ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', background: disabled ? '#333' : '#0D9488', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.6 : 1 }),
     outputArea: { flex: 1, overflow: 'auto', padding: 12, fontFamily: "'Fira Code', 'Consolas', monospace", fontSize: 13, background: '#1a1a2e', color: '#e0e0e0' },
     verdictBadge: (v) => {
       const colors = { ACCEPTED: '#059669', WRONG_ANSWER: '#dc2626', COMPILATION_ERROR: '#f59e0b', TIME_LIMIT_EXCEEDED: '#f97316', MEMORY_LIMIT_EXCEEDED: '#f97316', RUNTIME_ERROR: '#ef4444', INTERNAL_ERROR: '#dc2626' }

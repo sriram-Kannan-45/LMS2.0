@@ -13,26 +13,26 @@ import {
 } from 'lucide-react'
 
 const CHART_COLORS = {
-  enrollments: '#7c3aed',
+  enrollments: '#0D9488',
   completions: '#2563eb',
 }
 
 const ENGAGEMENT_COLORS = {
-  active: '#7c3aed',
+  active: '#0D9488',
   completed: '#2563eb',
   inProgress: '#10b981',
   notStarted: '#f59e0b',
 }
 
 const ACTIVITY_TYPES = [
-  { type: 'lesson', icon: BookOpen, bg: '#7c3aed', label: 'New lesson added' },
+  { type: 'lesson', icon: BookOpen, bg: '#0D9488', label: 'New lesson added' },
   { type: 'enrollment', icon: Users, bg: '#10b981', label: 'New enrollments' },
   { type: 'feedback', icon: Star, bg: '#f59e0b', label: 'New feedback received' },
   { type: 'quiz', icon: ClipboardList, bg: '#2563eb', label: 'Quiz created' },
 ]
 
 const TRAINER_GRADIENTS = [
-  'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
+  'linear-gradient(135deg, #0D9488 0%, #14B8A6 100%)',
   'linear-gradient(135deg, #2563eb 0%, #60a5fa 100%)',
   'linear-gradient(135deg, #059669 0%, #34d399 100%)',
   'linear-gradient(135deg, #ea580c 0%, #fb923c 100%)',
@@ -205,14 +205,14 @@ export default function AdminOverviewTab({ user, stats, feedbacks, trainings, pa
   }, [trainings])
 
   const quickLinks = [
-    { icon: FileText, label: 'Create Assignment', color: '#7c3aed', bg: 'rgba(124,58,237,0.08)' },
+    { icon: FileText, label: 'Create Assignment', color: '#0D9488', bg: 'rgba(13,148,136,0.08)' },
     { icon: Upload, label: 'Upload Resource', color: '#10b981', bg: 'rgba(16,185,129,0.08)' },
     { icon: ClipboardList, label: 'Create Quiz', color: '#2563eb', bg: 'rgba(37,99,235,0.08)' },
     { icon: Send, label: 'Send Announcement', color: '#f59e0b', bg: 'rgba(245,158,11,0.08)' },
   ]
 
   const statItems = [
-    { label: 'Total Trainings', value: stats.totalTrainings ?? 0, icon: BookOpen, color: '#7c3aed' },
+    { label: 'Total Trainings', value: stats.totalTrainings ?? 0, icon: BookOpen, color: '#0D9488' },
     { label: 'Total Participants', value: stats.totalParticipants ?? 0, icon: UserCheck, color: '#10b981' },
     { label: 'Active Enrollments', value: stats.totalEnrollments ?? 0, icon: Activity, color: '#2563eb' },
     { label: 'Avg Trainer Rating', value: stats.avgTrainerRating ?? '0.0', icon: Star, color: '#f59e0b' },
@@ -250,7 +250,7 @@ export default function AdminOverviewTab({ user, stats, feedbacks, trainings, pa
 
       {/* Quick Stat Strip */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <StatCard label="Total Trainings" value={stats.totalTrainings ?? 0} icon={BookOpen} variant="violet" />
+        <StatCard label="Total Trainings" value={stats.totalTrainings ?? 0} icon={BookOpen} variant="primary" />
         <StatCard label="Total Participants" value={stats.totalParticipants ?? 0} icon={UserCheck} variant="emerald" />
         <StatCard label="Active Enrollments" value={stats.totalEnrollments ?? 0} icon={Activity} variant="blue" />
         <StatCard label="Avg Trainer Rating" value={stats.avgTrainerRating ?? '0.0'} icon={Star} variant="amber" />
@@ -295,7 +295,7 @@ export default function AdminOverviewTab({ user, stats, feedbacks, trainings, pa
                     axisLine={false} tickLine={false} width={36}
                     domain={[0, 'auto']}
                   />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ stroke: 'rgba(124,58,237,0.1)', strokeWidth: 1 }} />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{ stroke: 'rgba(13,148,136,0.1)', strokeWidth: 1 }} />
                   <Area
                     type="monotone" dataKey="Enrollments"
                     stroke={CHART_COLORS.enrollments} strokeWidth={2.5}
@@ -404,7 +404,7 @@ export default function AdminOverviewTab({ user, stats, feedbacks, trainings, pa
             </span>
           </div>
           <div className="dash-engagement py-4">
-            <DonutChart data={engagementData.segments} colors={['#7c3aed', '#3b82f6', '#10b981', '#f59e0b']} height={200} />
+            <DonutChart data={engagementData.segments} colors={['#0D9488', '#3b82f6', '#10b981', '#f59e0b']} height={200} />
           </div>
         </motion.section>
       </div>

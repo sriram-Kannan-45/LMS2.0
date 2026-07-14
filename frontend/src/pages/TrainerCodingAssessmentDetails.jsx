@@ -10,19 +10,12 @@ import {
 import { API } from '../api/api'
 import { useToast } from '../components/Toast'
 import CodeEditor from '../components/CodeEditor'
-
-const STATUS_BADGE = {
-  DRAFT:     { bg: '#f1f5f9', fg: '#475569', label: 'Draft' },
-  PUBLISHED: { bg: '#dcfce7', fg: '#15803d', label: 'Published' },
-  CLOSED:    { bg: '#fee2e2', fg: '#dc2626', label: 'Closed' },
-  RESULTS_PUBLISHED: { bg: '#dbeafe', fg: '#1d4ed8', label: 'Results Published' },
-  ARCHIVED:  { bg: '#f5f5f4', fg: '#78716c', label: 'Archived' },
-}
-
-const RESULT_STATUS_BADGE = {
-  HIDDEN:  { bg: '#fef3c7', fg: '#92400e', label: 'Hidden' },
-  PUBLISHED: { bg: '#dcfce7', fg: '#15803d', label: 'Published' },
-}
+import {
+  colors, btnPrimary, btnSuccess, btnDanger, btnWarning, btnOutline, iconBtn,
+  STATUS_BADGE, RESULT_BADGE, DIFF_BADGE, ATTEMPT_STATUS,
+  lblStyle, inputStyle, selectStyle, textareaStyle, th, td,
+  skeletonStyle, typography, CHART_COLORS, SEVERITY_STYLES,
+} from '../theme/tokens'
 
 const LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
@@ -37,34 +30,6 @@ const LANGUAGES = [
   { value: 'rust', label: 'Rust' },
   { value: 'php', label: 'PHP' },
 ]
-
-const btnPrimary = {
-  display: 'inline-flex', alignItems: 'center', gap: 6,
-  padding: '9px 18px', background: '#4f46e5', color: '#fff', border: 'none',
-  borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-}
-const btnSuccess = { ...btnPrimary, background: '#059669' }
-const btnDanger = { ...btnPrimary, background: '#dc2626' }
-const btnWarning = { ...btnPrimary, background: '#d97706' }
-const btnOutline = {
-  display: 'inline-flex', alignItems: 'center', gap: 6,
-  padding: '9px 18px', background: '#fff', color: '#475569',
-  border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-}
-const iconBtn = (bg, fg) => ({
-  width: 32, height: 32, border: 'none', cursor: 'pointer', borderRadius: 6,
-  background: bg, color: fg, display: 'inline-flex', alignItems: 'center',
-  justifyContent: 'center', flexShrink: 0,
-})
-const inputStyle = {
-  width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8,
-  fontSize: 13, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', background: '#fff',
-}
-const selectStyle = { ...inputStyle, cursor: 'pointer' }
-const textareaStyle = { ...inputStyle, minHeight: 80, resize: 'vertical' }
-const labelStyle = { display: 'block', fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }
-const th = { padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '2px solid #e2e8f0' }
-const td = { padding: '10px 12px', verticalAlign: 'middle', borderBottom: '1px solid #f1f5f9', fontSize: 13 }
 
 export default function TrainerCodingAssessmentDetails({ user, onLogout }) {
   const { assessmentId } = useParams()
@@ -127,7 +92,7 @@ export default function TrainerCodingAssessmentDetails({ user, onLogout }) {
 
   if (loading) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>
+      <div style={{ padding: 40, textAlign: 'center', color: colors.slate[400] }}>
         <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 12px' }} />
         Loading assessment…
       </div>
@@ -136,7 +101,7 @@ export default function TrainerCodingAssessmentDetails({ user, onLogout }) {
 
   if (!assessment) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}>
+      <div style={{ padding: 40, textAlign: 'center', color: colors.danger[600] }}>
         <AlertCircle size={24} style={{ margin: '0 auto 12px' }} />
         Coding assessment not found
       </div>
@@ -144,7 +109,7 @@ export default function TrainerCodingAssessmentDetails({ user, onLogout }) {
   }
 
   const statusV = STATUS_BADGE[assessment.status] || STATUS_BADGE.DRAFT
-  const resultV = RESULT_STATUS_BADGE[assessment.resultStatus] || RESULT_STATUS_BADGE.HIDDEN
+  const resultV = RESULT_BADGE[assessment.resultStatus] || RESULT_BADGE.HIDDEN
 
   const tabs = [
     { key: 'general',    label: 'General',    icon: FileText },
@@ -159,24 +124,24 @@ export default function TrainerCodingAssessmentDetails({ user, onLogout }) {
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 20px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button onClick={() => navigate(-1)} style={iconBtn('#f1f5f9', '#475569')}>
+        <button onClick={() => navigate(-1)} style={iconBtn(colors.slate[100], colors.slate[600], 32)}>
           <ArrowLeft size={16} />
         </button>
         <div style={{ flex: 1 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{assessment.title}</h1>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: colors.text.primary }}>{assessment.title}</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-            <span style={{ padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: statusV.bg, color: statusV.fg }}>{statusV.label}</span>
-            <span style={{ padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: resultV.bg, color: resultV.fg }}>Results: {resultV.label}</span>
-            <span style={{ fontSize: 12, color: '#64748b' }}>{assessment.problems?.length || 0} problems</span>
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>•</span>
-            <span style={{ fontSize: 12, color: '#64748b' }}>{assessment.languages?.length || 1} language(s)</span>
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>•</span>
-            <span style={{ fontSize: 12, color: '#64748b' }}>{assessment.timeLimit || 60} min</span>
+            <span style={{ ...statusV, padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{assessment.status?.split('_').map(w => w[0] + w.slice(1).toLowerCase()).join(' ')}</span>
+            <span style={{ ...resultV, padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>Results: {assessment.resultStatus?.split('_').map(w => w[0] + w.slice(1).toLowerCase()).join(' ')}</span>
+            <span style={{ fontSize: 12, color: colors.slate[500] }}>{assessment.problems?.length || 0} problems</span>
+            <span style={{ fontSize: 12, color: colors.slate[400] }}>•</span>
+            <span style={{ fontSize: 12, color: colors.slate[500] }}>{assessment.languages?.length || 1} language(s)</span>
+            <span style={{ fontSize: 12, color: colors.slate[400] }}>•</span>
+            <span style={{ fontSize: 12, color: colors.slate[500] }}>{assessment.timeLimit || 60} min</span>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 2, borderBottom: '2px solid #e2e8f0', marginBottom: 24, overflow: 'auto' }}>
+      <div style={{ display: 'flex', gap: 2, borderBottom: `2px solid ${colors.border.default}`, marginBottom: 24, overflow: 'auto' }}>
         {tabs.map(tab => {
           const Icon = tab.icon
           const active = activeTab === tab.key
@@ -188,9 +153,9 @@ export default function TrainerCodingAssessmentDetails({ user, onLogout }) {
                 display: 'flex', alignItems: 'center', gap: 6,
                 padding: '10px 18px', border: 'none', cursor: 'pointer',
                 fontSize: 13, fontWeight: active ? 700 : 500,
-                color: active ? '#4f46e5' : '#64748b',
+                color: active ? colors.primary[600] : colors.slate[500],
                 background: 'transparent',
-                borderBottom: active ? '2px solid #4f46e5' : '2px solid transparent',
+                borderBottom: active ? `2px solid ${colors.primary[600]}` : '2px solid transparent',
                 marginBottom: -2, whiteSpace: 'nowrap',
                 transition: 'all 0.15s',
               }}
@@ -237,9 +202,6 @@ export default function TrainerCodingAssessmentDetails({ user, onLogout }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// GENERAL TAB
-// ════════════════════════════════════════════════════════════════════════════
 function GeneralTab({ assessment, onPublish, onClose, onDelete, publishing, onRefresh, auth, toast }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
@@ -289,7 +251,7 @@ function GeneralTab({ assessment, onPublish, onClose, onDelete, publishing, onRe
           </button>
         )}
         {assessment.status === 'CLOSED' && (
-          <span style={{ ...btnPrimary, opacity: 0.7, cursor: 'default', background: '#64748b' }}>
+          <span style={{ ...btnPrimary, opacity: 0.7, cursor: 'default', background: colors.slate[500] }}>
             Closed
           </span>
         )}
@@ -299,23 +261,23 @@ function GeneralTab({ assessment, onPublish, onClose, onDelete, publishing, onRe
       </div>
 
       {editing ? (
-        <div style={{ background: '#f8fafc', borderRadius: 12, padding: 20, marginBottom: 24, border: '1px solid #e2e8f0' }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Edit Assessment</h3>
+        <div style={{ background: colors.surface.secondary, borderRadius: 12, padding: 20, marginBottom: 24, border: `1px solid ${colors.border.default}` }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: colors.text.primary }}>Edit Assessment</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
-              <label style={labelStyle}>Title</label>
+              <label style={lblStyle}>Title</label>
               <input style={inputStyle} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
             </div>
             <div>
-              <label style={labelStyle}>Time Limit (minutes)</label>
+              <label style={lblStyle}>Time Limit (minutes)</label>
               <input style={inputStyle} type="number" min={1} value={form.timeLimit} onChange={e => setForm({ ...form, timeLimit: parseInt(e.target.value) || 60 })} />
             </div>
             <div style={{ gridColumn: 'span 2' }}>
-              <label style={labelStyle}>Description</label>
+              <label style={lblStyle}>Description</label>
               <textarea style={textareaStyle} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
             </div>
             <div>
-              <label style={labelStyle}>Allowed Languages</label>
+              <label style={lblStyle}>Allowed Languages</label>
               <select style={selectStyle} multiple size={4} value={form.languages} onChange={e => {
                 const opts = [...e.target.options].filter(o => o.selected).map(o => o.value)
                 setForm({ ...form, languages: opts.length ? opts : form.languages })
@@ -334,10 +296,10 @@ function GeneralTab({ assessment, onPublish, onClose, onDelete, publishing, onRe
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
         {meta.map(m => (
           <div key={m.label} style={{
-            background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px',
+            background: colors.surface.primary, border: `1px solid ${colors.border.default}`, borderRadius: 10, padding: '14px 16px',
           }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{m.label}</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>{m.value}</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: colors.slate[400], textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{m.label}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: colors.text.primary }}>{m.value}</div>
           </div>
         ))}
       </div>
@@ -345,9 +307,6 @@ function GeneralTab({ assessment, onPublish, onClose, onDelete, publishing, onRe
   )
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// PROBLEMS TAB
-// ════════════════════════════════════════════════════════════════════════════
 function ProblemsTab({ assessment, onRefresh, auth, toast }) {
   const [problems, setProblems] = useState(assessment.problems || [])
   const [showForm, setShowForm] = useState(false)
@@ -392,16 +351,10 @@ function ProblemsTab({ assessment, onRefresh, auth, toast }) {
     finally { setSaving(false) }
   }
 
-  const DIFF_BADGE = {
-    EASY:   { bg: '#dcfce7', fg: '#15803d' },
-    MEDIUM: { bg: '#fef3c7', fg: '#92400e' },
-    HARD:   { bg: '#fee2e2', fg: '#dc2626' },
-  }
-
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{problems.length} Problems</h3>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.text.primary }}>{problems.length} Problems</h3>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setShowAI(true)} style={btnOutline}>
             <Star size={14} /> AI Generate
@@ -437,16 +390,16 @@ function ProblemsTab({ assessment, onRefresh, auth, toast }) {
       </AnimatePresence>
 
       {problems.length === 0 ? (
-        <div style={{ padding: 60, textAlign: 'center', color: '#94a3b8', border: '2px dashed #e2e8f0', borderRadius: 12 }}>
+        <div style={{ padding: 60, textAlign: 'center', color: colors.slate[400], border: `2px dashed ${colors.border.default}`, borderRadius: 12 }}>
           <Code size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
           <div style={{ fontSize: 14, fontWeight: 600 }}>No problems yet</div>
           <div style={{ fontSize: 12, marginTop: 4 }}>Add a problem or generate with AI</div>
         </div>
       ) : (
-        <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ border: `1px solid ${colors.border.default}`, borderRadius: 10, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#f8fafc' }}>
+              <tr style={{ background: colors.surface.secondary }}>
                 <th style={{ ...th, width: 40 }}>#</th>
                 <th style={th}>Title</th>
                 <th style={th}>Language</th>
@@ -461,20 +414,20 @@ function ProblemsTab({ assessment, onRefresh, auth, toast }) {
                 const db = DIFF_BADGE[p.difficulty] || DIFF_BADGE.MEDIUM
                 return (
                   <tr key={p.id || i}>
-                    <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: '#94a3b8', fontSize: 12 }}>{i + 1}</td>
-                    <td style={{ ...td, fontWeight: 600, color: '#0f172a' }}>{p.title}</td>
-                    <td style={td}><span style={{ fontSize: 11, fontWeight: 600, color: '#475569' }}>{p.programmingLanguage || 'javascript'}</span></td>
+                    <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: colors.slate[400], fontSize: 12 }}>{i + 1}</td>
+                    <td style={{ ...td, fontWeight: 600, color: colors.text.primary }}>{p.title}</td>
+                    <td style={td}><span style={{ fontSize: 11, fontWeight: 600, color: colors.slate[600] }}>{p.programmingLanguage || 'javascript'}</span></td>
                     <td style={td}>
-                      <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: db.bg, color: db.fg }}>
+                      <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: db.background, color: db.color }}>
                         {p.difficulty || 'MEDIUM'}
                       </span>
                     </td>
-                    <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: '#475569' }}>{p.marks || 10}</td>
-                    <td style={{ ...td, textAlign: 'center', fontWeight: 600, color: '#64748b' }}>{p.testCases?.length || 0}</td>
+                    <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: colors.slate[600] }}>{p.marks || 10}</td>
+                    <td style={{ ...td, textAlign: 'center', fontWeight: 600, color: colors.slate[500] }}>{p.testCases?.length || 0}</td>
                     <td style={{ ...td, textAlign: 'center' }}>
                       <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                        <button onClick={() => { setEditP(p); setShowForm(true) }} style={iconBtn('#e0e7ff', '#4338ca')} title="Edit"><Pencil size={12} /></button>
-                        <button onClick={() => handleDelete(p.id)} style={iconBtn('#fee2e2', '#dc2626')} title="Delete"><Trash2 size={12} /></button>
+                        <button onClick={() => { setEditP(p); setShowForm(true) }} style={iconBtn(colors.primary[100], colors.primary[700], 32)} title="Edit"><Pencil size={12} /></button>
+                        <button onClick={() => handleDelete(p.id)} style={iconBtn(colors.danger[100], colors.danger[600], 32)} title="Delete"><Trash2 size={12} /></button>
                       </div>
                     </td>
                   </tr>
@@ -488,7 +441,6 @@ function ProblemsTab({ assessment, onRefresh, auth, toast }) {
   )
 }
 
-// ── Problem Form ─────────────────────────────────────────────────────────
 function ProblemForm({ problem, assessmentLanguages, onSave, onClose, saving }) {
   const isEdit = !!problem
   const testCases = problem?.testCases || []
@@ -529,7 +481,7 @@ function ProblemForm({ problem, assessmentLanguages, onSave, onClose, saving }) 
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       style={{
-        position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 100,
+        position: 'fixed', inset: 0, background: colors.bg.overlay, zIndex: 100,
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
       }}
       onClick={onClose}
@@ -537,22 +489,22 @@ function ProblemForm({ problem, assessmentLanguages, onSave, onClose, saving }) 
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         onClick={e => e.stopPropagation()}
-        style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '85vh', overflow: 'auto', padding: 24 }}
+        style={{ background: colors.surface.primary, borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '85vh', overflow: 'auto', padding: 24 }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: colors.text.primary }}>
             {isEdit ? 'Edit Problem' : 'Add Problem'}
           </h3>
-          <button onClick={onClose} style={iconBtn('#f1f5f9', '#475569')}><X size={14} /></button>
+          <button onClick={onClose} style={iconBtn(colors.slate[100], colors.slate[600], 32)}><X size={14} /></button>
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
             <div style={{ gridColumn: 'span 2' }}>
-              <label style={labelStyle}>Title *</label>
+              <label style={lblStyle}>Title *</label>
               <input style={inputStyle} required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
             </div>
             <div>
-              <label style={labelStyle}>Language</label>
+              <label style={lblStyle}>Language</label>
               <select style={selectStyle} value={form.programmingLanguage} onChange={e => setForm({ ...form, programmingLanguage: e.target.value })}>
                 {LANGUAGES.filter(l => assessmentLanguages.includes(l.value)).map(l => (
                   <option key={l.value} value={l.value}>{l.label}</option>
@@ -560,7 +512,7 @@ function ProblemForm({ problem, assessmentLanguages, onSave, onClose, saving }) 
               </select>
             </div>
             <div>
-              <label style={labelStyle}>Difficulty</label>
+              <label style={lblStyle}>Difficulty</label>
               <select style={selectStyle} value={form.difficulty} onChange={e => setForm({ ...form, difficulty: e.target.value })}>
                 <option value="EASY">Easy</option>
                 <option value="MEDIUM">Medium</option>
@@ -568,39 +520,39 @@ function ProblemForm({ problem, assessmentLanguages, onSave, onClose, saving }) 
               </select>
             </div>
             <div>
-              <label style={labelStyle}>Marks</label>
+              <label style={lblStyle}>Marks</label>
               <input style={inputStyle} type="number" min={1} value={form.marks} onChange={e => setForm({ ...form, marks: parseInt(e.target.value) || 10 })} />
             </div>
             <div>
-              <label style={labelStyle}>Time Limit (seconds)</label>
+              <label style={lblStyle}>Time Limit (seconds)</label>
               <input style={inputStyle} type="number" min={1} value={form.timeLimit} onChange={e => setForm({ ...form, timeLimit: parseInt(e.target.value) || 5 })} />
             </div>
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Problem Statement *</label>
+            <label style={lblStyle}>Problem Statement *</label>
             <textarea style={textareaStyle} required value={form.statement} onChange={e => setForm({ ...form, statement: e.target.value })} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
             <div>
-              <label style={labelStyle}>Input Format</label>
+              <label style={lblStyle}>Input Format</label>
               <textarea style={textareaStyle} value={form.inputFormat} onChange={e => setForm({ ...form, inputFormat: e.target.value })} />
             </div>
             <div>
-              <label style={labelStyle}>Output Format</label>
+              <label style={lblStyle}>Output Format</label>
               <textarea style={textareaStyle} value={form.outputFormat} onChange={e => setForm({ ...form, outputFormat: e.target.value })} />
             </div>
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Constraints</label>
+            <label style={lblStyle}>Constraints</label>
             <textarea style={textareaStyle} value={form.constraints} onChange={e => setForm({ ...form, constraints: e.target.value })} />
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Starter Code</label>
-            <div style={{ border: '1px solid #cbd5e1', borderRadius: 8, overflow: 'hidden' }}>
+            <label style={lblStyle}>Starter Code</label>
+            <div style={{ border: `1px solid ${colors.slate[300]}`, borderRadius: 8, overflow: 'hidden' }}>
               <CodeEditor
                 value={form.starterCode}
                 language={form.programmingLanguage}
@@ -611,8 +563,8 @@ function ProblemForm({ problem, assessmentLanguages, onSave, onClose, saving }) 
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Expected Solution (hidden from participants)</label>
-            <div style={{ border: '1px solid #cbd5e1', borderRadius: 8, overflow: 'hidden' }}>
+            <label style={lblStyle}>Expected Solution (hidden from participants)</label>
+            <div style={{ border: `1px solid ${colors.slate[300]}`, borderRadius: 8, overflow: 'hidden' }}>
               <CodeEditor
                 value={form.expectedSolution}
                 language={form.programmingLanguage}
@@ -624,7 +576,7 @@ function ProblemForm({ problem, assessmentLanguages, onSave, onClose, saving }) 
 
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <label style={{ ...labelStyle, marginBottom: 0 }}>Test Cases</label>
+              <label style={{ ...lblStyle, marginBottom: 0 }}>Test Cases</label>
               <button type="button" onClick={addTC} style={{ ...btnOutline, fontSize: 11, padding: '4px 12px' }}>
                 <Plus size={11} /> Add Test Case
               </button>
@@ -637,16 +589,16 @@ function ProblemForm({ problem, assessmentLanguages, onSave, onClose, saving }) 
                 <div style={{ flex: 1 }}>
                   <input style={inputStyle} placeholder="Expected Output" value={tc.expectedOutput} onChange={e => updateTC(i, 'expectedOutput', e.target.value)} />
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#64748b', whiteSpace: 'nowrap', marginTop: 9 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: colors.slate[500], whiteSpace: 'nowrap', marginTop: 9 }}>
                   <input type="checkbox" checked={tc.isHidden} onChange={e => updateTC(i, 'isHidden', e.target.checked)} />
                   Hidden
                 </label>
-                <button type="button" onClick={() => removeTC(i)} style={{ ...iconBtn('#fee2e2', '#dc2626'), marginTop: 5 }}><X size={10} /></button>
+                <button type="button" onClick={() => removeTC(i)} style={{ ...iconBtn(colors.danger[100], colors.danger[600], 32), marginTop: 5 }}><X size={10} /></button>
               </div>
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20, borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20, borderTop: `1px solid ${colors.border.default}`, paddingTop: 16 }}>
             <button type="button" onClick={onClose} style={btnOutline}>Cancel</button>
             <button type="submit" disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -659,7 +611,6 @@ function ProblemForm({ problem, assessmentLanguages, onSave, onClose, saving }) 
   )
 }
 
-// ── AI Coding Wizard ─────────────────────────────────────────────────────
 function AICodingWizard({ assessmentId, onClose, onComplete, auth, toast }) {
   const [prompt, setPrompt] = useState('')
   const [generating, setGenerating] = useState(false)
@@ -684,23 +635,23 @@ function AICodingWizard({ assessmentId, onClose, onComplete, auth, toast }) {
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      style={{ position: 'fixed', inset: 0, background: colors.bg.overlay, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         onClick={e => e.stopPropagation()}
-        style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 520, padding: 24 }}
+        style={{ background: colors.surface.primary, borderRadius: 14, width: '100%', maxWidth: 520, padding: 24 }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
-            <Star size={16} style={{ marginRight: 8, verticalAlign: 'middle', color: '#f59e0b' }} />
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: colors.text.primary }}>
+            <Star size={16} style={{ marginRight: 8, verticalAlign: 'middle', color: colors.warning[500] }} />
             AI Generate Coding Problems
           </h3>
-          <button onClick={onClose} style={iconBtn('#f1f5f9', '#475569')}><X size={14} /></button>
+          <button onClick={onClose} style={iconBtn(colors.slate[100], colors.slate[600], 32)}><X size={14} /></button>
         </div>
         <div style={{ marginBottom: 16 }}>
-          <label style={labelStyle}>Describe the problems you want to generate</label>
+          <label style={lblStyle}>Describe the problems you want to generate</label>
           <textarea
             style={{ ...inputStyle, minHeight: 140, resize: 'vertical' }}
             placeholder="e.g. Create 3 problems about binary search trees. Include easy, medium, and hard difficulty. Each problem should have starter code and test cases."
@@ -720,9 +671,6 @@ function AICodingWizard({ assessmentId, onClose, onComplete, auth, toast }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// PARTICIPANTS TAB
-// ════════════════════════════════════════════════════════════════════════════
 function ParticipantsTab({ assessment, auth, toast }) {
   const [participants, setParticipants] = useState([])
   const [loading, setLoading] = useState(true)
@@ -738,13 +686,6 @@ function ParticipantsTab({ assessment, auth, toast }) {
     })()
   }, [])
 
-  const ATTEMPT_STATUS = {
-    NOT_STARTED: { bg: '#f1f5f9', fg: '#64748b', label: 'Not Started' },
-    IN_PROGRESS: { bg: '#dbeafe', fg: '#1d4ed8', label: 'In Progress' },
-    SUBMITTED: { bg: '#dcfce7', fg: '#15803d', label: 'Submitted' },
-    DISQUALIFIED: { bg: '#fee2e2', fg: '#dc2626', label: 'Disqualified' },
-  }
-
   const filtered = participants.filter(p =>
     p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.email?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -753,26 +694,26 @@ function ParticipantsTab({ assessment, auth, toast }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{participants.length} Participants</h3>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.text.primary }}>{participants.length} Participants</h3>
         <div style={{ position: 'relative' }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: '#94a3b8' }} />
+          <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: colors.slate[400] }} />
           <input style={{ ...inputStyle, paddingLeft: 30, width: 240 }} placeholder="Search participants…" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
         </div>
       </div>
 
       {loading ? (
-        <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}><Loader2 size={20} className="animate-spin" /></div>
+        <div style={{ padding: 40, textAlign: 'center', color: colors.slate[400] }}><Loader2 size={20} className="animate-spin" /></div>
       ) : participants.length === 0 ? (
-        <div style={{ padding: 60, textAlign: 'center', color: '#94a3b8', border: '2px dashed #e2e8f0', borderRadius: 12 }}>
+        <div style={{ padding: 60, textAlign: 'center', color: colors.slate[400], border: `2px dashed ${colors.border.default}`, borderRadius: 12 }}>
           <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
           <div style={{ fontSize: 14, fontWeight: 600 }}>No participants yet</div>
           <div style={{ fontSize: 12, marginTop: 4 }}>Participants will appear once they start the assessment</div>
         </div>
       ) : (
-        <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ border: `1px solid ${colors.border.default}`, borderRadius: 10, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#f8fafc' }}>
+              <tr style={{ background: colors.surface.secondary }}>
                 <th style={th}>Name</th>
                 <th style={th}>Email</th>
                 <th style={th}>Status</th>
@@ -785,7 +726,7 @@ function ParticipantsTab({ assessment, auth, toast }) {
                 const st = ATTEMPT_STATUS[p.status] || ATTEMPT_STATUS.NOT_STARTED
                 return (
                   <tr key={p.id}>
-                    <td style={{ ...td, fontWeight: 600, color: '#0f172a' }}>{p.name || '—'}</td>
+                    <td style={{ ...td, fontWeight: 600, color: colors.text.primary }}>{p.name || '—'}</td>
                     <td style={td}>{p.email || '—'}</td>
                     <td style={td}>
                       <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: st.bg, color: st.fg }}>
@@ -793,7 +734,7 @@ function ParticipantsTab({ assessment, auth, toast }) {
                       </span>
                     </td>
                     <td style={{ ...td, textAlign: 'center' }}>
-                      <span style={{ fontWeight: 600, color: (p.violationCount || 0) > 3 ? '#dc2626' : '#64748b' }}>
+                      <span style={{ fontWeight: 600, color: (p.violationCount || 0) > 3 ? colors.danger[600] : colors.slate[500] }}>
                         {p.violationCount || 0}
                       </span>
                     </td>
@@ -809,9 +750,6 @@ function ParticipantsTab({ assessment, auth, toast }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// RESULTS TAB
-// ════════════════════════════════════════════════════════════════════════════
 function ResultsTab({ assessment, auth, toast, onRefresh }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
@@ -851,7 +789,7 @@ function ResultsTab({ assessment, auth, toast, onRefresh }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{results.length} Results</h3>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: colors.text.primary }}>{results.length} Results</h3>
         {assessment.resultStatus === 'HIDDEN' && results.length > 0 && (
           <button onClick={handlePublishResults} style={btnSuccess}>
             <Send size={14} /> Publish All Results
@@ -865,18 +803,18 @@ function ResultsTab({ assessment, auth, toast, onRefresh }) {
       </div>
 
       {loading ? (
-        <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}><Loader2 size={20} className="animate-spin" /></div>
+        <div style={{ padding: 40, textAlign: 'center', color: colors.slate[400] }}><Loader2 size={20} className="animate-spin" /></div>
       ) : results.length === 0 ? (
-        <div style={{ padding: 60, textAlign: 'center', color: '#94a3b8', border: '2px dashed #e2e8f0', borderRadius: 12 }}>
+        <div style={{ padding: 60, textAlign: 'center', color: colors.slate[400], border: `2px dashed ${colors.border.default}`, borderRadius: 12 }}>
           <BarChart3 size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
           <div style={{ fontSize: 14, fontWeight: 600 }}>No results yet</div>
           <div style={{ fontSize: 12, marginTop: 4 }}>Results will appear after participants submit</div>
         </div>
       ) : (
-        <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ border: `1px solid ${colors.border.default}`, borderRadius: 10, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#f8fafc' }}>
+              <tr style={{ background: colors.surface.secondary }}>
                 <th style={th}>Participant</th>
                 <th style={{ ...th, textAlign: 'center' }}>Score</th>
                 <th style={{ ...th, textAlign: 'center' }}>Max</th>
@@ -889,20 +827,20 @@ function ResultsTab({ assessment, auth, toast, onRefresh }) {
             <tbody>
               {results.map((r, i) => (
                 <tr key={r.id || i}>
-                  <td style={{ ...td, fontWeight: 600, color: '#0f172a' }}>{r.participantName || r.participant?.name || `Participant #${r.participantId}`}</td>
-                  <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: '#059669' }}>{r.totalScore ?? '—'}</td>
-                  <td style={{ ...td, textAlign: 'center', color: '#475569' }}>{r.maxScore ?? '—'}</td>
+                  <td style={{ ...td, fontWeight: 600, color: colors.text.primary }}>{r.participantName || r.participant?.name || `Participant #${r.participantId}`}</td>
+                  <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: colors.success[600] }}>{r.totalScore ?? '—'}</td>
+                  <td style={{ ...td, textAlign: 'center', color: colors.slate[600] }}>{r.maxScore ?? '—'}</td>
                   <td style={{ ...td, textAlign: 'center' }}>
                     <span style={{
                       padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
-                      background: (r.percentage || 0) >= 70 ? '#dcfce7' : (r.percentage || 0) >= 40 ? '#fef3c7' : '#fee2e2',
-                      color: (r.percentage || 0) >= 70 ? '#15803d' : (r.percentage || 0) >= 40 ? '#92400e' : '#dc2626',
+                      background: (r.percentage || 0) >= 70 ? colors.success[100] : (r.percentage || 0) >= 40 ? colors.warning[100] : colors.danger[100],
+                      color: (r.percentage || 0) >= 70 ? colors.success[700] : (r.percentage || 0) >= 40 ? colors.warning[800] : colors.danger[600],
                     }}>
                       {r.percentage != null ? `${Math.round(r.percentage)}%` : '—'}
                     </span>
                   </td>
-                  <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: '#475569' }}>{r.rank ?? '—'}</td>
-                  <td style={{ ...td, textAlign: 'center', fontSize: 12, color: '#64748b' }}>{r.timeTaken ? `${r.timeTaken}s` : '—'}</td>
+                  <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: colors.slate[600] }}>{r.rank ?? '—'}</td>
+                  <td style={{ ...td, textAlign: 'center', fontSize: 12, color: colors.slate[500] }}>{r.timeTaken ? `${r.timeTaken}s` : '—'}</td>
                   <td style={{ ...td, textAlign: 'center' }}>
                     <button onClick={() => setSelectedResult(selectedResult?.id === r.id ? null : r)} style={btnOutline}>
                       <Eye size={12} /> {selectedResult?.id === r.id ? 'Hide' : 'View'}
@@ -928,29 +866,29 @@ function SubmissionDetail({ submission, onClose }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
-      style={{ marginTop: 20, background: '#f8fafc', borderRadius: 12, padding: 20, border: '1px solid #e2e8f0' }}
+      style={{ marginTop: 20, background: colors.bg.raised, borderRadius: 12, padding: 20, border: `1px solid ${colors.border.default}` }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>Submission Details</h4>
-        <button onClick={onClose} style={iconBtn('#f1f5f9', '#475569')}><X size={14} /></button>
+        <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: colors.text.primary }}>Submission Details</h4>
+        <button onClick={onClose} style={iconBtn(colors.slate[100], colors.slate[600], 32)}><X size={14} /></button>
       </div>
       {submission.submissions?.map((sub, i) => (
-        <div key={i} style={{ marginBottom: 16, padding: 16, background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-          <h5 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+        <div key={i} style={{ marginBottom: 16, padding: 16, background: colors.surface.primary, borderRadius: 10, border: `1px solid ${colors.border.default}` }}>
+          <h5 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 700, color: colors.text.primary }}>
             Problem: {sub.problemTitle || `Problem #${sub.problemId || i + 1}`}
           </h5>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Language</span>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{sub.language || 'javascript'}</div>
+              <span style={{ fontSize: 10, fontWeight: 700, color: colors.slate[400], textTransform: 'uppercase', letterSpacing: 0.5 }}>Language</span>
+              <div style={{ fontSize: 13, fontWeight: 600, color: colors.text.primary }}>{sub.language || 'javascript'}</div>
             </div>
             <div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Result</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: colors.slate[400], textTransform: 'uppercase', letterSpacing: 0.5 }}>Result</span>
               <div>
                 <span style={{
                   padding: '1px 6px', borderRadius: 999, fontSize: 10, fontWeight: 700,
-                  background: sub.allPassed ? '#dcfce7' : '#fee2e2',
-                  color: sub.allPassed ? '#15803d' : '#dc2626',
+                  background: sub.allPassed ? colors.success[100] : colors.danger[100],
+                  color: sub.allPassed ? colors.success[700] : colors.danger[600],
                 }}>
                   {sub.allPassed ? 'All Passed' : 'Some Failed'}
                 </span>
@@ -959,21 +897,21 @@ function SubmissionDetail({ submission, onClose }) {
           </div>
           {sub.testResults?.length > 0 && (
             <div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'block' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: colors.slate[400], textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, display: 'block' }}>
                 Test Results ({sub.passedTestCases || 0}/{sub.totalTestCases || sub.testResults.length})
               </span>
               {sub.testResults.map((tr, j) => (
                 <div key={j} style={{
                   display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', marginBottom: 4,
-                  borderRadius: 6, fontSize: 12, background: tr.passed ? '#f0fdf4' : '#fef2f2',
+                  borderRadius: 6, fontSize: 12, background: tr.passed ? colors.success[50] : colors.danger[50],
                 }}>
-                  {tr.passed ? <Check size={12} color="#16a34a" /> : <X size={12} color="#dc2626" />}
-                  <span style={{ flex: 1, color: tr.passed ? '#15803d' : '#dc2626' }}>
+                  {tr.passed ? <Check size={12} color={colors.success[600]} /> : <X size={12} color={colors.danger[600]} />}
+                  <span style={{ flex: 1, color: tr.passed ? colors.success[700] : colors.danger[600] }}>
                     {tr.isHidden ? 'Hidden Test' : `Test ${j + 1}`}
-                    {!tr.isHidden && tr.input && <span style={{ color: '#64748b' }}> — Input: {tr.input}</span>}
+                    {!tr.isHidden && tr.input && <span style={{ color: colors.slate[500] }}> — Input: {tr.input}</span>}
                   </span>
                   {tr.executionTime != null && (
-                    <span style={{ color: '#94a3b8', fontSize: 10 }}>{Number(tr.executionTime).toFixed(3)}s</span>
+                    <span style={{ color: colors.slate[400], fontSize: 10 }}>{Number(tr.executionTime).toFixed(3)}s</span>
                   )}
                 </div>
               ))}
@@ -985,9 +923,6 @@ function SubmissionDetail({ submission, onClose }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// LEADERBOARD TAB
-// ════════════════════════════════════════════════════════════════════════════
 function LeaderboardTab({ assessment, auth }) {
   const [leaders, setLeaders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1004,24 +939,24 @@ function LeaderboardTab({ assessment, auth }) {
 
   return (
     <div>
-      <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-        <Trophy size={16} style={{ marginRight: 8, verticalAlign: 'middle', color: '#f59e0b' }} />
+      <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: colors.text.primary }}>
+        <Trophy size={16} style={{ marginRight: 8, verticalAlign: 'middle', color: colors.warning[500] }} />
         Leaderboard
       </h3>
 
       {loading ? (
-        <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}><Loader2 size={20} className="animate-spin" /></div>
+        <div style={{ padding: 40, textAlign: 'center', color: colors.slate[400] }}><Loader2 size={20} className="animate-spin" /></div>
       ) : leaders.length === 0 ? (
-        <div style={{ padding: 60, textAlign: 'center', color: '#94a3b8', border: '2px dashed #e2e8f0', borderRadius: 12 }}>
+        <div style={{ padding: 60, textAlign: 'center', color: colors.slate[400], border: `2px dashed ${colors.border.default}`, borderRadius: 12 }}>
           <Trophy size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
           <div style={{ fontSize: 14, fontWeight: 600 }}>No rankings yet</div>
           <div style={{ fontSize: 12, marginTop: 4 }}>Results will appear after participants submit</div>
         </div>
       ) : (
-        <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ border: `1px solid ${colors.border.default}`, borderRadius: 10, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#f8fafc' }}>
+              <tr style={{ background: colors.surface.secondary }}>
                 <th style={{ ...th, width: 60, textAlign: 'center' }}>Rank</th>
                 <th style={th}>Participant</th>
                 <th style={{ ...th, textAlign: 'center' }}>Score</th>
@@ -1031,25 +966,25 @@ function LeaderboardTab({ assessment, auth }) {
             </thead>
             <tbody>
               {leaders.map((l, i) => {
-                const medal = i === 0 ? '#f59e0b' : i === 1 ? '#94a3b8' : i === 2 ? '#b45309' : 'transparent'
+                const medal = i === 0 ? colors.warning[500] : i === 1 ? colors.slate[400] : i === 2 ? colors.warning[700] : 'transparent'
                 const isMe = l.isCurrentParticipant
                 return (
-                  <tr key={l.id || i} style={{ background: isMe ? '#f0fdf4' : i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                  <tr key={l.id || i} style={{ background: isMe ? colors.success[50] : i % 2 === 0 ? colors.surface.primary : colors.surface.secondary }}>
                     <td style={{ ...td, textAlign: 'center' }}>
-                      {i < 3 ? <Trophy size={16} color={medal} fill={medal} /> : <span style={{ fontWeight: 700, color: '#94a3b8' }}>{i + 1}</span>}
+                      {i < 3 ? <Trophy size={16} color={medal} fill={medal} /> : <span style={{ fontWeight: 700, color: colors.slate[400] }}>{i + 1}</span>}
                     </td>
-                    <td style={{ ...td, fontWeight: 600, color: '#0f172a' }}>{l.participantName || l.name || `Participant #${l.participantId}`}</td>
-                    <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: '#059669' }}>{l.totalScore ?? l.score ?? '—'}</td>
+                    <td style={{ ...td, fontWeight: 600, color: colors.text.primary }}>{l.participantName || l.name || `Participant #${l.participantId}`}</td>
+                    <td style={{ ...td, textAlign: 'center', fontWeight: 700, color: colors.success[600] }}>{l.totalScore ?? l.score ?? '—'}</td>
                     <td style={{ ...td, textAlign: 'center' }}>
                       <span style={{
                         padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
-                        background: (l.percentage || 0) >= 70 ? '#dcfce7' : (l.percentage || 0) >= 40 ? '#fef3c7' : '#fee2e2',
-                        color: (l.percentage || 0) >= 70 ? '#15803d' : (l.percentage || 0) >= 40 ? '#92400e' : '#dc2626',
+                        background: (l.percentage || 0) >= 70 ? colors.success[100] : (l.percentage || 0) >= 40 ? colors.warning[100] : colors.danger[100],
+                        color: (l.percentage || 0) >= 70 ? colors.success[700] : (l.percentage || 0) >= 40 ? colors.warning[800] : colors.danger[600],
                       }}>
                         {l.percentage != null ? `${Math.round(l.percentage)}%` : '—'}
                       </span>
                     </td>
-                    <td style={{ ...td, textAlign: 'center', fontSize: 12, color: '#64748b' }}>{l.timeTaken ? `${l.timeTaken}s` : '—'}</td>
+                    <td style={{ ...td, textAlign: 'center', fontSize: 12, color: colors.slate[500] }}>{l.timeTaken ? `${l.timeTaken}s` : '—'}</td>
                   </tr>
                 )
               })}
@@ -1061,9 +996,6 @@ function LeaderboardTab({ assessment, auth }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// ANALYTICS TAB
-// ════════════════════════════════════════════════════════════════════════════
 function AnalyticsTab({ assessment, auth }) {
   const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -1078,37 +1010,37 @@ function AnalyticsTab({ assessment, auth }) {
     })()
   }, [])
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}><Loader2 size={20} className="animate-spin" /></div>
-  if (!analytics) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>No analytics data available</div>
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: colors.slate[400] }}><Loader2 size={20} className="animate-spin" /></div>
+  if (!analytics) return <div style={{ padding: 40, textAlign: 'center', color: colors.slate[400] }}>No analytics data available</div>
 
   const cards = [
-    { label: 'Avg. Score', value: analytics.averageScore != null ? `${Math.round(analytics.averageScore)}%` : '—', color: '#4f46e5' },
-    { label: 'Highest Score', value: analytics.highestScore != null ? `${Math.round(analytics.highestScore)}%` : '—', color: '#059669' },
-    { label: 'Lowest Score', value: analytics.lowestScore != null ? `${Math.round(analytics.lowestScore)}%` : '—', color: '#dc2626' },
-    { label: 'Total Attempts', value: analytics.totalAttempts || 0, color: '#0891b2' },
-    { label: 'Avg. Time', value: analytics.averageTime ? `${Math.round(analytics.averageTime)}s` : '—', color: '#7c3aed' },
-    { label: 'Pass Rate', value: analytics.passRate != null ? `${Math.round(analytics.passRate)}%` : '—', color: '#d97706' },
+    { label: 'Avg. Score', value: analytics.averageScore != null ? `${Math.round(analytics.averageScore)}%` : '—', color: colors.primary[600] },
+    { label: 'Highest Score', value: analytics.highestScore != null ? `${Math.round(analytics.highestScore)}%` : '—', color: colors.success[600] },
+    { label: 'Lowest Score', value: analytics.lowestScore != null ? `${Math.round(analytics.lowestScore)}%` : '—', color: colors.danger[600] },
+    { label: 'Total Attempts', value: analytics.totalAttempts || 0, color: '#0891B2' },
+    { label: 'Avg. Time', value: analytics.averageTime ? `${Math.round(analytics.averageTime)}s` : '—', color: '#7C3AED' },
+    { label: 'Pass Rate', value: analytics.passRate != null ? `${Math.round(analytics.passRate)}%` : '—', color: colors.warning[600] },
   ]
 
   return (
     <div>
-      <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+      <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: colors.text.primary }}>
         <BarChart3 size={16} style={{ marginRight: 8, verticalAlign: 'middle' }} />
         Assessment Analytics
       </h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12, marginBottom: 24 }}>
         {cards.map(c => (
-          <div key={c.label} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{c.label}</div>
+          <div key={c.label} style={{ background: colors.surface.primary, border: `1px solid ${colors.border.default}`, borderRadius: 10, padding: '16px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: colors.slate[400], textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{c.label}</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: c.color }}>{c.value}</div>
           </div>
         ))}
       </div>
       {analytics.problemStats?.length > 0 && (
-        <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ border: `1px solid ${colors.border.default}`, borderRadius: 10, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#f8fafc' }}>
+              <tr style={{ background: colors.surface.secondary }}>
                 <th style={th}>Problem</th>
                 <th style={{ ...th, textAlign: 'center' }}>Difficulty</th>
                 <th style={{ ...th, textAlign: 'center' }}>Avg. Score</th>
@@ -1119,18 +1051,18 @@ function AnalyticsTab({ assessment, auth }) {
             <tbody>
               {analytics.problemStats.map((ps, i) => (
                 <tr key={i}>
-                  <td style={{ ...td, fontWeight: 600, color: '#0f172a' }}>{ps.title || `Problem ${i + 1}`}</td>
+                  <td style={{ ...td, fontWeight: 600, color: colors.text.primary }}>{ps.title || `Problem ${i + 1}`}</td>
                   <td style={{ ...td, textAlign: 'center' }}>
                     <span style={{
                       padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700,
-                      background: ps.difficulty === 'EASY' ? '#dcfce7' : ps.difficulty === 'HARD' ? '#fee2e2' : '#fef3c7',
-                      color: ps.difficulty === 'EASY' ? '#15803d' : ps.difficulty === 'HARD' ? '#dc2626' : '#92400e',
+                      background: ps.difficulty === 'EASY' ? colors.success[100] : ps.difficulty === 'HARD' ? colors.danger[100] : colors.warning[100],
+                      color: ps.difficulty === 'EASY' ? colors.success[700] : ps.difficulty === 'HARD' ? colors.danger[600] : colors.warning[800],
                     }}>{ps.difficulty || 'MEDIUM'}</span>
                   </td>
                   <td style={{ ...td, textAlign: 'center', fontWeight: 700 }}>{ps.averageScore != null ? `${Math.round(ps.averageScore)}%` : '—'}</td>
                   <td style={{ ...td, textAlign: 'center' }}>{ps.totalSubmissions || 0}</td>
                   <td style={{ ...td, textAlign: 'center' }}>
-                    <span style={{ fontWeight: 600, color: (ps.passRate || 0) >= 70 ? '#059669' : (ps.passRate || 0) >= 40 ? '#d97706' : '#dc2626' }}>
+                    <span style={{ fontWeight: 600, color: (ps.passRate || 0) >= 70 ? colors.success[600] : (ps.passRate || 0) >= 40 ? colors.warning[600] : colors.danger[600] }}>
                       {ps.passRate != null ? `${Math.round(ps.passRate)}%` : '—'}
                     </span>
                   </td>
@@ -1144,9 +1076,6 @@ function AnalyticsTab({ assessment, auth }) {
   )
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// SETTINGS TAB
-// ════════════════════════════════════════════════════════════════════════════
 function SettingsTab({ assessment, onRefresh, auth, toast }) {
   const [form, setForm] = useState({
     maxAttempts: assessment.maxAttempts || 1,
@@ -1175,26 +1104,26 @@ function SettingsTab({ assessment, onRefresh, auth, toast }) {
 
   return (
     <div>
-      <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+      <h3 style={{ margin: '0 0 20px', fontSize: 16, fontWeight: 700, color: colors.text.primary }}>
         <Settings size={16} style={{ marginRight: 8, verticalAlign: 'middle' }} />
         Assessment Settings
       </h3>
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24, maxWidth: 600 }}>
+      <div style={{ background: colors.surface.primary, border: `1px solid ${colors.border.default}`, borderRadius: 12, padding: 24, maxWidth: 600 }}>
         <div style={{ display: 'grid', gap: 16 }}>
           <div>
-            <label style={labelStyle}>Max Attempts</label>
+            <label style={lblStyle}>Max Attempts</label>
             <input style={inputStyle} type="number" min={1} max={10} value={form.maxAttempts} onChange={e => setForm({ ...form, maxAttempts: parseInt(e.target.value) || 1 })} />
           </div>
           <div>
-            <label style={labelStyle}>Time Limit (minutes)</label>
+            <label style={lblStyle}>Time Limit (minutes)</label>
             <input style={inputStyle} type="number" min={5} value={form.timeLimit} onChange={e => setForm({ ...form, timeLimit: parseInt(e.target.value) || 60 })} />
           </div>
           <div>
-            <label style={labelStyle}>Passing Percentage</label>
+            <label style={lblStyle}>Passing Percentage</label>
             <input style={inputStyle} type="number" min={0} max={100} value={form.passingPercentage} onChange={e => setForm({ ...form, passingPercentage: parseInt(e.target.value) || 50 })} />
           </div>
           <div>
-            <label style={labelStyle}>Allowed Languages</label>
+            <label style={lblStyle}>Allowed Languages</label>
             <select style={selectStyle} multiple size={4} value={form.languages} onChange={e => {
               const opts = [...e.target.options].filter(o => o.selected).map(o => o.value)
               setForm({ ...form, languages: opts.length ? opts : form.languages })
@@ -1205,19 +1134,19 @@ function SettingsTab({ assessment, onRefresh, auth, toast }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
               <input type="checkbox" checked={form.proctoringEnabled} onChange={e => setForm({ ...form, proctoringEnabled: e.target.checked })} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>Enable Proctoring</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: colors.text.primary }}>Enable Proctoring</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
               <input type="checkbox" checked={form.fullscreenRequired} onChange={e => setForm({ ...form, fullscreenRequired: e.target.checked })} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>Require Fullscreen</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: colors.text.primary }}>Require Fullscreen</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
               <input type="checkbox" checked={form.shuffleProblems} onChange={e => setForm({ ...form, shuffleProblems: e.target.checked })} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>Shuffle Problems</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: colors.text.primary }}>Shuffle Problems</span>
             </label>
           </div>
         </div>
-        <div style={{ marginTop: 20, borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+        <div style={{ marginTop: 20, borderTop: `1px solid ${colors.border.default}`, paddingTop: 16 }}>
           <button onClick={handleSave} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {saving ? 'Saving…' : 'Save Settings'}
@@ -1227,4 +1156,3 @@ function SettingsTab({ assessment, onRefresh, auth, toast }) {
     </div>
   )
 }
-

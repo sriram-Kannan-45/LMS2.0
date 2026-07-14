@@ -36,7 +36,7 @@ export default function DataCard({
         ) : null}
         
         {/* Fallback gradient if no image or error */}
-        <div className={`absolute inset-0 flex items-center justify-center bg-gradient-to-tr from-violet-600/90 to-indigo-800/95 text-white font-bold text-lg p-4 text-center select-none ${thumbnail ? 'hidden' : 'flex'}`}>
+        <div className={`absolute inset-0 flex items-center justify-center bg-gradient-to-tr from-primary-600/90 to-primary-800/95 text-white font-bold text-lg p-4 text-center select-none ${thumbnail ? 'hidden' : 'flex'}`}>
           {title}
         </div>
 
@@ -78,7 +78,7 @@ export default function DataCard({
         <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-3">
           {/* Progress Bar */}
           {progress !== undefined && (
-            <ProgressBar value={progress} max={100} showLabel label="Completion Progress" color="violet" />
+            <ProgressBar value={progress} max={100} showLabel label="Completion Progress" color="primary" />
           )}
 
           {/* Metrics */}

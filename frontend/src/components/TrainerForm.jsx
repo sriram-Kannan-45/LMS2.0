@@ -289,7 +289,7 @@ function TrainerForm({ user, onLogout }) {
                 {displayImage ? (
                   <img src={displayImage} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <span style={{ fontSize: 28, fontWeight: 700, color: '#7c3aed', fontFamily: "'Poppins', sans-serif" }}>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: '#0D9488', fontFamily: "'Poppins', sans-serif" }}>
                     {initials(user.name)}
                   </span>
                 )}
@@ -300,7 +300,7 @@ function TrainerForm({ user, onLogout }) {
                 style={{
                   position: 'absolute', bottom: 0, right: 0, width: 32, height: 32,
                   borderRadius: '50%', border: '2px solid #fff', cursor: 'pointer',
-                  background: '#7c3aed', color: '#fff', display: 'flex',
+                  background: '#0D9488', color: '#fff', display: 'flex',
                   alignItems: 'center', justifyContent: 'center',
                   boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
                 }}
@@ -321,7 +321,7 @@ function TrainerForm({ user, onLogout }) {
                   background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600,
                   color: '#475569', transition: 'all 0.15s'
                 }}
-                onMouseEnter={e => e.target.style.borderColor = '#7c3aed'}
+                onMouseEnter={e => e.target.style.borderColor = '#0D9488'}
                 onMouseLeave={e => e.target.style.borderColor = '#e2e8f0'}
               >
                 {displayImage ? 'Change Photo' : 'Upload Photo'}
@@ -477,7 +477,7 @@ function TrainerForm({ user, onLogout }) {
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px',
                 borderRadius: 10, border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
-                background: saving ? '#94a3b8' : '#7c3aed', color: '#fff',
+                background: saving ? '#94a3b8' : '#0D9488', color: '#fff',
                 fontSize: 14, fontWeight: 600, transition: 'all 0.15s',
                 opacity: saving ? 0.7 : 1
               }}
@@ -609,7 +609,7 @@ function TrainerForm({ user, onLogout }) {
                   disabled={changingPassword}
                   style={{
                     padding: '8px 20px', borderRadius: 10, border: 'none', cursor: changingPassword ? 'not-allowed' : 'pointer',
-                    background: changingPassword ? '#94a3b8' : '#7c3aed', color: '#fff',
+                    background: changingPassword ? '#94a3b8' : '#0D9488', color: '#fff',
                     fontSize: 13, fontWeight: 600, opacity: changingPassword ? 0.7 : 1
                   }}
                 >

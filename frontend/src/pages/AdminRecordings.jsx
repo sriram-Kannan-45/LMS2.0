@@ -163,12 +163,12 @@ export default function AdminRecordings({ user }) {
             placeholder="Search participant..."
             value={filters.search}
             onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
           <select
             value={filters.quiz_id}
             onChange={e => setFilters(f => ({ ...f, quiz_id: e.target.value }))}
-            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">All Quizzes</option>
             {quizzes.map(q => <option key={q.id} value={q.id}>{q.title}</option>)}
@@ -176,7 +176,7 @@ export default function AdminRecordings({ user }) {
           <select
             value={filters.trainer_id}
             onChange={e => setFilters(f => ({ ...f, trainer_id: e.target.value }))}
-            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">All Trainers</option>
             {trainers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -185,18 +185,18 @@ export default function AdminRecordings({ user }) {
             type="date"
             value={filters.date_from}
             onChange={e => setFilters(f => ({ ...f, date_from: e.target.value }))}
-            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
           <input
             type="date"
             value={filters.date_to}
             onChange={e => setFilters(f => ({ ...f, date_to: e.target.value }))}
-            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
           <select
             value={filters.status}
             onChange={e => setFilters(f => ({ ...f, status: e.target.value }))}
-            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">All Status</option>
             <option value="ready">Ready</option>
@@ -229,7 +229,7 @@ export default function AdminRecordings({ user }) {
                   header: 'Participant',
                   render: (row) => (
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400 flex items-center justify-center text-xs font-bold border border-violet-100 dark:border-violet-900/30">
+                      <div className="w-8 h-8 rounded-full bg-primary-50 text-primary-500 dark:bg-primary-950/40 dark:text-primary-400 flex items-center justify-center text-xs font-bold border border-primary-100 dark:border-primary-900/30">
                         {initials(row.participant?.name)}
                       </div>
                       <span className="font-semibold text-slate-800 dark:text-slate-200">{row.participant?.name || `User #${row.participantId}`}</span>
@@ -248,7 +248,7 @@ export default function AdminRecordings({ user }) {
                   className: 'text-right',
                   render: (row) => (
                     <div className="flex items-center justify-end gap-1.5">
-                      <Button size="sm" variant="ghost" onClick={() => handleWatch(row)} icon={Play} className="text-violet-600 dark:text-violet-400" title="Watch" />
+                      <Button size="sm" variant="ghost" onClick={() => handleWatch(row)} icon={Play} className="text-primary-500 dark:text-primary-400" title="Watch" />
                       <Button size="sm" variant="ghost" onClick={() => handleDownload(row)} icon={Download} className="text-slate-500 dark:text-slate-400" title="Download" />
                       <Button size="sm" variant="ghost" onClick={() => handleDelete(row.id)} icon={Trash2} className="text-rose-500 hover:text-rose-700" title="Delete" />
                     </div>
